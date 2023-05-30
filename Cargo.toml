@@ -1,15 +1,17 @@
 [package]
-name = "eframe_template"
-version = "0.1.0"
-authors = ["Emil Ernerfeldt <emil.ernerfeldt@gmail.com>"]
+name = "flexpad"
+version = "0.0.1"
+authors = ["Dave Wathen <dave@wathenweb.com>"]
 edition = "2021"
 rust-version = "1.65"
+build = "build.rs"
 
+[build-dependencies]
+vergen = { version = "8.2.1", features = [ "build", "git", "gitoxide" ] }
 
 [dependencies]
-egui = "0.21.0"
-eframe = { version = "0.21.0", default-features = false, features = [
-    "accesskit",     # Make egui comptaible with screen readers. NOTE: adds a lot of dependencies.
+egui = "0.22.0"
+eframe = { version = "0.22.0", default-features = false, features = [
     "default_fonts", # Embed the default egui fonts.
     "glow",          # Use the glow rendering backend. Alternative: "wgpu".
     "persistence",   # Enable restoring app state when restarting the app.
@@ -17,6 +19,7 @@ eframe = { version = "0.21.0", default-features = false, features = [
 
 # You only need serde if you want app persistence:
 serde = { version = "1", features = ["derive"] }
+image = { version = "0.24.6", features = ["jpeg"] }
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

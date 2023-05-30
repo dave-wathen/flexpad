@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://web.resource.org/cc/" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" version="1.1" baseProfile="full" width="200px" height="200px" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid meet" id="svg_document" style="zoom: 1;">
+    <title id="title">FlexpadIcon.svg</title>
+    <g id="main_group">
+        <rect stroke="#000000" x="40px" height="135px" y="40px" id="pad" stroke-width="3px" width="120px" fill="#ffffff" transform=""></rect>
+        <line stroke="#000000" y1="50px" stroke-width="3px" x1="49px" id="spiral1" y2="30px" x2="59px" transform=""></line>
+        <line stroke="#000000" y1="50px" stroke-width="3px" x1="72px" id="spiral2" y2="30px" x2="82px" transform=""></line>
+        <line stroke="#000000" y1="50px" id="spiral3" x1="95px" stroke-width="3px" y2="30px" x2="105px" transform=""></line>
+        <line stroke="#000000" y1="50px" stroke-width="3px" x1="118px" id="spiral4" y2="30px" x2="128px" transform=""></line>
+        <line stroke="#000000" y1="50px" stroke-width="3px" x1="141px" id="spiral5" y2="30px" x2="151px" transform=""></line>
+        <text stroke="none" id="text1" style="outline-style:none;" stroke-width="1px" x="100px" text-rendering="geometricPrecision" font-family="Arial Black" fill="cornflowerblue" font-size="32px" y="146px" transform="" text-anchor="middle">PAD</text>
+        <text stroke="none" id="text2" style="outline-style:none;" stroke-width="1px" x="105px" text-rendering="geometricPrecision" font-family="Zapfino" fill="#000000" font-size="21px" y="115px" transform="" text-anchor="middle" font-weight="bolder">flex</text>
+    </g>
+</svg>
