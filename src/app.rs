@@ -77,7 +77,7 @@ impl FlexpadApp {
         });
     }
 
-    fn render_workpad(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    fn render_workpad(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("Pad", |ui| {
@@ -85,10 +85,11 @@ impl FlexpadApp {
                         ui.close_menu();
                         self.state = UiState::FrontScreen;
                     }
-                    if ui.button("Quit").clicked() {
-                        ui.close_menu();
-                        frame.close();
-                    }
+                    // TODO Figure out why this fails in WASM build
+                    // if ui.button("Quit").clicked() {
+                    //     ui.close_menu();
+                    //     frame.close();
+                    // }
                 });
             });
         });
