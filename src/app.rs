@@ -1,26 +1,31 @@
-use egui::{ColorImage, TextureHandle};
+use crate::version::Version;
+use egui::{Align, Layout, Separator, Vec2};
+
+use crate::images::AppImages;
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct FlexpadApp {
     #[serde(skip)]
-    icon: Option<TextureHandle>,
+    images: AppImages,
     #[serde(skip)]
-    version: &'static str,
+    version: Version,
     #[serde(skip)]
-    git_branch: &'static str,
-    #[serde(skip)]
-    git_sha: &'static str,
+    state: UiState,
+}
+
+enum UiState {
+    FrontScreen,
+    Workpad,
 }
 
 impl Default for FlexpadApp {
     fn default() -> Self {
         Self {
-            icon: None,
-            version: "unknown",
-            git_branch: "unknown",
-            git_sha: "unknown",
+            images: Default::default(),
+            version: Default::default(),
+            state: UiState::FrontScreen,
         }
     }
 }
@@ -29,44 +34,67 @@ impl FlexpadApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         cc.egui_ctx.set_visuals(egui::Visuals::light());
 
-        let mut result: FlexpadApp;
         if let Some(storage) = cc.storage {
-            result = eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
+            eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default()
         } else {
-            result = Default::default();
-        };
-
-        result.version = env!("CARGO_PKG_VERSION");
-        result.git_branch = env!("VERGEN_GIT_BRANCH");
-        result.git_sha = env!("VERGEN_GIT_SHA");
-        result
+            Default::default()
+        }
     }
 
     fn render_front_page(&mut self, ctx: &egui::Context) {
-        let product = if self.git_branch == self.version {
-            format!("Flexpad {} ({})", self.version, &self.git_sha[0..7])
-        } else {
-            format!(
-                "Flexpad {} ({} {})",
-                self.version,
-                self.git_branch,
-                &self.git_sha[0..7]
-            )
-        };
-
-        let icon: &TextureHandle = self.icon.get_or_insert_with(|| {
-            load_image_from_memory(
-                include_bytes!("../resources/FlexpadIcon.jpg"),
-                ctx,
-                "FlexpadIcon.jpg",
-            )
-            .expect("FlexpadIcon.jpg not initialized")
-        });
-
+        egui::SidePanel::left("left_margin")
+            .show_separator_line(false)
+            .show(ctx, |ui| ui.add_space(20.0));
+        egui::SidePanel::right("right_margin")
+            .show_separator_line(false)
+            .show(ctx, |ui| ui.add_space(20.0));
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.vertical_centered_justified(|ui| {
-                ui.image(icon, icon.size_vec2());
-                ui.label(product);
+                ui.add(self.images.app_icon.image(ctx));
+                ui.label(self.version.description());
+                ui.add(Separator::default().spacing(20.0));
+                ui.vertical(|ui| {
+                    ui.heading("Create New ...");
+                    ui.add_space(10.0);
+                    ui.horizontal_wrapped(|ui| {
+                        ui.allocate_ui_with_layout(
+                            Vec2::new(80.0, 40.0),
+                            Layout::top_down(Align::Center),
+                            |ui| {
+                                if ui.add(self.images.workpad_icon.image_button(ctx)).clicked() {
+                                    self.state = UiState::Workpad
+                                }
+                                ui.label("Workpad")
+                            },
+                        )
+                    })
+                });
+                ui.add(Separator::default().spacing(20.0));
+                ui.vertical(|ui| {
+                    ui.heading("Reopen ...");
+                });
+            })
+        });
+    }
+
+    fn render_workpad(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+            egui::menu::bar(ui, |ui| {
+                ui.menu_button("Pad", |ui| {
+                    if ui.button("Close").clicked() {
+                        ui.close_menu();
+                        self.state = UiState::FrontScreen;
+                    }
+                    if ui.button("Quit").clicked() {
+                        ui.close_menu();
+                        frame.close();
+                    }
+                });
+            });
+        });
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.vertical_centered_justified(|ui| {
+                ui.heading("Unnamed");
             })
         });
     }
@@ -77,21 +105,10 @@ impl eframe::App for FlexpadApp {
         eframe::set_value(storage, eframe::APP_KEY, self);
     }
 
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.render_front_page(ctx);
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        match self.state {
+            UiState::FrontScreen => self.render_front_page(ctx),
+            UiState::Workpad => self.render_workpad(ctx, frame),
+        };
     }
-}
-
-fn load_image_from_memory(
-    image_data: &[u8],
-    ctx: &egui::Context,
-    debug_name: &'static str,
-) -> Result<TextureHandle, image::ImageError> {
-    let image = image::load_from_memory(image_data)?;
-    let size = [image.width() as _, image.height() as _];
-    let image_buffer = image.to_rgba8();
-    let pixels = image_buffer.as_flat_samples();
-    let color_image = ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
-    let texture = ctx.load_texture(debug_name, color_image, Default::default());
-    Ok(texture)
 }
