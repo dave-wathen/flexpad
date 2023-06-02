@@ -85,11 +85,13 @@ impl FlexpadApp {
                         ui.close_menu();
                         self.state = UiState::FrontScreen;
                     }
-                    // TODO Figure out why this fails in WASM build
-                    // if ui.button("Quit").clicked() {
-                    //     ui.close_menu();
-                    //     frame.close();
-                    // }
+
+                    // Can only quit native windows
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if ui.button("Quit").clicked() {
+                        ui.close_menu();
+                        _frame.close();
+                    }
                 });
             });
         });
