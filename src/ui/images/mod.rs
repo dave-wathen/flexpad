@@ -48,11 +48,8 @@ impl AppImage {
 impl Default for AppImages {
     fn default() -> Self {
         Self {
-            app_icon: AppImage::new(
-                include_bytes!("../resources/FlexpadIcon.jpg"),
-                "FlexpadIcon.jpg",
-            ),
-            workpad_icon: AppImage::new(include_bytes!("../resources/Workpad.png"), "Workpad.png"),
+            app_icon: AppImage::new(include_bytes!("./FlexpadIcon.jpg"), "FlexpadIcon.jpg"),
+            workpad_icon: AppImage::new(include_bytes!("./Workpad.png"), "Workpad.png"),
         }
     }
 }

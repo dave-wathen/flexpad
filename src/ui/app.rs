@@ -1,7 +1,10 @@
-use crate::version::Version;
-use egui::{Align, Layout, Separator, Vec2};
+use std::sync::Arc;
 
-use crate::images::AppImages;
+use crate::version::Version;
+use crate::{model::workpad::Workpad, ui::widgets::workpad::WorkpadUi};
+use egui::{Align, Layout, ScrollArea, Separator, Vec2};
+
+use crate::ui::images::AppImages;
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -17,7 +20,7 @@ pub struct FlexpadApp {
 
 enum UiState {
     FrontScreen,
-    Workpad,
+    Workpad(Arc<Workpad>),
 }
 
 impl Default for FlexpadApp {
@@ -26,6 +29,8 @@ impl Default for FlexpadApp {
             images: Default::default(),
             version: Default::default(),
             state: UiState::FrontScreen,
+            // TODO Temporary - use line below instead of above to skip front page
+            // state: UiState::Workpad(Arc::new(Workpad::default())),
         }
     }
 }
@@ -62,7 +67,7 @@ impl FlexpadApp {
                             Layout::top_down(Align::Center),
                             |ui| {
                                 if ui.add(self.images.workpad_icon.image_button(ctx)).clicked() {
-                                    self.state = UiState::Workpad
+                                    self.state = UiState::Workpad(Arc::new(Workpad::default()))
                                 }
                                 ui.label("Workpad")
                             },
@@ -77,7 +82,12 @@ impl FlexpadApp {
         });
     }
 
-    fn render_workpad(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn render_workpad(
+        &mut self,
+        pad: Arc<Workpad>,
+        ctx: &egui::Context,
+        _frame: &mut eframe::Frame,
+    ) {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("Pad", |ui| {
@@ -96,8 +106,18 @@ impl FlexpadApp {
             });
         });
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.vertical_centered_justified(|ui| {
+            ui.vertical(|ui| {
                 ui.heading("Unnamed");
+                ui.horizontal(|ui| {
+                    ui.button("a");
+                    ui.button("b");
+                    ui.button("c");
+                    ui.button("d");
+                });
+                ui.horizontal(|ui| {
+                    ui.text_edit_singleline(&mut "Some text".to_owned());
+                });
+                ui.add(WorkpadUi::new(pad));
             })
         });
     }
@@ -109,9 +129,9 @@ impl eframe::App for FlexpadApp {
     }
 
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        match self.state {
+        match &self.state {
             UiState::FrontScreen => self.render_front_page(ctx),
-            UiState::Workpad => self.render_workpad(ctx, frame),
+            UiState::Workpad(pad) => self.render_workpad(pad.clone(), ctx, frame),
         };
     }
 }

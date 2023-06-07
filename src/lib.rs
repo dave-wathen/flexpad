@@ -1,6 +1,6 @@
 #![warn(clippy::all, rust_2018_idioms)]
 
-mod app;
-mod images;
+mod model;
+mod ui;
 mod version;
-pub use app::FlexpadApp;
+pub use ui::app::FlexpadApp;
