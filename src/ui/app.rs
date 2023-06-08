@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::version::Version;
 use crate::{model::workpad::Workpad, ui::widgets::workpad::WorkpadUi};
-use egui::{Align, Layout, ScrollArea, Separator, Vec2};
+use egui::{Align, Layout, Separator, Vec2};
 
 use crate::ui::images::AppImages;
 
@@ -109,10 +109,10 @@ impl FlexpadApp {
             ui.vertical(|ui| {
                 ui.heading("Unnamed");
                 ui.horizontal(|ui| {
-                    ui.button("a");
-                    ui.button("b");
-                    ui.button("c");
-                    ui.button("d");
+                    let _ = ui.button("a");
+                    let _ = ui.button("b");
+                    let _ = ui.button("c");
+                    let _ = ui.button("d");
                 });
                 ui.horizontal(|ui| {
                     ui.text_edit_singleline(&mut "Some text".to_owned());

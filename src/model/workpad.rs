@@ -90,7 +90,7 @@ fn create_a1_reference(row: usize, column: usize) -> CellReference {
     //    The next 26*26*26 are a three-digit sequence AAA-ZZZ
     //    ...
     let mut start = 27;
-    let mut bytes = [0 as u8; 27];
+    let mut bytes = [0_u8; 27];
     let mut push = |b| {
         start -= 1;
         bytes[start] = b;
@@ -98,7 +98,7 @@ fn create_a1_reference(row: usize, column: usize) -> CellReference {
 
     let mut rw = row + 1;
     loop {
-        push('0' as u8 + (rw % 10) as u8);
+        push(b'0' + (rw % 10) as u8);
         if rw < 10 {
             break;
         }
@@ -117,33 +117,33 @@ fn create_a1_reference(row: usize, column: usize) -> CellReference {
     const HI_5: usize = HI_4 + 26_usize.pow(5);
 
     match column {
-        LO_1..=HI_1 => push('A' as u8 + column as u8),
+        LO_1..=HI_1 => push(b'A' + column as u8),
         LO_2..=HI_2 => {
             let cl = column - LO_2;
-            push('A' as u8 + (cl % 26) as u8);
-            push('A' as u8 + ((cl / 26) % 26) as u8);
+            push(b'A' + (cl % 26) as u8);
+            push(b'A' + ((cl / 26) % 26) as u8);
         }
         LO_3..=HI_3 => {
             dbg!("LO_3..=HI_3");
             let cl = column - LO_3;
-            push('A' as u8 + (cl % 26) as u8);
-            push('A' as u8 + ((cl / 26) % 26) as u8);
-            push('A' as u8 + ((cl / 26 / 26) % 26) as u8);
+            push(b'A' + (cl % 26) as u8);
+            push(b'A' + ((cl / 26) % 26) as u8);
+            push(b'A' + ((cl / 26 / 26) % 26) as u8);
         }
         LO_4..=HI_4 => {
             let cl = column - LO_4;
-            push('A' as u8 + (cl % 26) as u8);
-            push('A' as u8 + ((cl / 26) % 26) as u8);
-            push('A' as u8 + ((cl / 26 / 26) % 26) as u8);
-            push('A' as u8 + ((cl / 26 / 26 / 26) % 26) as u8);
+            push(b'A' + (cl % 26) as u8);
+            push(b'A' + ((cl / 26) % 26) as u8);
+            push(b'A' + ((cl / 26 / 26) % 26) as u8);
+            push(b'A' + ((cl / 26 / 26 / 26) % 26) as u8);
         }
         LO_5..=HI_5 => {
             let cl = column - LO_5;
-            push('A' as u8 + (cl % 26) as u8);
-            push('A' as u8 + ((cl / 26) % 26) as u8);
-            push('A' as u8 + ((cl / 26 / 26) % 26) as u8);
-            push('A' as u8 + ((cl / 26 / 26 / 26) % 26) as u8);
-            push('A' as u8 + ((cl / 26 / 26 / 26 / 26) % 26) as u8);
+            push(b'A' + (cl % 26) as u8);
+            push(b'A' + ((cl / 26) % 26) as u8);
+            push(b'A' + ((cl / 26 / 26) % 26) as u8);
+            push(b'A' + ((cl / 26 / 26 / 26) % 26) as u8);
+            push(b'A' + ((cl / 26 / 26 / 26 / 26) % 26) as u8);
         }
         _ => panic!("Column too large"),
     };
@@ -174,33 +174,33 @@ fn create_column_name(column: usize) -> String {
     const HI_5: usize = HI_4 + 26_usize.pow(5);
 
     match column {
-        LO_1..=HI_1 => bytes.push('A' as u8 + column as u8),
+        LO_1..=HI_1 => bytes.push(b'A' + column as u8),
         LO_2..=HI_2 => {
             let cl = column - LO_2;
-            bytes.push('A' as u8 + (cl % 26) as u8);
-            bytes.push('A' as u8 + ((cl / 26) % 26) as u8);
+            bytes.push(b'A' + (cl % 26) as u8);
+            bytes.push(b'A' + ((cl / 26) % 26) as u8);
         }
         LO_3..=HI_3 => {
             dbg!("LO_3..=HI_3");
             let cl = column - LO_3;
-            bytes.push('A' as u8 + (cl % 26) as u8);
-            bytes.push('A' as u8 + ((cl / 26) % 26) as u8);
-            bytes.push('A' as u8 + ((cl / 26 / 26) % 26) as u8);
+            bytes.push(b'A' + (cl % 26) as u8);
+            bytes.push(b'A' + ((cl / 26) % 26) as u8);
+            bytes.push(b'A' + ((cl / 26 / 26) % 26) as u8);
         }
         LO_4..=HI_4 => {
             let cl = column - LO_4;
-            bytes.push('A' as u8 + (cl % 26) as u8);
-            bytes.push('A' as u8 + ((cl / 26) % 26) as u8);
-            bytes.push('A' as u8 + ((cl / 26 / 26) % 26) as u8);
-            bytes.push('A' as u8 + ((cl / 26 / 26 / 26) % 26) as u8);
+            bytes.push(b'A' + (cl % 26) as u8);
+            bytes.push(b'A' + ((cl / 26) % 26) as u8);
+            bytes.push(b'A' + ((cl / 26 / 26) % 26) as u8);
+            bytes.push(b'A' + ((cl / 26 / 26 / 26) % 26) as u8);
         }
         LO_5..=HI_5 => {
             let cl = column - LO_5;
-            bytes.push('A' as u8 + (cl % 26) as u8);
-            bytes.push('A' as u8 + ((cl / 26) % 26) as u8);
-            bytes.push('A' as u8 + ((cl / 26 / 26) % 26) as u8);
-            bytes.push('A' as u8 + ((cl / 26 / 26 / 26) % 26) as u8);
-            bytes.push('A' as u8 + ((cl / 26 / 26 / 26 / 26) % 26) as u8);
+            bytes.push(b'A' + (cl % 26) as u8);
+            bytes.push(b'A' + ((cl / 26) % 26) as u8);
+            bytes.push(b'A' + ((cl / 26 / 26) % 26) as u8);
+            bytes.push(b'A' + ((cl / 26 / 26 / 26) % 26) as u8);
+            bytes.push(b'A' + ((cl / 26 / 26 / 26 / 26) % 26) as u8);
         }
         _ => panic!("Column too large"),
     };
