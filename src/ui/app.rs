@@ -106,19 +106,7 @@ impl FlexpadApp {
             });
         });
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.vertical(|ui| {
-                ui.heading("Unnamed");
-                ui.horizontal(|ui| {
-                    let _ = ui.button("a");
-                    let _ = ui.button("b");
-                    let _ = ui.button("c");
-                    let _ = ui.button("d");
-                });
-                ui.horizontal(|ui| {
-                    ui.text_edit_singleline(&mut "Some text".to_owned());
-                });
-                ui.add(WorkpadUi::new(pad));
-            })
+            ui.add(WorkpadUi::new(pad));
         });
     }
 }

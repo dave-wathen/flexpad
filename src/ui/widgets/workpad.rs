@@ -27,68 +27,59 @@ impl WorkpadUi {
     }
 
     fn calc_visible_cells(&mut self, viewport: Rect) {
-        let rows = self.pad.row_count();
-        let columns = self.pad.column_count();
+        let sheet = self.pad.current_sheet();
 
-        // Find the first visible row
-        let mut rows_height = 0.0;
-        let mut visible_rows = EMPTY.clone();
-        for rw in 0..rows {
-            let mid_y = rows_height + self.pad.row_height(rw) / 2.0;
-            rows_height += self.pad.row_height(rw);
+        // TODO probably more efficient to maintain vec of cumulative heights
+        // Alternatively try_fold with ControlFlow can eliminate iterating the tail
+        let (_, found, lo, hi) =
+            sheet
+                .rows()
+                .fold((0.0, false, 0, 0), |(height, lo_found, lo, hi), row| {
+                    if !lo_found {
+                        let mid_y = height + row.height() / 2.0;
+                        if viewport.y_range().contains(&mid_y) {
+                            (row.height(), true, row.index(), row.index())
+                        } else {
+                            (height + row.height(), false, 0, 0)
+                        }
+                    } else if height < viewport.height() {
+                        (height + row.height(), true, lo, row.index())
+                    } else {
+                        (height, true, lo, hi)
+                    }
+                });
+        self.visible_rows = if found { lo..=hi } else { EMPTY.clone() };
 
-            if viewport.y_range().contains(&mid_y) {
-                visible_rows = rw..=rw;
-                break;
-            }
-        }
-
-        // Extend the range for further visible rows
-        if !visible_rows.is_empty() {
-            let mut visible_rows_height = 0.0;
-            let mut rw = *visible_rows.start();
-            while visible_rows_height < viewport.height() && rw < rows {
-                visible_rows = *visible_rows.start()..=rw;
-                visible_rows_height += self.pad.row_height(rw);
-                rw += 1;
-            }
-        }
-
-        // Find the first visible column
-        let mut columns_width = 0.0;
-        let mut visible_columns = EMPTY.clone();
-        for cl in 0..columns {
-            let mid_x = columns_width + self.pad.column_width(cl) / 2.0;
-            columns_width += self.pad.column_width(cl);
-
-            if viewport.x_range().contains(&mid_x) {
-                visible_columns = cl..=cl;
-                break;
-            }
-        }
-
-        // Extend the range for further visible columns
-        if !visible_columns.is_empty() {
-            let mut visible_columns_width = 0.0;
-            let mut cl = *visible_columns.start();
-            while visible_columns_width < viewport.width() && cl < columns {
-                visible_columns = *visible_columns.start()..=cl;
-                visible_columns_width += self.pad.column_width(cl);
-                cl += 1;
-            }
-        }
-
-        self.visible_rows = visible_rows;
-        self.visible_columns = visible_columns;
+        // TODO probably more efficient to maintain vec of cumulative widths
+        // Alternatively try_fold with ControlFlow can eliminate iterating the tail
+        let (_, found, lo, hi) =
+            sheet
+                .columns()
+                .fold((0.0, false, 0, 0), |(width, lo_found, lo, hi), column| {
+                    if !lo_found {
+                        let mid_x = width + column.width() / 2.0;
+                        if viewport.x_range().contains(&mid_x) {
+                            (column.width(), true, column.index(), column.index())
+                        } else {
+                            (width + column.width(), false, 0, 0)
+                        }
+                    } else if width < viewport.width() {
+                        (width + column.width(), true, lo, column.index())
+                    } else {
+                        (width, true, lo, hi)
+                    }
+                });
+        self.visible_columns = if found { lo..=hi } else { EMPTY.clone() };
     }
 
     fn render_corner(&self, ui: &mut egui::Ui) -> Rect {
+        let sheet = self.pad.current_sheet();
         let available_rect = ui.available_rect_before_wrap();
         let visuals = ui.style().visuals.clone();
 
         let corner_rect = Rect::from_min_size(
             available_rect.min,
-            Vec2::new(self.pad.row_header_width(), self.pad.column_header_height()),
+            Vec2::new(sheet.row_header_width(), sheet.column_header_height()),
         );
 
         ui.painter()
@@ -106,19 +97,13 @@ impl WorkpadUi {
         ScrollArea::both()
             .auto_shrink([false; 2])
             .show_viewport(ui, |ui, viewport| {
-                let rows = self.pad.row_count();
-                let columns = self.pad.column_count();
+                // TODO Review the use of clone here
+                let pad = self.pad.clone();
+                let sheet = pad.current_sheet();
 
-                let mut height = 0.0;
-                for rw in 0..rows {
-                    height += self.pad.row_height(rw);
-                }
+                let height = sheet.rows().map(|r| r.height()).sum();
+                let width = sheet.columns().map(|c| c.width()).sum();
                 ui.set_height(height);
-
-                let mut width = 0.0;
-                for cl in 0..columns {
-                    width += self.pad.column_width(cl);
-                }
                 ui.set_width(width);
 
                 let mut used_rect = Rect::NOTHING;
@@ -127,18 +112,18 @@ impl WorkpadUi {
                 if !self.visible_rows.is_empty() && !self.visible_columns.is_empty() {
                     let mut y = ui.min_rect().top() + viewport.top();
 
-                    for row in self.visible_rows.clone() {
-                        let height = self.pad.row_height(row);
+                    for rw in self.visible_rows.clone() {
+                        let row = sheet.row(rw);
+                        let height = row.height();
 
                         let mut x = ui.min_rect().left() + viewport.left();
 
-                        for col in self.visible_columns.clone() {
-                            let _cell = self.pad.cell(row, col);
-                            let reference = &_cell.a1_reference() as &str;
-                            let width = self.pad.column_width(col);
+                        for cl in self.visible_columns.clone() {
+                            let cell = sheet.cell(rw, cl);
+                            let reference = cell.name();
                             let cell_rect = Rect::from_two_pos(
                                 Pos2::new(x, y),
-                                Pos2::new(x + width, y + height),
+                                Pos2::new(x + cell.width(), y + height),
                             );
                             used_rect = used_rect.union(cell_rect);
 
@@ -154,7 +139,7 @@ impl WorkpadUi {
                                 },
                                 ui.style().visuals.warn_fg_color,
                             );
-                            x += width;
+                            x += cell.width();
                         }
                         y += height;
                     }
@@ -163,10 +148,14 @@ impl WorkpadUi {
     }
 
     fn render_row_headings(&mut self, ui: &mut egui::Ui) {
+        let sheet = self.pad.current_sheet();
+
         let mut y = ui.min_rect().top();
         let x_range = ui.max_rect().x_range();
-        for row in self.visible_rows.clone() {
-            let height = self.pad.row_height(row);
+        for rw in self.visible_rows.clone() {
+            let row = sheet.row(rw);
+
+            let height = row.height();
             let rect = Rect::from_x_y_ranges(x_range.clone(), y..=(y + height));
 
             ui.painter()
@@ -174,7 +163,7 @@ impl WorkpadUi {
             ui.painter().text(
                 rect.center(),
                 Align2::CENTER_CENTER,
-                (row + 1).to_string(),
+                row.name(),
                 FontId {
                     size: 10.0,
                     family: FontFamily::Proportional,
@@ -186,10 +175,14 @@ impl WorkpadUi {
     }
 
     fn render_column_headings(&mut self, ui: &mut egui::Ui) {
+        let sheet = self.pad.current_sheet();
+
         let mut x = ui.min_rect().left();
         let y_range = ui.max_rect().y_range();
         for col in self.visible_columns.clone() {
-            let width = self.pad.column_width(col);
+            let column = sheet.column(col);
+
+            let width = column.width();
             let rect = Rect::from_x_y_ranges(x..=(x + width), y_range.clone());
 
             ui.painter()
@@ -197,7 +190,7 @@ impl WorkpadUi {
             ui.painter().text(
                 rect.center(),
                 Align2::CENTER_CENTER,
-                self.pad.column(col).name(),
+                column.name(),
                 FontId {
                     size: 10.0,
                     family: FontFamily::Proportional,
@@ -211,30 +204,49 @@ impl WorkpadUi {
 
 impl Widget for WorkpadUi {
     fn ui(mut self, ui: &mut egui::Ui) -> Response {
-        let corner_rect = self.render_corner(ui);
-        let available_rect = ui.available_rect_before_wrap();
-        let grid_rect = Rect::from_min_size(
-            corner_rect.right_bottom(),
-            available_rect.size() - corner_rect.size(),
-        );
-        let row_headings_rect = Rect::from_min_size(
-            corner_rect.left_bottom(),
-            Vec2::new(corner_rect.width(), grid_rect.height()),
-        );
-        let column_headings_rect = Rect::from_min_size(
-            corner_rect.right_top(),
-            Vec2::new(grid_rect.width(), corner_rect.height()),
-        );
+        ui.vertical(|ui| {
+            ui.heading("Unnamed");
+            ui.horizontal(|ui| {
+                let _ = ui.button("a");
+                let _ = ui.button("b");
+                let _ = ui.button("c");
+                let _ = ui.button("d");
+            });
+            let sheet = self.pad.current_sheet();
+            let mut sheet_name = sheet.name().to_owned();
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing = Vec2::ZERO;
+                ui.text_edit_singleline(&mut sheet_name);
+                ui.separator();
+                ui.text_edit_singleline(&mut "Formula".to_owned());
+            });
 
-        let mut content_ui = ui.child_ui(grid_rect, *ui.layout());
-        self.render_grid(&mut content_ui);
+            let corner_rect = self.render_corner(ui);
+            let available_rect = ui.available_rect_before_wrap();
+            let grid_rect = Rect::from_min_size(
+                corner_rect.right_bottom(),
+                available_rect.size() - corner_rect.size(),
+            );
+            let row_headings_rect = Rect::from_min_size(
+                corner_rect.left_bottom(),
+                Vec2::new(corner_rect.width(), grid_rect.height()),
+            );
+            let column_headings_rect = Rect::from_min_size(
+                corner_rect.right_top(),
+                Vec2::new(grid_rect.width(), corner_rect.height()),
+            );
 
-        let mut row_headings_ui = ui.child_ui(row_headings_rect, *ui.layout());
-        self.render_row_headings(&mut row_headings_ui);
+            let mut content_ui = ui.child_ui(grid_rect, *ui.layout());
+            self.render_grid(&mut content_ui);
 
-        let mut column_headings_ui = ui.child_ui(column_headings_rect, *ui.layout());
-        self.render_column_headings(&mut column_headings_ui);
+            let mut row_headings_ui = ui.child_ui(row_headings_rect, *ui.layout());
+            self.render_row_headings(&mut row_headings_ui);
 
-        ui.allocate_rect(available_rect, Sense::hover())
+            let mut column_headings_ui = ui.child_ui(column_headings_rect, *ui.layout());
+            self.render_column_headings(&mut column_headings_ui);
+
+            ui.allocate_rect(available_rect, Sense::hover());
+        })
+        .response
     }
 }

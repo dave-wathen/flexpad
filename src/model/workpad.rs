@@ -1,158 +1,247 @@
-use std::str::from_utf8_unchecked;
+use compact_str::{CompactString, ToCompactString};
 
-pub struct Workpad;
-
-pub struct SheetCell {
-    row: usize,
-    column: usize,
-}
-
-pub struct Column {
-    column: usize,
-}
-
-#[derive(Debug)]
-pub enum CellReference {
-    A1(u8, [u8; 27]),
+pub struct Workpad {
+    sheets: Vec<SheetData>,
+    current: usize,
 }
 
 impl Default for Workpad {
     fn default() -> Self {
-        Self
+        let sheet1 = SheetData::new("Sheet 1");
+        let sheet2 = SheetData::new("Sheet 2");
+        let sheet3 = SheetData::new("Sheet 3");
+        Self {
+            sheets: vec![sheet1, sheet2, sheet3],
+            current: 0,
+        }
     }
 }
 
 impl Workpad {
+    pub fn current_sheet(&self) -> Sheet<'_> {
+        Sheet {
+            data: &self.sheets[self.current],
+        }
+    }
+}
+
+pub struct SheetData {
+    name: CompactString,
+    column_header_height: f32,
+    row_header_width: f32,
+    columns: Vec<ColumnData>,
+    rows: Vec<RowData>,
+}
+
+impl SheetData {
+    fn new(name: impl ToCompactString) -> Self {
+        let columns = (0..99).map(ColumnData::new).collect();
+        let rows = (0..999).map(RowData::new).collect();
+        Self {
+            name: name.to_compact_string(),
+            column_header_height: 20.0,
+            row_header_width: 60.0,
+            columns,
+            rows,
+        }
+    }
+}
+
+pub struct ColumnData {
+    name: Name,
+    width: f32,
+}
+
+impl ColumnData {
+    fn new(index: usize) -> Self {
+        Self {
+            name: Name::Auto(create_column_name(index)),
+            width: 100.0,
+        }
+    }
+}
+
+pub struct RowData {
+    name: Name,
+    height: f32,
+}
+
+impl RowData {
+    fn new(index: usize) -> Self {
+        Self {
+            name: Name::Auto((index + 1).to_compact_string()),
+            height: 20.0,
+        }
+    }
+}
+
+pub struct Sheet<'pad> {
+    data: &'pad SheetData,
+}
+
+impl Sheet<'_> {
+    pub fn name(&self) -> &str {
+        &self.data.name
+    }
+
+    pub fn columns(&self) -> impl ExactSizeIterator<Item = Column<'_>> {
+        self.data
+            .columns
+            .iter()
+            .enumerate()
+            .map(|(index, data)| Column::new(data, index))
+    }
+
+    pub fn column(&self, index: usize) -> Column<'_> {
+        Column::new(&self.data.columns[index], index)
+    }
+
+    pub fn rows(&self) -> impl ExactSizeIterator<Item = Row<'_>> {
+        self.data
+            .rows
+            .iter()
+            .enumerate()
+            .map(|(index, data)| Row::new(data, index))
+    }
+
+    pub fn row(&self, index: usize) -> Row<'_> {
+        Row::new(&self.data.rows[index], index)
+    }
+
     pub fn column_header_height(&self) -> f32 {
-        20.0
+        self.data.column_header_height
     }
 
     pub fn row_header_width(&self) -> f32 {
-        60.0
+        self.data.row_header_width
     }
 
-    pub fn row_count(&self) -> usize {
-        1000
-    }
-
-    pub fn column_count(&self) -> usize {
-        100
-    }
-
-    pub fn row_height(&self, _row: usize) -> f32 {
-        20.0
-    }
-
-    pub fn column_width(&self, _column: usize) -> f32 {
-        100.0
-    }
-
-    pub fn cell(&self, row: usize, column: usize) -> SheetCell {
-        SheetCell::new(row, column)
-    }
-
-    pub fn column(&self, column: usize) -> Column {
-        Column::new(column)
+    pub fn cell(&self, row: usize, column: usize) -> Cell<'_> {
+        Cell::new(
+            &self.data.rows[row],
+            row,
+            &self.data.columns[column],
+            column,
+        )
     }
 }
 
-impl SheetCell {
-    fn new(row: usize, column: usize) -> Self {
-        Self { row, column }
+pub struct Column<'pad> {
+    data: &'pad ColumnData,
+    index: usize,
+}
+
+impl Column<'_> {
+    fn new(data: &'_ ColumnData, index: usize) -> Column<'_> {
+        Column { data, index }
     }
 
-    pub fn a1_reference(&self) -> CellReference {
-        create_a1_reference(self.row, self.column)
+    pub fn index(&self) -> usize {
+        self.index
+    }
+
+    pub fn name(&self) -> &str {
+        match &self.data.name {
+            Name::Auto(n) => n,
+            Name::Custom(n) => n,
+        }
+    }
+
+    pub fn width(&self) -> f32 {
+        self.data.width
     }
 }
 
-impl Column {
-    fn new(column: usize) -> Self {
-        Self { column }
+pub struct Row<'pad> {
+    data: &'pad RowData,
+    index: usize,
+}
+
+impl Row<'_> {
+    fn new(data: &'_ RowData, index: usize) -> Row<'_> {
+        Row { data, index }
     }
 
-    // TODO Do we want a short string type that supports Into<WidgetText>? Once decided deal with duplicste code below
-    pub fn name(&self) -> String {
-        create_column_name(self.column)
+    pub fn index(&self) -> usize {
+        self.index
+    }
+
+    pub fn name(&self) -> &str {
+        match &self.data.name {
+            Name::Auto(n) => n,
+            Name::Custom(n) => n,
+        }
+    }
+
+    pub fn height(&self) -> f32 {
+        self.data.height
     }
 }
 
-fn create_a1_reference(row: usize, column: usize) -> CellReference {
-    // We build the reference backwards.
-    // The row part is simple the number of the row so we accumulate each digit
-    // in turn from the least significant.
-    //
-    // The columns are a series of base 26 (A=0, B=1, Z=25) number sequences
-    // that are zero-(A-)padded to a length so one range is distinguished from
-    // others.  That is:
-    //    The first 26 are a one-digit sequence A-Z
-    //    The next 26*26 are a two-digit sequence AA-ZZ
-    //    The next 26*26*26 are a three-digit sequence AAA-ZZZ
-    //    ...
-    let mut start = 27;
-    let mut bytes = [0_u8; 27];
-    let mut push = |b| {
-        start -= 1;
-        bytes[start] = b;
-    };
-
-    let mut rw = row + 1;
-    loop {
-        push(b'0' + (rw % 10) as u8);
-        if rw < 10 {
-            break;
-        }
-        rw /= 10;
-    }
-
-    const LO_1: usize = 0;
-    const HI_1: usize = 25;
-    const LO_2: usize = HI_1 + 1;
-    const HI_2: usize = HI_1 + 26_usize.pow(2);
-    const LO_3: usize = HI_2 + 1;
-    const HI_3: usize = HI_2 + 26_usize.pow(3);
-    const LO_4: usize = HI_3 + 1;
-    const HI_4: usize = HI_3 + 26_usize.pow(4);
-    const LO_5: usize = HI_4 + 1;
-    const HI_5: usize = HI_4 + 26_usize.pow(5);
-
-    match column {
-        LO_1..=HI_1 => push(b'A' + column as u8),
-        LO_2..=HI_2 => {
-            let cl = column - LO_2;
-            push(b'A' + (cl % 26) as u8);
-            push(b'A' + ((cl / 26) % 26) as u8);
-        }
-        LO_3..=HI_3 => {
-            dbg!("LO_3..=HI_3");
-            let cl = column - LO_3;
-            push(b'A' + (cl % 26) as u8);
-            push(b'A' + ((cl / 26) % 26) as u8);
-            push(b'A' + ((cl / 26 / 26) % 26) as u8);
-        }
-        LO_4..=HI_4 => {
-            let cl = column - LO_4;
-            push(b'A' + (cl % 26) as u8);
-            push(b'A' + ((cl / 26) % 26) as u8);
-            push(b'A' + ((cl / 26 / 26) % 26) as u8);
-            push(b'A' + ((cl / 26 / 26 / 26) % 26) as u8);
-        }
-        LO_5..=HI_5 => {
-            let cl = column - LO_5;
-            push(b'A' + (cl % 26) as u8);
-            push(b'A' + ((cl / 26) % 26) as u8);
-            push(b'A' + ((cl / 26 / 26) % 26) as u8);
-            push(b'A' + ((cl / 26 / 26 / 26) % 26) as u8);
-            push(b'A' + ((cl / 26 / 26 / 26 / 26) % 26) as u8);
-        }
-        _ => panic!("Column too large"),
-    };
-
-    CellReference::A1(start as u8, bytes)
+pub struct Cell<'pad> {
+    row_data: &'pad RowData,
+    row_index: usize,
+    column_data: &'pad ColumnData,
+    column_index: usize,
+    name: Name,
 }
 
-fn create_column_name(column: usize) -> String {
-    // We build the name backwards.
+#[allow(dead_code)]
+impl Cell<'_> {
+    fn new<'pad>(
+        row_data: &'pad RowData,
+        row_index: usize,
+        column_data: &'pad ColumnData,
+        column_index: usize,
+    ) -> Cell<'pad> {
+        let name = match (&row_data.name, &column_data.name) {
+            (Name::Auto(row_name), Name::Auto(column_name)) => {
+                Name::Auto(column_name.clone() + row_name)
+            }
+            (Name::Auto(_), Name::Custom(_)) => todo!(),
+            (Name::Custom(_), Name::Auto(_)) => todo!(),
+            (Name::Custom(_), Name::Custom(_)) => todo!(),
+        };
+        Cell {
+            row_data,
+            row_index,
+            column_data,
+            column_index,
+            name,
+        }
+    }
+
+    pub fn row(&self) -> Row<'_> {
+        Row::new(self.row_data, self.row_index)
+    }
+
+    pub fn column(&self) -> Column<'_> {
+        Column::new(self.column_data, self.column_index)
+    }
+
+    pub fn width(&self) -> f32 {
+        self.column_data.width
+    }
+
+    pub fn height(&self) -> f32 {
+        self.row_data.height
+    }
+
+    pub fn name(&self) -> &str {
+        match &self.name {
+            Name::Auto(n) => n,
+            Name::Custom(n) => n,
+        }
+    }
+}
+
+#[allow(dead_code)]
+enum Name {
+    Auto(CompactString),
+    Custom(CompactString),
+}
+
+fn create_column_name(column: usize) -> CompactString {
     // The column names are a series of base 26 (A=0, B=1, ... Z=25) number sequences
     // that are zero-(A-)padded to a length so one range is distinguished from
     // others.  That is:
@@ -160,8 +249,6 @@ fn create_column_name(column: usize) -> String {
     //    The next 26*26 are a two-digit sequence AA-ZZ
     //    The next 26*26*26 are a three-digit sequence AAA-ZZZ
     //    ...
-    let mut bytes = vec![];
-
     const LO_1: usize = 0;
     const HI_1: usize = 25;
     const LO_2: usize = HI_1 + 1;
@@ -174,50 +261,50 @@ fn create_column_name(column: usize) -> String {
     const HI_5: usize = HI_4 + 26_usize.pow(5);
 
     match column {
-        LO_1..=HI_1 => bytes.push(b'A' + column as u8),
+        LO_1..=HI_1 => unsafe { CompactString::from_utf8_unchecked([b'A' + column as u8]) },
         LO_2..=HI_2 => {
             let cl = column - LO_2;
-            bytes.push(b'A' + (cl % 26) as u8);
-            bytes.push(b'A' + ((cl / 26) % 26) as u8);
+            unsafe {
+                CompactString::from_utf8_unchecked([
+                    b'A' + ((cl / 26) % 26) as u8,
+                    b'A' + (cl % 26) as u8,
+                ])
+            }
         }
         LO_3..=HI_3 => {
-            dbg!("LO_3..=HI_3");
             let cl = column - LO_3;
-            bytes.push(b'A' + (cl % 26) as u8);
-            bytes.push(b'A' + ((cl / 26) % 26) as u8);
-            bytes.push(b'A' + ((cl / 26 / 26) % 26) as u8);
+            unsafe {
+                CompactString::from_utf8_unchecked([
+                    b'A' + ((cl / 26 / 26) % 26) as u8,
+                    b'A' + ((cl / 26) % 26) as u8,
+                    b'A' + (cl % 26) as u8,
+                ])
+            }
         }
         LO_4..=HI_4 => {
             let cl = column - LO_4;
-            bytes.push(b'A' + (cl % 26) as u8);
-            bytes.push(b'A' + ((cl / 26) % 26) as u8);
-            bytes.push(b'A' + ((cl / 26 / 26) % 26) as u8);
-            bytes.push(b'A' + ((cl / 26 / 26 / 26) % 26) as u8);
+            unsafe {
+                CompactString::from_utf8_unchecked([
+                    b'A' + ((cl / 26 / 26 / 26) % 26) as u8,
+                    b'A' + ((cl / 26 / 26) % 26) as u8,
+                    b'A' + ((cl / 26) % 26) as u8,
+                    b'A' + (cl % 26) as u8,
+                ])
+            }
         }
         LO_5..=HI_5 => {
             let cl = column - LO_5;
-            bytes.push(b'A' + (cl % 26) as u8);
-            bytes.push(b'A' + ((cl / 26) % 26) as u8);
-            bytes.push(b'A' + ((cl / 26 / 26) % 26) as u8);
-            bytes.push(b'A' + ((cl / 26 / 26 / 26) % 26) as u8);
-            bytes.push(b'A' + ((cl / 26 / 26 / 26 / 26) % 26) as u8);
+            unsafe {
+                CompactString::from_utf8_unchecked([
+                    b'A' + ((cl / 26 / 26 / 26 / 26) % 26) as u8,
+                    b'A' + ((cl / 26 / 26 / 26) % 26) as u8,
+                    b'A' + ((cl / 26 / 26) % 26) as u8,
+                    b'A' + ((cl / 26) % 26) as u8,
+                    b'A' + (cl % 26) as u8,
+                ])
+            }
         }
         _ => panic!("Column too large"),
-    };
-
-    bytes.reverse();
-    unsafe { String::from_utf8_unchecked(bytes) }
-}
-
-impl std::ops::Deref for CellReference {
-    type Target = str;
-
-    fn deref(&self) -> &Self::Target {
-        match self {
-            CellReference::A1(start, ref bytes) => unsafe {
-                from_utf8_unchecked(&bytes[(*start as usize)..27])
-            },
-        }
     }
 }
 
@@ -226,80 +313,38 @@ mod tests {
     use super::*;
 
     #[test]
-    fn short_a1_references() {
-        assert_eq!("A1", &create_a1_reference(0, 0) as &str);
-        assert_eq!("A9", &create_a1_reference(8, 0) as &str);
-        assert_eq!("A10", &create_a1_reference(9, 0) as &str);
-        assert_eq!("A1234567", &create_a1_reference(1234566, 0) as &str);
-
-        assert_eq!("B1", &create_a1_reference(0, 1) as &str);
-        assert_eq!("Z1", &create_a1_reference(0, 25) as &str);
-        assert_eq!("AA1", &create_a1_reference(0, 26) as &str);
-        assert_eq!("AZ1", &create_a1_reference(0, 51) as &str);
-        assert_eq!("BA1", &create_a1_reference(0, 52) as &str);
-        assert_eq!("ZZ1", &create_a1_reference(0, 26_usize.pow(2) + 25) as &str);
-        assert_eq!(
-            "AAA1",
-            &create_a1_reference(0, 26_usize.pow(2) + 26) as &str
-        );
-        assert_eq!(
-            "ZZZ1",
-            &create_a1_reference(0, 26_usize.pow(3) + 26_usize.pow(2) + 25) as &str
-        );
-        assert_eq!(
-            "AAAA1",
-            &create_a1_reference(0, 26_usize.pow(3) + 26_usize.pow(2) + 26) as &str
-        );
-        assert_eq!(
-            "ZZZZ1",
-            &create_a1_reference(0, 26_usize.pow(4) + 26_usize.pow(3) + 26_usize.pow(2) + 25)
-                as &str
-        );
-        assert_eq!(
-            "AAAAA1",
-            &create_a1_reference(0, 26_usize.pow(4) + 26_usize.pow(3) + 26_usize.pow(2) + 26)
-                as &str
-        );
-        assert_eq!(
-            "ZZZZZ1",
-            &create_a1_reference(
-                0,
-                26_usize.pow(5) + 26_usize.pow(4) + 26_usize.pow(3) + 26_usize.pow(2) + 25
-            ) as &str
-        );
-    }
-
-    #[test]
     fn column_name() {
-        assert_eq!("A", &create_column_name(0));
-        assert_eq!("B", &create_column_name(1));
-        assert_eq!("Z", &create_column_name(25));
-        assert_eq!("AA", &create_column_name(26));
-        assert_eq!("AZ", &create_column_name(51));
-        assert_eq!("BA", &create_column_name(52));
-        assert_eq!("ZZ", &create_column_name(26_usize.pow(2) + 25));
-        assert_eq!("AAA", &create_column_name(26_usize.pow(2) + 26));
+        const A: usize = 0;
+        const AA: usize = 26;
+        const AAA: usize = 26_usize.pow(2) + 26;
+        const AAAA: usize = 26_usize.pow(3) + 26_usize.pow(2) + 26;
+        const AAAAA: usize = 26_usize.pow(4) + 26_usize.pow(3) + 26_usize.pow(2) + 26;
+        const AAAAAA: usize =
+            26_usize.pow(5) + 26_usize.pow(4) + 26_usize.pow(3) + 26_usize.pow(2) + 26;
+
+        assert_eq!("A", &create_column_name(A) as &str);
+        assert_eq!("B", &create_column_name(A + 1) as &str);
+        assert_eq!("Z", &create_column_name(AA - 1) as &str);
+        assert_eq!("AA", &create_column_name(AA) as &str);
+        assert_eq!("AB", &create_column_name(AA + 1) as &str);
+        assert_eq!("AZ", &create_column_name(AA + 25) as &str);
+        assert_eq!("BA", &create_column_name(AA + 26) as &str);
+        assert_eq!("ZZ", &create_column_name(AAA - 1) as &str);
+        assert_eq!("AAA", &create_column_name(AAA) as &str);
+        assert_eq!("ABC", &create_column_name(AAA + 26 + 2) as &str);
+        assert_eq!("ZZZ", &create_column_name(AAAA - 1) as &str);
+        assert_eq!("AAAA", &create_column_name(AAAA) as &str);
         assert_eq!(
-            "ZZZ",
-            &create_column_name(26_usize.pow(3) + 26_usize.pow(2) + 25)
+            "ABCD",
+            &create_column_name(AAAA + 26_usize.pow(2) + (2 * 26) + 3) as &str
         );
+        assert_eq!("ZZZZ", &create_column_name(AAAAA - 1) as &str);
+        assert_eq!("AAAAA", &create_column_name(AAAAA) as &str);
         assert_eq!(
-            "AAAA",
-            &create_column_name(26_usize.pow(3) + 26_usize.pow(2) + 26)
+            "ABCDE",
+            &create_column_name(AAAAA + 26_usize.pow(3) + (2 * 26_usize.pow(2)) + (3 * 26) + 4)
+                as &str
         );
-        assert_eq!(
-            "ZZZZ",
-            &create_column_name(26_usize.pow(4) + 26_usize.pow(3) + 26_usize.pow(2) + 25)
-        );
-        assert_eq!(
-            "AAAAA",
-            &create_column_name(26_usize.pow(4) + 26_usize.pow(3) + 26_usize.pow(2) + 26)
-        );
-        assert_eq!(
-            "ZZZZZ",
-            &create_column_name(
-                26_usize.pow(5) + 26_usize.pow(4) + 26_usize.pow(3) + 26_usize.pow(2) + 25
-            )
-        );
+        assert_eq!("ZZZZZ", &create_column_name(AAAAAA - 1) as &str);
     }
 }
