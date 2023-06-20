@@ -5,10 +5,37 @@ use egui::{
     Vec2, Widget,
 };
 
-use crate::model::workpad::Workpad;
+use crate::model::workpad::{Sheet, Workpad};
 
-pub struct WorkpadUi {
+pub struct WorkpadUiState {
     pad: Arc<Workpad>,
+    edit: WorkpadEdit,
+}
+
+impl Default for WorkpadUiState {
+    fn default() -> Self {
+        Self {
+            pad: Arc::new(Default::default()),
+            edit: Default::default(),
+        }
+    }
+}
+
+#[derive(Debug)]
+enum WorkpadEdit {
+    None,
+    SheetName(String),
+    Formula(String),
+}
+
+impl Default for WorkpadEdit {
+    fn default() -> Self {
+        WorkpadEdit::None
+    }
+}
+
+pub struct WorkpadUi<'a> {
+    state: &'a mut WorkpadUiState,
     visible_rows: RangeInclusive<usize>,
     visible_columns: RangeInclusive<usize>,
     gridline: Stroke,
@@ -16,64 +43,83 @@ pub struct WorkpadUi {
 
 const EMPTY: RangeInclusive<usize> = RangeInclusive::new(1, 0);
 
-impl WorkpadUi {
-    pub fn new(pad: Arc<Workpad>) -> Self {
-        Self {
-            pad,
+impl WorkpadUi<'_> {
+    pub fn new(state: &mut WorkpadUiState) -> WorkpadUi<'_> {
+        WorkpadUi {
+            state,
             visible_rows: EMPTY.clone(),
             visible_columns: EMPTY.clone(),
             gridline: Stroke::new(1.0, Color32::LIGHT_GRAY),
         }
     }
 
-    fn calc_visible_cells(&mut self, viewport: Rect) {
-        let sheet = self.pad.current_sheet();
+    fn current_sheet(&self) -> Sheet<'_> {
+        self.state.pad.current_sheet()
+    }
 
+    fn start_edit(&mut self, edit: WorkpadEdit) {
+        self.finish_edit();
+        self.state.edit = edit;
+    }
+
+    fn finish_edit(&mut self) {
+        if let WorkpadEdit::None = self.state.edit {
+        } else {
+            println!("Send {:?}", self.state.edit);
+            self.state.edit = WorkpadEdit::None;
+        };
+    }
+
+    fn cancel_edit(&mut self) {
+        self.state.edit = WorkpadEdit::None;
+    }
+
+    fn calc_visible_cells(&mut self, viewport: Rect) {
         // TODO probably more efficient to maintain vec of cumulative heights
         // Alternatively try_fold with ControlFlow can eliminate iterating the tail
-        let (_, found, lo, hi) =
-            sheet
-                .rows()
-                .fold((0.0, false, 0, 0), |(height, lo_found, lo, hi), row| {
-                    if !lo_found {
-                        let mid_y = height + row.height() / 2.0;
-                        if viewport.y_range().contains(&mid_y) {
-                            (row.height(), true, row.index(), row.index())
-                        } else {
-                            (height + row.height(), false, 0, 0)
-                        }
-                    } else if height < viewport.height() {
-                        (height + row.height(), true, lo, row.index())
+        let (_, found, lo, hi) = self.current_sheet().rows().fold(
+            (0.0, false, 0, 0),
+            |(height, lo_found, lo, hi), row| {
+                if !lo_found {
+                    let mid_y = height + row.height() / 2.0;
+                    if viewport.y_range().contains(&mid_y) {
+                        (row.height(), true, row.index(), row.index())
                     } else {
-                        (height, true, lo, hi)
+                        (height + row.height(), false, 0, 0)
                     }
-                });
+                } else if height < viewport.height() {
+                    (height + row.height(), true, lo, row.index())
+                } else {
+                    (height, true, lo, hi)
+                }
+            },
+        );
         self.visible_rows = if found { lo..=hi } else { EMPTY.clone() };
 
         // TODO probably more efficient to maintain vec of cumulative widths
         // Alternatively try_fold with ControlFlow can eliminate iterating the tail
-        let (_, found, lo, hi) =
-            sheet
-                .columns()
-                .fold((0.0, false, 0, 0), |(width, lo_found, lo, hi), column| {
-                    if !lo_found {
-                        let mid_x = width + column.width() / 2.0;
-                        if viewport.x_range().contains(&mid_x) {
-                            (column.width(), true, column.index(), column.index())
-                        } else {
-                            (width + column.width(), false, 0, 0)
-                        }
-                    } else if width < viewport.width() {
-                        (width + column.width(), true, lo, column.index())
+        let (_, found, lo, hi) = self.current_sheet().columns().fold(
+            (0.0, false, 0, 0),
+            |(width, lo_found, lo, hi), column| {
+                if !lo_found {
+                    let mid_x = width + column.width() / 2.0;
+                    if viewport.x_range().contains(&mid_x) {
+                        (column.width(), true, column.index(), column.index())
                     } else {
-                        (width, true, lo, hi)
+                        (width + column.width(), false, 0, 0)
                     }
-                });
+                } else if width < viewport.width() {
+                    (width + column.width(), true, lo, column.index())
+                } else {
+                    (width, true, lo, hi)
+                }
+            },
+        );
         self.visible_columns = if found { lo..=hi } else { EMPTY.clone() };
     }
 
     fn render_corner(&self, ui: &mut egui::Ui) -> Rect {
-        let sheet = self.pad.current_sheet();
+        let sheet = self.state.pad.current_sheet();
         let available_rect = ui.available_rect_before_wrap();
         let visuals = ui.style().visuals.clone();
 
@@ -94,13 +140,12 @@ impl WorkpadUi {
     }
 
     fn render_grid(&mut self, ui: &mut egui::Ui) {
+        let pad = self.state.pad.clone();
+        let sheet = pad.current_sheet();
+
         ScrollArea::both()
             .auto_shrink([false; 2])
             .show_viewport(ui, |ui, viewport| {
-                // TODO Review the use of clone here
-                let pad = self.pad.clone();
-                let sheet = pad.current_sheet();
-
                 let height = sheet.rows().map(|r| r.height()).sum();
                 let width = sheet.columns().map(|c| c.width()).sum();
                 ui.set_height(height);
@@ -148,7 +193,7 @@ impl WorkpadUi {
     }
 
     fn render_row_headings(&mut self, ui: &mut egui::Ui) {
-        let sheet = self.pad.current_sheet();
+        let sheet = self.state.pad.current_sheet();
 
         let mut y = ui.min_rect().top();
         let x_range = ui.max_rect().x_range();
@@ -175,7 +220,7 @@ impl WorkpadUi {
     }
 
     fn render_column_headings(&mut self, ui: &mut egui::Ui) {
-        let sheet = self.pad.current_sheet();
+        let sheet = self.state.pad.current_sheet();
 
         let mut x = ui.min_rect().left();
         let y_range = ui.max_rect().y_range();
@@ -202,7 +247,7 @@ impl WorkpadUi {
     }
 }
 
-impl Widget for WorkpadUi {
+impl Widget for WorkpadUi<'_> {
     fn ui(mut self, ui: &mut egui::Ui) -> Response {
         ui.vertical(|ui| {
             ui.heading("Unnamed");
@@ -212,13 +257,51 @@ impl Widget for WorkpadUi {
                 let _ = ui.button("c");
                 let _ = ui.button("d");
             });
-            let sheet = self.pad.current_sheet();
-            let mut sheet_name = sheet.name().to_owned();
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing = Vec2::ZERO;
-                ui.text_edit_singleline(&mut sheet_name);
+                ui.push_id("sheet_name", |ui| {
+                    if let WorkpadEdit::SheetName(ref mut s) = self.state.edit {
+                        let resp = ui.text_edit_singleline(s);
+                        if resp.lost_focus() {
+                            if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                                self.cancel_edit();
+                            } else {
+                                self.finish_edit();
+                            }
+                        }
+                    } else {
+                        let mut sheet_name = self.current_sheet().name().to_owned();
+                        let resp = ui.text_edit_singleline(&mut sheet_name);
+                        if resp.gained_focus() {
+                            self.finish_edit();
+                        }
+                        if resp.changed() {
+                            self.start_edit(WorkpadEdit::SheetName(sheet_name));
+                        };
+                    };
+                });
                 ui.separator();
-                ui.text_edit_singleline(&mut "Formula".to_owned());
+                ui.push_id("formula", |ui| {
+                    if let WorkpadEdit::Formula(ref mut s) = self.state.edit {
+                        let resp = ui.text_edit_singleline(s);
+                        if resp.lost_focus() {
+                            if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                                self.cancel_edit();
+                            } else {
+                                self.finish_edit();
+                            }
+                        }
+                    } else {
+                        let mut formula = "Formula".to_owned();
+                        let resp = ui.text_edit_singleline(&mut formula);
+                        if resp.gained_focus() {
+                            self.finish_edit();
+                        }
+                        if resp.changed() {
+                            self.start_edit(WorkpadEdit::Formula(formula));
+                        };
+                    }
+                });
             });
 
             let corner_rect = self.render_corner(ui);

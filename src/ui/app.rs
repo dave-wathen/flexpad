@@ -1,10 +1,13 @@
-use std::sync::Arc;
-
 use crate::version::Version;
-use crate::{model::workpad::Workpad, ui::widgets::workpad::WorkpadUi};
 use egui::{Align, Layout, Separator, Vec2};
 
-use crate::ui::images::AppImages;
+use super::images::AppImages;
+use super::widgets::workpad::{WorkpadUi, WorkpadUiState};
+
+enum UiState {
+    FrontScreen,
+    Workpad(WorkpadUiState),
+}
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -16,11 +19,6 @@ pub struct FlexpadApp {
     version: Version,
     #[serde(skip)]
     state: UiState,
-}
-
-enum UiState {
-    FrontScreen,
-    Workpad(Arc<Workpad>),
 }
 
 impl Default for FlexpadApp {
@@ -67,7 +65,7 @@ impl FlexpadApp {
                             Layout::top_down(Align::Center),
                             |ui| {
                                 if ui.add(self.images.workpad_icon.image_button(ctx)).clicked() {
-                                    self.state = UiState::Workpad(Arc::new(Workpad::default()))
+                                    self.state = UiState::Workpad(Default::default())
                                 }
                                 ui.label("Workpad")
                             },
@@ -82,12 +80,7 @@ impl FlexpadApp {
         });
     }
 
-    fn render_workpad(
-        &mut self,
-        pad: Arc<Workpad>,
-        ctx: &egui::Context,
-        _frame: &mut eframe::Frame,
-    ) {
+    fn render_workpad(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("Pad", |ui| {
@@ -106,7 +99,11 @@ impl FlexpadApp {
             });
         });
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.add(WorkpadUi::new(pad));
+            if let UiState::Workpad(ref mut workpad_ui_state) = self.state {
+                ui.add(WorkpadUi::new(workpad_ui_state));
+            } else {
+                unreachable!("Invalid state")
+            }
         });
     }
 }
@@ -117,9 +114,9 @@ impl eframe::App for FlexpadApp {
     }
 
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        match &self.state {
+        match &mut self.state {
             UiState::FrontScreen => self.render_front_page(ctx),
-            UiState::Workpad(pad) => self.render_workpad(pad.clone(), ctx, frame),
+            UiState::Workpad(_) => self.render_workpad(ctx, frame),
         };
     }
 }
