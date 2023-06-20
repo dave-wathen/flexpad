@@ -21,17 +21,12 @@ impl Default for WorkpadUiState {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 enum WorkpadEdit {
+    #[default]
     None,
     SheetName(String),
     Formula(String),
-}
-
-impl Default for WorkpadEdit {
-    fn default() -> Self {
-        WorkpadEdit::None
-    }
 }
 
 pub struct WorkpadUi<'a> {
