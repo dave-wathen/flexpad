@@ -1,6 +1,7 @@
 use compact_str::{CompactString, ToCompactString};
 
 pub struct Workpad {
+    name: CompactString,
     sheets: Vec<SheetData>,
     current: usize,
 }
@@ -11,6 +12,7 @@ impl Default for Workpad {
         let sheet2 = SheetData::new("Sheet 2");
         let sheet3 = SheetData::new("Sheet 3");
         Self {
+            name: "Unnamed".to_compact_string(),
             sheets: vec![sheet1, sheet2, sheet3],
             current: 0,
         }
@@ -22,6 +24,10 @@ impl Workpad {
         Sheet {
             data: &self.sheets[self.current],
         }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
     }
 }
 
