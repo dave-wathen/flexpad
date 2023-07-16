@@ -1,0 +1,15 @@
+[package]
+name = "flexpad"
+version.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+edition.workspace = true
+build = "build.rs"
+
+[build-dependencies]
+vergen = { version = "8.2.1", features = [ "build", "git", "gitoxide" ] }
+
+[dependencies]
+compact_str = "0.7.1"
+iced = { git = "https://github.com/iced-rs/iced", features = ["advanced", "image"], branch = "master"}
+flexpad-grid = { path = "../flexpad-grid" }

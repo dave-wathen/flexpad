@@ -20,7 +20,7 @@ impl Default for Workpad {
 }
 
 impl Workpad {
-    pub fn current_sheet(&self) -> Sheet<'_> {
+    pub fn active_sheet(&self) -> Sheet<'_> {
         Sheet {
             data: &self.sheets[self.current],
         }
@@ -28,6 +28,11 @@ impl Workpad {
 
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    // TODO Think about MVCC
+    pub fn set_name(&mut self, value: impl ToCompactString) {
+        self.name = value.to_compact_string()
     }
 }
 
@@ -41,8 +46,11 @@ pub struct SheetData {
 
 impl SheetData {
     fn new(name: impl ToCompactString) -> Self {
-        let columns = (0..99).map(ColumnData::new).collect();
-        let rows = (0..999).map(RowData::new).collect();
+        // TODO Temporarilly overridden until scroll window only is working
+        // let columns = (0..99).map(ColumnData::new).collect();
+        // let rows = (0..999).map(RowData::new).collect();
+        let columns = (0..30).map(ColumnData::new).collect();
+        let rows = (0..99).map(RowData::new).collect();
         Self {
             name: name.to_compact_string(),
             column_header_height: 20.0,
@@ -98,6 +106,7 @@ impl Sheet<'_> {
             .map(|(index, data)| Column::new(data, index))
     }
 
+    #[allow(dead_code)]
     pub fn column(&self, index: usize) -> Column<'_> {
         Column::new(&self.data.columns[index], index)
     }
@@ -110,6 +119,7 @@ impl Sheet<'_> {
             .map(|(index, data)| Row::new(data, index))
     }
 
+    #[allow(dead_code)]
     pub fn row(&self, index: usize) -> Row<'_> {
         Row::new(&self.data.rows[index], index)
     }
@@ -120,6 +130,32 @@ impl Sheet<'_> {
 
     pub fn row_header_width(&self) -> f32 {
         self.data.row_header_width
+    }
+
+    pub fn active_cell(&self) -> Cell<'_> {
+        // TODO
+        self.cell(0, 0)
+    }
+
+    pub fn cells(&self) -> impl Iterator<Item = Cell<'_>> {
+        // TODO use a range
+        let rows = self.data.rows.len();
+        let cols = self.data.columns.len();
+        let mut rw = 0;
+        let mut cl = 0;
+        std::iter::from_fn(move || {
+            if rw >= rows {
+                None
+            } else {
+                let cell = self.cell(rw, cl);
+                cl += 1;
+                if cl >= cols {
+                    cl = 0;
+                    rw += 1;
+                }
+                Some(cell)
+            }
+        })
     }
 
     pub fn cell(&self, row: usize, column: usize) -> Cell<'_> {

@@ -1,52 +1,12 @@
-[package]
-name = "flexpad"
-version = "0.0.1"
+[workspace]
+
+members = [
+    "flexpad",
+    "flexpad-grid"
+]
+
+[workspace.package]
+version = "0.0.2"
 authors = ["Dave Wathen <dave@wathenweb.com>"]
-edition = "2021"
 rust-version = "1.65"
-build = "build.rs"
-
-[build-dependencies]
-vergen = { version = "8.2.1", features = [ "build", "git", "gitoxide" ] }
-
-[dependencies]
-egui = "0.22.0"
-eframe = { version = "0.22.0", default-features = false, features = [
-    "default_fonts", # Embed the default egui fonts.
-    "glow",          # Use the glow rendering backend. Alternative: "wgpu".
-    "persistence",   # Enable restoring app state when restarting the app.
-] }
-
-# You only need serde if you want app persistence:
-serde = { version = "1", features = ["derive"] }
-image = { version = "0.24.6", features = ["jpeg", "png"] }
-compact_str = "0.7.0"
-
-# native:
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tracing-subscriber = "0.3"
-
-# web:
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-console_error_panic_hook = "0.1.6"
-tracing-wasm = "0.2"
-wasm-bindgen-futures = "0.4"
-
-
-[profile.release]
-opt-level = 2 # fast and small wasm
-
-# Optimize all dependencies even in debug builds:
-[profile.dev.package."*"]
-opt-level = 2
-
-
-[patch.crates-io]
-
-# If you want to use the bleeding edge version of egui and eframe:
-# egui = { git = "https://github.com/emilk/egui", branch = "master" }
-# eframe = { git = "https://github.com/emilk/egui", branch = "master" }
-
-# If you fork https://github.com/emilk/egui you can test with:
-# egui = { path = "../egui/crates/egui" }
-# eframe = { path = "../egui/crates/eframe" }
+edition = "2021"
