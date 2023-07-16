@@ -566,7 +566,12 @@ where
                     // TODO: make fill in color configurable
                     let active_style = theme.active(&self.style);
                     let color = active_style.scroller.color;
-                    let color = Color::new(color.r * 0.8, color.g * 0.8, color.b * 0.8, color.a);
+                    let color = Color::new(
+                        (color.r * 1.1).min(1.0),
+                        (color.g * 1.1).min(1.0),
+                        (color.b * 1.1).min(1.0),
+                        color.a,
+                    );
                     for fill_in in scrollbars.fill_ins() {
                         renderer.fill_quad(
                             renderer::Quad {
