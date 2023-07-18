@@ -16,7 +16,6 @@ use crate::Grid;
 // TODO: Scroll in columns/rows (maybe optional - discrete/continuous)
 // TODO: Visible only contents to allow large grids
 // TODO: Why is performance slow for large grids anyway
-// TODO: Why won't it scroll to the ends of the rows/columns
 // TODO: Programatic scrolling to row/column?
 
 /// A widget that can display a large [`Grid`] with scrollbars
@@ -105,7 +104,6 @@ where
 
     fn constituents(&self, tree: &Tree, layout: Layout<'_>) -> internals::Constituents {
         let state = tree.state.downcast_ref::<State>();
-        let bounds = layout.bounds();
 
         let content_layout = layout.children().next().unwrap();
         let content_bounds = content_layout.bounds();
@@ -123,10 +121,10 @@ where
             .then(|| grid_children_layouts.next().unwrap().bounds());
 
         internals::Constituents::new(
-            state,
+            tree.state.downcast_ref::<State>(),
             &self.vertical,
             &self.horizontal,
-            bounds,
+            layout.bounds(),
             content_bounds,
             row_heads_bounds,
             column_heads_bounds,
@@ -228,7 +226,9 @@ where
         let event_status = {
             let cursor = match cursor_over_scrollable {
                 Some(cursor_position) if !(mouse_over_x_scrollbar || mouse_over_y_scrollbar) => {
-                    mouse::Cursor::Available(cursor_position + state.offset(bounds, content_bounds))
+                    mouse::Cursor::Available(
+                        cursor_position + state.offset(constituents.scroll_context()),
+                    )
                 }
                 _ => mouse::Cursor::Unavailable,
             };
@@ -275,7 +275,7 @@ where
                     mouse::ScrollDelta::Pixels { x, y } => Vector::new(x, y),
                 };
 
-                state.scroll(delta, bounds, content_bounds);
+                state.scroll(delta, constituents.scroll_context());
 
                 notify_on_scroll(state, &self.on_scroll, bounds, content_bounds, shell);
 
@@ -304,7 +304,7 @@ where
                                 cursor_position.y - scroll_box_touched_at.y,
                             );
 
-                            state.scroll(delta, bounds, content_bounds);
+                            state.scroll(delta, constituents.scroll_context());
 
                             state.scroll_area_touched_at = Some(cursor_position);
 
@@ -339,8 +339,7 @@ where
 
                         state.scroll_y_to(
                             scrollbar.scroll_percentage_y(scroller_grabbed_at, cursor_position),
-                            bounds,
-                            content_bounds,
+                            constituents.scroll_context(),
                         );
 
                         notify_on_scroll(state, &self.on_scroll, bounds, content_bounds, shell);
@@ -364,8 +363,7 @@ where
                     ) {
                         state.scroll_y_to(
                             scrollbar.scroll_percentage_y(scroller_grabbed_at, cursor_position),
-                            bounds,
-                            content_bounds,
+                            constituents.scroll_context(),
                         );
 
                         state.y_scroller_grabbed_at = Some(scroller_grabbed_at);
@@ -397,8 +395,7 @@ where
                     if let Some(scrollbar) = constituents.x {
                         state.scroll_x_to(
                             scrollbar.scroll_percentage_x(scroller_grabbed_at, cursor_position),
-                            bounds,
-                            content_bounds,
+                            constituents.scroll_context(),
                         );
 
                         notify_on_scroll(state, &self.on_scroll, bounds, content_bounds, shell);
@@ -422,8 +419,7 @@ where
                     ) {
                         state.scroll_x_to(
                             scrollbar.scroll_percentage_x(scroller_grabbed_at, cursor_position),
-                            bounds,
-                            content_bounds,
+                            constituents.scroll_context(),
                         );
 
                         state.x_scroller_grabbed_at = Some(scroller_grabbed_at);
@@ -455,12 +451,11 @@ where
 
         let bounds = layout.bounds();
         let content_layout = layout.children().next().unwrap();
-        let content_bounds = content_layout.bounds();
 
         let cursor_over_scrollable = cursor.position_over(bounds);
         let (mouse_over_y_scrollbar, mouse_over_x_scrollbar) = constituents.is_mouse_over(cursor);
 
-        let offset = state.offset(bounds, content_bounds);
+        let offset = state.offset(constituents.scroll_context());
 
         let cursor = match cursor_over_scrollable {
             Some(cursor_position) if !(mouse_over_x_scrollbar || mouse_over_y_scrollbar) => {
@@ -471,7 +466,7 @@ where
 
         if constituents.can_scroll() {
             // Draw grid content
-            renderer.with_layer(constituents.grid_cells_viewport, |renderer| {
+            renderer.with_layer(constituents.cells_viewport, |renderer| {
                 renderer.with_translation(Vector::ZERO - offset, |renderer| {
                     self.content.draw(
                         &tree.children[0],
@@ -481,8 +476,8 @@ where
                         content_layout,
                         cursor,
                         &Rectangle::new(
-                            constituents.grid_cells_viewport.position() + offset,
-                            constituents.grid_cells_viewport.size(),
+                            constituents.cells_viewport.position() + offset,
+                            constituents.cells_viewport.size(),
                         ),
                     );
                 });
@@ -672,14 +667,13 @@ where
         let cursor_over_scrollable = cursor.position_over(bounds);
 
         let content_layout = layout.children().next().unwrap();
-        let content_bounds = content_layout.bounds();
 
         let (mouse_over_y_scrollbar, mouse_over_x_scrollbar) = constituents.is_mouse_over(cursor);
 
         if (mouse_over_x_scrollbar || mouse_over_y_scrollbar) || state.scrollers_grabbed() {
             mouse::Interaction::Idle
         } else {
-            let offset = state.offset(bounds, content_bounds);
+            let offset = state.offset(constituents.scroll_context());
 
             let cursor = match cursor_over_scrollable {
                 Some(cursor_position) if !(mouse_over_x_scrollbar || mouse_over_y_scrollbar) => {
@@ -708,6 +702,7 @@ where
         layout: Layout<'_>,
         renderer: &Renderer,
     ) -> Option<overlay::Element<'b, Message, Renderer>> {
+        let constituents = self.constituents(tree, layout);
         self.content
             .overlay(
                 &mut tree.children[0],
@@ -715,13 +710,10 @@ where
                 renderer,
             )
             .map(|overlay| {
-                let bounds = layout.bounds();
-                let content_layout = layout.children().next().unwrap();
-                let content_bounds = content_layout.bounds();
                 let offset = tree
                     .state
                     .downcast_ref::<State>()
-                    .offset(bounds, content_bounds);
+                    .offset(constituents.scroll_context());
 
                 overlay.translate(Vector::new(-offset.x, -offset.y))
             })
@@ -867,10 +859,60 @@ enum Offset {
 }
 
 impl Offset {
-    fn absolute(self, viewport: f32, content: f32) -> f32 {
+    fn absolute(self, ratio: ScrollRatio) -> f32 {
         match self {
-            Offset::Absolute(absolute) => absolute.min((content - viewport).max(0.0)),
-            Offset::Relative(percentage) => ((content - viewport) * percentage).max(0.0),
+            Offset::Absolute(absolute) => ratio.clamp(absolute),
+            Offset::Relative(percentage) => ratio.percentage(percentage),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ScrollRatio {
+    viewport: f32,
+    onto: f32,
+}
+
+impl ScrollRatio {
+    fn clamp(&self, value: f32) -> f32 {
+        value.clamp(0.0, self.onto - self.viewport)
+    }
+
+    fn percentage(&self, percentage: f32) -> f32 {
+        self.clamp((self.onto - self.viewport) * percentage)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ScrollContext {
+    viewport: Rectangle,
+    content: Rectangle,
+}
+
+impl ScrollContext {
+    fn new(viewport: Rectangle, content: Rectangle) -> Self {
+        Self { viewport, content }
+    }
+
+    fn can_scroll_x(&self) -> bool {
+        self.viewport.width < self.content.width
+    }
+
+    fn can_scroll_y(&self) -> bool {
+        self.viewport.height < self.content.height
+    }
+
+    fn x_ratio(&self) -> ScrollRatio {
+        ScrollRatio {
+            viewport: self.viewport.width,
+            onto: self.content.width,
+        }
+    }
+
+    fn y_ratio(&self) -> ScrollRatio {
+        ScrollRatio {
+            viewport: self.viewport.height,
+            onto: self.content.height,
         }
     }
 }
@@ -887,12 +929,9 @@ pub struct Viewport {
 impl Viewport {
     /// Returns the [`AbsoluteOffset`] of the current [`Viewport`].
     pub fn absolute_offset(&self) -> AbsoluteOffset {
-        let x = self
-            .offset_x
-            .absolute(self.bounds.width, self.content_bounds.width);
-        let y = self
-            .offset_y
-            .absolute(self.bounds.height, self.content_bounds.height);
+        let context = ScrollContext::new(self.bounds, self.content_bounds);
+        let x = self.offset_x.absolute(context.x_ratio());
+        let y = self.offset_y.absolute(context.y_ratio());
 
         AbsoluteOffset { x, y }
     }
@@ -914,21 +953,16 @@ impl State {
         State::default()
     }
 
-    /// Apply a scrolling offset to the current [`State`], given the bounds of
-    /// the [`GridScrollable`] and its contents.
-    pub fn scroll(&mut self, delta: Vector<f32>, bounds: Rectangle, content_bounds: Rectangle) {
-        if bounds.height < content_bounds.height {
-            self.offset_y = Offset::Absolute(
-                (self.offset_y.absolute(bounds.height, content_bounds.height) - delta.y)
-                    .clamp(0.0, content_bounds.height - bounds.height),
-            )
+    /// Apply a scrolling offset to the current [`State`], given the context.
+    fn scroll(&mut self, delta: Vector<f32>, context: ScrollContext) {
+        if context.can_scroll_y() {
+            let ratio = context.y_ratio();
+            self.offset_y = Offset::Absolute(ratio.clamp(self.offset_y.absolute(ratio) - delta.y))
         }
 
-        if bounds.width < content_bounds.width {
-            self.offset_x = Offset::Absolute(
-                (self.offset_x.absolute(bounds.width, content_bounds.width) - delta.x)
-                    .clamp(0.0, content_bounds.width - bounds.width),
-            );
+        if context.can_scroll_x() {
+            let ratio = context.x_ratio();
+            self.offset_x = Offset::Absolute(ratio.clamp(self.offset_x.absolute(ratio) - delta.x));
         }
     }
 
@@ -936,47 +970,43 @@ impl State {
     ///
     /// `0` represents scrollbar at the beginning, while `1` represents scrollbar at
     /// the end.
-    pub fn scroll_y_to(&mut self, percentage: f32, bounds: Rectangle, content_bounds: Rectangle) {
+    fn scroll_y_to(&mut self, percentage: f32, context: ScrollContext) {
         self.offset_y = Offset::Relative(percentage.clamp(0.0, 1.0));
-        self.unsnap(bounds, content_bounds);
+        self.unsnap(context);
     }
 
     /// Scrolls the [`GridScrollable`] to a relative amount along the x axis.
     ///
     /// `0` represents scrollbar at the beginning, while `1` represents scrollbar at
     /// the end.
-    pub fn scroll_x_to(&mut self, percentage: f32, bounds: Rectangle, content_bounds: Rectangle) {
+    fn scroll_x_to(&mut self, percentage: f32, context: ScrollContext) {
         self.offset_x = Offset::Relative(percentage.clamp(0.0, 1.0));
-        self.unsnap(bounds, content_bounds);
+        self.unsnap(context);
     }
 
     /// Snaps the scroll position to a [`RelativeOffset`].
-    pub fn snap_to(&mut self, offset: RelativeOffset) {
+    fn snap_to(&mut self, offset: RelativeOffset) {
         self.offset_x = Offset::Relative(offset.x.clamp(0.0, 1.0));
         self.offset_y = Offset::Relative(offset.y.clamp(0.0, 1.0));
     }
 
     /// Scroll to the provided [`AbsoluteOffset`].
-    pub fn scroll_to(&mut self, offset: AbsoluteOffset) {
+    fn scroll_to(&mut self, offset: AbsoluteOffset) {
         self.offset_x = Offset::Absolute(offset.x.max(0.0));
         self.offset_y = Offset::Absolute(offset.y.max(0.0));
     }
 
-    /// Unsnaps the current scroll position, if snapped, given the bounds of the
-    /// [`GridScrollable`] and its contents.
-    pub fn unsnap(&mut self, bounds: Rectangle, content_bounds: Rectangle) {
-        self.offset_x =
-            Offset::Absolute(self.offset_x.absolute(bounds.width, content_bounds.width));
-        self.offset_y =
-            Offset::Absolute(self.offset_y.absolute(bounds.height, content_bounds.height));
+    /// Unsnaps the current scroll position, if snapped, given the context.
+    fn unsnap(&mut self, context: ScrollContext) {
+        self.offset_x = Offset::Absolute(self.offset_x.absolute(context.x_ratio()));
+        self.offset_y = Offset::Absolute(self.offset_y.absolute(context.y_ratio()));
     }
 
-    /// Returns the scrolling offset of the [`State`], given the bounds of the
-    /// [`GridScrollable`] and its contents.
-    pub fn offset(&self, bounds: Rectangle, content_bounds: Rectangle) -> Vector {
+    /// Returns the scrolling offset of the [`State`], given the context.
+    fn offset(&self, context: ScrollContext) -> Vector {
         Vector::new(
-            self.offset_x.absolute(bounds.width, content_bounds.width),
-            self.offset_y.absolute(bounds.height, content_bounds.height),
+            self.offset_x.absolute(context.x_ratio()),
+            self.offset_y.absolute(context.y_ratio()),
         )
     }
 
@@ -1037,7 +1067,7 @@ impl Properties {
 pub(super) mod internals {
     use iced::{advanced::mouse, Point, Rectangle, Size, Vector};
 
-    use super::{Properties, State};
+    use super::{Properties, ScrollContext, State};
 
     #[derive(Debug)]
     /// State of both [`Scrollbar`]s.
@@ -1047,7 +1077,8 @@ pub(super) mod internals {
         bars_fill_in: Option<Rectangle>,
         row_head_fill_in: Option<Rectangle>,
         column_head_fill_in: Option<Rectangle>,
-        pub grid_cells_viewport: Rectangle,
+        pub grid_cells_bounds: Rectangle,
+        pub cells_viewport: Rectangle,
         pub row_head_viewport: Option<Rectangle>,
         pub column_head_viewport: Option<Rectangle>,
         pub corner_viewport: Option<Rectangle>,
@@ -1064,6 +1095,18 @@ pub(super) mod internals {
             row_heads_bounds: Option<Rectangle>,
             column_head_bounds: Option<Rectangle>,
         ) -> Self {
+            // Grid cell bounds is the portion of the Grid that contains cells
+            let heads_adjustment = match (row_heads_bounds, column_head_bounds) {
+                (None, None) => Vector::ZERO,
+                (None, Some(chb)) => Vector::new(0.0, chb.height),
+                (Some(rhb), None) => Vector::new(rhb.width, 0.0),
+                (Some(rhb), Some(chb)) => Vector::new(rhb.width, chb.height),
+            };
+            let grid_cells_bounds = Rectangle::new(
+                content_bounds.position() + heads_adjustment,
+                (content_bounds.size() - heads_adjustment.into()).max(Size::ZERO),
+            );
+
             // Initial sizes for scrollbars
             let (x_height, y_width) = (horizontal.across(), vertical.across());
             let (x_width, y_height) = (
@@ -1095,27 +1138,21 @@ pub(super) mod internals {
 
             // Calculate the sub-viewports for the grid (row/column heads and cells)
             let scroll_bars_adjustment = Size::new(y_width, x_height);
-            let heads_adjustment = match (row_heads_bounds, column_head_bounds) {
-                (None, None) => Vector::ZERO,
-                (None, Some(chb)) => Vector::new(0.0, chb.height),
-                (Some(rhb), None) => Vector::new(rhb.width, 0.0),
-                (Some(rhb), Some(chb)) => Vector::new(rhb.width, chb.height),
-            };
-            let grid_cells_viewport = Rectangle::new(
+            let cells_viewport = Rectangle::new(
                 bounds.position() + heads_adjustment,
                 (bounds.size() - heads_adjustment.into() - scroll_bars_adjustment).max(Size::ZERO),
             );
 
             let row_head_viewport = row_heads_bounds.map(|b| {
                 Rectangle::new(
-                    Point::new(bounds.x, grid_cells_viewport.y),
-                    Size::new(b.width, grid_cells_viewport.height),
+                    Point::new(bounds.x, cells_viewport.y),
+                    Size::new(b.width, cells_viewport.height),
                 )
             });
             let column_head_viewport = column_head_bounds.map(|b| {
                 Rectangle::new(
-                    Point::new(grid_cells_viewport.x, bounds.y),
-                    Size::new(grid_cells_viewport.width, b.height),
+                    Point::new(cells_viewport.x, bounds.y),
+                    Size::new(cells_viewport.width, b.height),
                 )
             });
             let corner_viewport = match (row_head_viewport, column_head_viewport) {
@@ -1127,7 +1164,8 @@ pub(super) mod internals {
             };
 
             // Calculate the offset
-            let offset = state.offset(grid_cells_viewport, content_bounds);
+            let context = ScrollContext::new(cells_viewport, grid_cells_bounds);
+            let offset = state.offset(context);
 
             let y_scrollbar = y_active.then(|| {
                 let Properties {
@@ -1138,29 +1176,27 @@ pub(super) mod internals {
 
                 // Total bounds of the scrollbar + margin + scroller width
                 let total_scrollbar_bounds = Rectangle {
-                    x: grid_cells_viewport.x + grid_cells_viewport.width,
-                    y: grid_cells_viewport.y,
+                    x: cells_viewport.x + cells_viewport.width,
+                    y: cells_viewport.y,
                     width: y_width,
                     height: y_height,
                 };
 
                 // Bounds of just the scrollbar
                 let scrollbar_bounds = Rectangle {
-                    x: grid_cells_viewport.x + grid_cells_viewport.width + (y_width - width) / 2.0,
-                    y: grid_cells_viewport.y,
+                    x: cells_viewport.x + cells_viewport.width + (y_width - width) / 2.0,
+                    y: cells_viewport.y,
                     width,
                     height: y_height,
                 };
 
-                let ratio = y_height / content_bounds.height;
+                let ratio = y_height / grid_cells_bounds.height;
                 // min height for easier grabbing with super tall content
                 let scroller_height = (y_height * ratio).max(2.0);
                 let scroller_offset = offset.y * ratio;
 
                 let scroller_bounds = Rectangle {
-                    x: grid_cells_viewport.x
-                        + grid_cells_viewport.width
-                        + (y_width - scroller_width) / 2.0,
+                    x: cells_viewport.x + cells_viewport.width + (y_width - scroller_width) / 2.0,
                     y: (scrollbar_bounds.y + scroller_offset).max(0.0),
                     width: scroller_width,
                     height: scroller_height,
@@ -1184,32 +1220,28 @@ pub(super) mod internals {
 
                 // Total bounds of the scrollbar + margin + scroller width
                 let total_scrollbar_bounds = Rectangle {
-                    x: grid_cells_viewport.x,
-                    y: grid_cells_viewport.y + grid_cells_viewport.height,
+                    x: cells_viewport.x,
+                    y: cells_viewport.y + cells_viewport.height,
                     width: x_width,
                     height: x_height,
                 };
 
                 // Bounds of just the scrollbar
                 let scrollbar_bounds = Rectangle {
-                    x: grid_cells_viewport.x,
-                    y: grid_cells_viewport.y
-                        + grid_cells_viewport.height
-                        + (x_height - width) / 2.0,
+                    x: cells_viewport.x,
+                    y: cells_viewport.y + cells_viewport.height + (x_height - width) / 2.0,
                     width: x_width,
                     height: width,
                 };
 
-                let ratio = x_width / content_bounds.width;
+                let ratio = x_width / grid_cells_bounds.width;
                 // min width for easier grabbing with extra wide content
                 let scroller_length = (x_width * ratio).max(2.0);
                 let scroller_offset = offset.x * ratio;
 
                 let scroller_bounds = Rectangle {
                     x: (scrollbar_bounds.x + scroller_offset).max(0.0),
-                    y: grid_cells_viewport.y
-                        + grid_cells_viewport.height
-                        + (x_height - scroller_width) / 2.0,
+                    y: cells_viewport.y + cells_viewport.height + (x_height - scroller_width) / 2.0,
                     width: scroller_length,
                     height: scroller_width,
                 };
@@ -1226,8 +1258,8 @@ pub(super) mod internals {
             let bars_fill_in = (x_active && y_active).then(|| {
                 Rectangle::new(
                     Point::new(
-                        grid_cells_viewport.x + grid_cells_viewport.width,
-                        grid_cells_viewport.y + grid_cells_viewport.height,
+                        cells_viewport.x + cells_viewport.width,
+                        cells_viewport.y + cells_viewport.height,
                     ),
                     Size::new(y_width, x_height),
                 )
@@ -1255,11 +1287,16 @@ pub(super) mod internals {
                 bars_fill_in,
                 row_head_fill_in,
                 column_head_fill_in,
-                grid_cells_viewport,
+                cells_viewport,
                 row_head_viewport,
                 column_head_viewport,
                 corner_viewport,
+                grid_cells_bounds,
             }
+        }
+
+        pub(super) fn scroll_context(&self) -> ScrollContext {
+            ScrollContext::new(self.cells_viewport, self.grid_cells_bounds)
         }
 
         pub fn is_mouse_over(&self, cursor: mouse::Cursor) -> (bool, bool) {
