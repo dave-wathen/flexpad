@@ -103,8 +103,6 @@ where
     }
 
     fn constituents(&self, tree: &Tree, layout: Layout<'_>) -> internals::Constituents {
-        let state = tree.state.downcast_ref::<State>();
-
         let content_layout = layout.children().next().unwrap();
         let content_bounds = content_layout.bounds();
 
