@@ -7,8 +7,9 @@ use iced::mouse::{Cursor, Interaction};
 use iced::{event, Color, Element, Event, Length, Point, Rectangle, Size, Vector};
 use std::borrow::Borrow;
 use std::collections::BTreeSet;
+use std::rc::Rc;
 
-use crate::{ColumnHead, GridCell, GridCorner, Lengths, RowCol, RowHead};
+use crate::{ColumnHead, GridCell, GridCorner, RowCol, RowHead, SumSeq};
 
 pub mod addressing;
 pub mod cell;
@@ -25,8 +26,8 @@ where
     Renderer: iced::advanced::Renderer,
     Renderer::Theme: StyleSheet,
 {
-    row_heights: Lengths,
-    column_widths: Lengths,
+    row_heights: Rc<SumSeq>,
+    column_widths: Rc<SumSeq>,
     width: Length,
     height: Length,
     cells: Vec<GridCell<'a, Message, Renderer>>,
@@ -44,10 +45,10 @@ where
     <Renderer::Theme as StyleSheet>::Style: Clone,
 {
     /// Creates an empty [`Grid`].
-    pub fn new(row_heights: impl Into<Lengths>, column_widths: impl Into<Lengths>) -> Self {
+    pub fn new(row_heights: SumSeq, column_widths: SumSeq) -> Self {
         Grid {
-            row_heights: row_heights.into(),
-            column_widths: column_widths.into(),
+            row_heights: Rc::new(row_heights),
+            column_widths: Rc::new(column_widths),
             width: Length::Shrink,
             height: Length::Shrink,
             cells: vec![],
@@ -81,7 +82,7 @@ where
     pub fn push_row_head(mut self, head: RowHead<'a, Message, Renderer>) -> Self {
         let rh = match self.row_heads {
             Some(rh) => rh,
-            None => RowHeads::new(self.row_heights.clone()),
+            None => RowHeads::new(Rc::clone(&self.row_heights)),
         };
         let rh = rh.push(head.head);
         let rh = rh.style(self.style.clone());
@@ -105,7 +106,7 @@ where
     pub fn push_column_head(mut self, head: ColumnHead<'a, Message, Renderer>) -> Self {
         let ch = match self.column_heads {
             Some(ch) => ch,
-            None => ColumnHeads::new(self.column_widths.clone()),
+            None => ColumnHeads::new(Rc::clone(&self.column_widths)),
         };
         let ch = ch.push(head.head);
         let ch = ch.style(self.style.clone());
@@ -291,8 +292,12 @@ where
         };
 
         for child_cell in self.cells.iter() {
-            let (y1, y2) = self.row_heights.span(child_cell.range.rows());
-            let (x1, x2) = self.column_widths.span(child_cell.range.columns());
+            let rows = child_cell.range.rows();
+            let y1 = self.row_heights.sum_to(rows.start as usize);
+            let y2 = self.row_heights.sum_to(rows.end as usize);
+            let columns = child_cell.range.columns();
+            let x1 = self.column_widths.sum_to(columns.start as usize);
+            let x2 = self.column_widths.sum_to(columns.end as usize);
             let cell_size = Size::new(x2 - x1, y2 - y1);
             let cell_limits = Limits::new(cell_size, cell_size);
             let mut child_layout = child_cell.layout(renderer, &cell_limits);
@@ -580,8 +585,8 @@ where
         // Track which cells of the grid have been included
         // This should only cover visible ranges once scrolling is introduced
         let mut absent_cells = BTreeSet::new();
-        for rw in 0..self.row_heights.count() {
-            for cl in 0..self.column_widths.count() {
+        for rw in 0..self.row_heights.len() {
+            for cl in 0..self.column_widths.len() {
                 absent_cells.insert(RowCol::new(rw as u32, cl as u32));
             }
         }
@@ -617,8 +622,12 @@ where
         // Draw rule lines for the absent cells
         let heads_offset = Vector::new(r_heads_width, c_heads_height);
         for absent_cell in absent_cells {
-            let (y1, y2) = self.row_heights.span(absent_cell.rows());
-            let (x1, x2) = self.column_widths.span(absent_cell.columns());
+            let rows = absent_cell.rows();
+            let y1 = self.row_heights.sum_to(rows.start as usize);
+            let y2 = self.row_heights.sum_to(rows.end as usize);
+            let columns = absent_cell.columns();
+            let x1 = self.column_widths.sum_to(columns.start as usize);
+            let x2 = self.column_widths.sum_to(columns.end as usize);
             let cell_bounds = Rectangle::new(
                 bounds.position() + Vector::new(x1, y1) + heads_offset,
                 Size::new(x2 - x1, y2 - y1),

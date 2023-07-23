@@ -1,4 +1,5 @@
 use std::borrow::Borrow;
+use std::rc::Rc;
 
 use iced::advanced::overlay::Group;
 use iced::advanced::widget::tree::Tree;
@@ -10,7 +11,7 @@ use iced::{
     Vector,
 };
 
-use crate::{Lengths, StyleSheet};
+use crate::{StyleSheet, SumSeq};
 
 // A heading for a row in a [`Grid`]
 pub struct RowHead<'a, Message, Renderer = crate::Renderer>
@@ -335,7 +336,7 @@ where
     Renderer: iced::advanced::Renderer,
     Renderer::Theme: StyleSheet,
 {
-    row_heights: Lengths,
+    row_heights: Rc<SumSeq>,
     width: Length,
     row_heads: Vec<Head<'a, Message, Renderer>>,
     style: <Renderer::Theme as StyleSheet>::Style,
@@ -348,7 +349,7 @@ where
     Renderer::Theme: StyleSheet,
 {
     /// Creates an empty [`RowHeads`].
-    pub fn new(row_heights: Lengths) -> Self {
+    pub fn new(row_heights: Rc<SumSeq>) -> Self {
         Self {
             row_heights,
             width: Length::Shrink,
@@ -406,7 +407,8 @@ where
         let mut max_width: f32 = 0.0;
         for r_head in self.row_heads.iter() {
             let rw = r_head.index;
-            let (y1, y2) = self.row_heights.span(rw..(rw + 1));
+            let y1 = self.row_heights.sum_to(rw as usize);
+            let y2 = self.row_heights.sum_to((rw + 1) as usize);
             let cell_limits = limits.loose().max_height(y2 - y1);
             let mut child_layout = r_head.layout(renderer, &cell_limits);
             max_width = max_width.max(child_layout.size().width);
@@ -499,7 +501,7 @@ where
 
         // Draw rule lines
         let mut cell_start = bounds.position();
-        for row_height in self.row_heights.lengths() {
+        for row_height in self.row_heights.values() {
             let cell_bounds = Rectangle::new(cell_start, Size::new(bounds.width, row_height));
             renderer.fill_quad(
                 renderer::Quad {
@@ -580,7 +582,7 @@ where
     Renderer: iced::advanced::Renderer,
     Renderer::Theme: StyleSheet,
 {
-    column_widths: Lengths,
+    column_widths: Rc<SumSeq>,
     height: Length,
     column_heads: Vec<Head<'a, Message, Renderer>>,
     style: <Renderer::Theme as StyleSheet>::Style,
@@ -593,7 +595,7 @@ where
     Renderer::Theme: StyleSheet,
 {
     /// Creates an empty [`ColumnHeads`].
-    pub fn new(column_widths: Lengths) -> Self {
+    pub fn new(column_widths: Rc<SumSeq>) -> Self {
         Self {
             column_widths,
             height: Length::Shrink,
@@ -651,7 +653,8 @@ where
         let mut max_height: f32 = 0.0;
         for c_head in self.column_heads.iter() {
             let cl = c_head.index;
-            let (x1, x2) = self.column_widths.span(cl..(cl + 1));
+            let x1 = self.column_widths.sum_to(cl as usize);
+            let x2 = self.column_widths.sum_to((cl + 1) as usize);
             let cell_limits = limits.loose().max_width(x2 - x1);
             let mut child_layout = c_head.layout(renderer, &cell_limits);
             max_height = max_height.max(child_layout.size().height);
@@ -744,7 +747,7 @@ where
 
         // Draw rule lines
         let mut cell_start = bounds.position();
-        for column_width in self.column_widths.lengths() {
+        for column_width in self.column_widths.values() {
             let cell_bounds = Rectangle::new(cell_start, Size::new(column_width, bounds.height));
             renderer.fill_quad(
                 renderer::Quad {

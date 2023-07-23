@@ -2,7 +2,7 @@ use std::sync::{Arc, RwLock};
 
 use crate::model::workpad::Workpad;
 use flexpad_grid::{
-    style, ColumnHead, Grid, GridCell, GridCorner, GridScrollable, Lengths, RowHead,
+    style, ColumnHead, Grid, GridCell, GridCorner, GridScrollable, RowHead, SumSeq,
 };
 use iced::{
     alignment, theme,
@@ -181,14 +181,16 @@ impl WorkpadUI {
         let sheet = pad.active_sheet();
 
         // TODO Allow hetrogenious sizes
-        let widths = Lengths::from((
+        let mut widths = SumSeq::new();
+        widths.push_many(
             sheet.columns().count() as u32,
             sheet.columns().next().unwrap().width(),
-        ));
-        let heights = Lengths::from((
+        );
+        let mut heights = SumSeq::new();
+        heights.push_many(
             sheet.rows().count() as u32,
             sheet.rows().next().unwrap().height(),
-        ));
+        );
 
         // TODO Hardcoded text sizes
         let mut grid: Grid<WorkpadMessage> = Grid::new(heights, widths)
@@ -215,7 +217,10 @@ impl WorkpadUI {
             ))
         }
 
-        GridScrollable::new(grid).into()
+        GridScrollable::new(grid)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into()
     }
 
     // TODO Cancel editing using Esc/Button
