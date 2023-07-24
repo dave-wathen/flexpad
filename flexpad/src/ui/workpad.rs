@@ -2,7 +2,8 @@ use std::sync::{Arc, RwLock};
 
 use crate::model::workpad::Workpad;
 use flexpad_grid::{
-    style, ColumnHead, Grid, GridCell, GridCorner, GridScrollable, RowHead, SumSeq,
+    style, CellRange, ColumnHead, Grid, GridCell, GridCorner, GridScrollable, RowCol, RowHead,
+    SumSeq, Viewport,
 };
 use iced::{
     alignment, theme,
@@ -30,6 +31,7 @@ pub enum WorkpadMessage {
     SheetNameEditStart,
     SheetNameEdited(String),
     SheetNameEditEnd,
+    ViewportChanged(Viewport),
 }
 
 pub struct WorkpadUI {
@@ -37,6 +39,7 @@ pub struct WorkpadUI {
     state: State,
     name_edit_id: text_input::Id,
     sheet_edit_id: text_input::Id,
+    visible_cells: Option<CellRange>,
 }
 
 impl Default for WorkpadUI {
@@ -46,6 +49,7 @@ impl Default for WorkpadUI {
             state: Default::default(),
             name_edit_id: text_input::Id::unique(),
             sheet_edit_id: text_input::Id::unique(),
+            visible_cells: None,
         }
     }
 }
@@ -199,32 +203,41 @@ impl WorkpadUI {
             .row_head_width(sheet.row_header_width())
             .column_head_height(sheet.column_header_height());
 
-        for column in sheet.columns() {
-            grid = grid.push_column_head(ColumnHead::new(
-                column.index() as u32,
-                text(column.name()).size(10),
-            ))
-        }
+        if let Some(visibles) = self.visible_cells {
+            for cl in visibles.columns() {
+                let column = sheet.column(cl as usize);
+                grid = grid.push_column_head(ColumnHead::new(cl, text(column.name()).size(10)))
+            }
 
-        for row in sheet.rows() {
-            grid = grid.push_row_head(RowHead::new(row.index() as u32, text(row.name()).size(10)))
-        }
+            for rw in visibles.rows() {
+                let row = sheet.row(rw as usize);
+                grid = grid.push_row_head(RowHead::new(rw, text(row.name()).size(10)))
+            }
 
-        for cell in sheet.cells() {
-            grid = grid.push_cell(GridCell::new(
-                (cell.row().index() as u32, cell.column().index() as u32),
-                text(cell.name()).size(10),
-            ))
+            for RowCol {
+                row: rw,
+                column: cl,
+            } in visibles.cells()
+            {
+                let cell = sheet.cell(rw as usize, cl as usize);
+                grid = grid.push_cell(GridCell::new((rw, cl), text(cell.name()).size(10)))
+            }
         }
 
         GridScrollable::new(grid)
             .width(Length::Fill)
             .height(Length::Fill)
+            .on_viewport_change(WorkpadMessage::ViewportChanged)
             .into()
     }
 
     // TODO Cancel editing using Esc/Button
     pub fn update(&mut self, message: WorkpadMessage) -> Command<WorkpadMessage> {
+        if let WorkpadMessage::ViewportChanged(viewport) = message {
+            dbg!(viewport.cell_range());
+            self.visible_cells = Some(viewport.cell_range())
+        }
+
         match &self.state {
             State::Passive => match message {
                 WorkpadMessage::PadNameEditStart => {

@@ -1,22 +1,21 @@
 //! Navigate an endless amount of content with a scrollbar.
 use std::rc::Rc;
 
-use iced::advanced::widget::{self, operation, tree, Operation, Tree};
+use iced::advanced::widget::{self, tree, Operation, Tree};
 use iced::advanced::{layout, renderer, Clipboard, Layout, Shell, Widget};
 use iced::event::{self, Event};
-use iced::keyboard;
 use iced::mouse;
 use iced::overlay;
 use iced::touch;
-use iced::widget::scrollable::{AbsoluteOffset, RelativeOffset};
 use iced::widget::scrollable::{Scrollbar, StyleSheet};
 use iced::Command;
+use iced::{keyboard, window};
 use iced::{Background, Color, Element, Length, Pixels, Point, Rectangle, Size, Vector};
 
-use crate::{Grid, SumSeq};
+use crate::sequence::Rounding;
+use crate::{operation, CellRange, Grid, SumSeq};
 
 // TODO: Visible only contents to allow large grids
-// TODO: Why is performance slow for large grids anyway
 // TODO: Programatic scrolling to row/column?
 
 /// A widget that can display a large [`Grid`] with scrollbars
@@ -36,7 +35,7 @@ where
     vertical_granularity: Granularity,
     horizontal_granularity: Granularity,
     content: Grid<'a, Message, Renderer>,
-    on_scroll: Option<Box<dyn Fn(Viewport) -> Message + 'a>>,
+    on_viewport_change: Option<Box<dyn Fn(Viewport) -> Message + 'a>>,
     style: <Renderer::Theme as StyleSheet>::Style,
 }
 
@@ -58,7 +57,7 @@ where
             vertical_granularity: Default::default(),
             horizontal_granularity: Default::default(),
             content,
-            on_scroll: None,
+            on_viewport_change: None,
             style: Default::default(),
         }
     }
@@ -131,11 +130,13 @@ where
         self
     }
 
-    /// Sets a function to call when the [`GridScrollable`] is scrolled.
+    /// Sets a function to call when the [`GridScrollable`] changes its viewport onto the
+    /// scrolled content.  This happens when the [`GridScrollable`] is first painted,
+    /// scrolled or resized.
     ///
     /// The function takes the [`Viewport`] of the [`GridScrollable`]
-    pub fn on_scroll(mut self, f: impl Fn(Viewport) -> Message + 'a) -> Self {
-        self.on_scroll = Some(Box::new(f));
+    pub fn on_viewport_change(mut self, f: impl Fn(Viewport) -> Message + 'a) -> Self {
+        self.on_viewport_change = Some(Box::new(f));
         self
     }
 
@@ -233,10 +234,10 @@ where
 
         let grid_measures = GridMeasures {
             cells_bounds: grid_cells_bounds,
-            row_heights: (self.vertical_granularity == Granularity::Discrete)
-                .then(|| Rc::clone(&self.content.row_heights)),
-            column_widths: (self.horizontal_granularity == Granularity::Discrete)
-                .then(|| Rc::clone(&self.content.column_widths)),
+            row_heights: Rc::clone(&self.content.row_heights),
+            column_widths: Rc::clone(&self.content.column_widths),
+            vertical_granularity: self.vertical_granularity,
+            horizontal_granularity: self.horizontal_granularity,
         };
 
         // Calculate the offset
@@ -450,7 +451,7 @@ where
     ) {
         let state = tree.state.downcast_mut::<State>();
 
-        operation.scrollable(state, self.id.as_ref().map(|id| &id.0));
+        //operation.scrollable(state, self.id.as_ref().map(|id| &id.0));
 
         operation.container(self.id.as_ref().map(|id| &id.0), &mut |operation| {
             self.content.operate(
@@ -513,6 +514,26 @@ where
         }
 
         match event {
+            Event::Window(window::Event::Resized {
+                width: _,
+                height: _,
+            }) => {
+                notify_on_viewport_change(
+                    state,
+                    &self.on_viewport_change,
+                    constituents.scales(),
+                    shell,
+                );
+            }
+            Event::Window(window::Event::RedrawRequested(_)) if state.last_notified.is_none() => {
+                notify_on_viewport_change(
+                    state,
+                    &self.on_viewport_change,
+                    constituents.scales(),
+                    shell,
+                );
+                return event::Status::Ignored;
+            }
             Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
                 if cursor_over_scrollable.is_none() {
                     return event::Status::Ignored;
@@ -534,7 +555,12 @@ where
 
                 state.scroll(delta, constituents.scales());
 
-                notify_on_scroll(state, &self.on_scroll, constituents.scales(), shell);
+                notify_on_viewport_change(
+                    state,
+                    &self.on_viewport_change,
+                    constituents.scales(),
+                    shell,
+                );
 
                 return event::Status::Captured;
             }
@@ -565,7 +591,12 @@ where
 
                             state.scroll_area_touched_at = Some(cursor_position);
 
-                            notify_on_scroll(state, &self.on_scroll, constituents.scales(), shell);
+                            notify_on_viewport_change(
+                                state,
+                                &self.on_viewport_change,
+                                constituents.scales(),
+                                shell,
+                            );
                         }
                     }
                     touch::Event::FingerLifted { .. } | touch::Event::FingerLost { .. } => {
@@ -599,7 +630,12 @@ where
                             constituents.scales(),
                         );
 
-                        notify_on_scroll(state, &self.on_scroll, constituents.scales(), shell);
+                        notify_on_viewport_change(
+                            state,
+                            &self.on_viewport_change,
+                            constituents.scales(),
+                            shell,
+                        );
 
                         return event::Status::Captured;
                     }
@@ -625,7 +661,12 @@ where
 
                         state.y_scroller_grabbed_at = Some(scroller_grabbed_at);
 
-                        notify_on_scroll(state, &self.on_scroll, constituents.scales(), shell);
+                        notify_on_viewport_change(
+                            state,
+                            &self.on_viewport_change,
+                            constituents.scales(),
+                            shell,
+                        );
                     }
 
                     return event::Status::Captured;
@@ -655,7 +696,12 @@ where
                             constituents.scales(),
                         );
 
-                        notify_on_scroll(state, &self.on_scroll, constituents.scales(), shell);
+                        notify_on_viewport_change(
+                            state,
+                            &self.on_viewport_change,
+                            constituents.scales(),
+                            shell,
+                        );
                     }
 
                     return event::Status::Captured;
@@ -681,7 +727,12 @@ where
 
                         state.x_scroller_grabbed_at = Some(scroller_grabbed_at);
 
-                        notify_on_scroll(state, &self.on_scroll, constituents.scales(), shell);
+                        notify_on_viewport_change(
+                            state,
+                            &self.on_viewport_change,
+                            constituents.scales(),
+                            shell,
+                        );
 
                         return event::Status::Captured;
                     }
@@ -1025,18 +1076,18 @@ enum Granularity {
 /// Produces a [`Command`] that snaps the [`GridScrollable`] with the given [`Id`]
 /// to the provided `percentage` along the x & y axis.
 #[allow(dead_code)]
-pub fn snap_to<Message: 'static>(id: Id, offset: RelativeOffset) -> Command<Message> {
-    Command::widget(operation::scrollable::snap_to(id.0, offset))
+pub fn snap_to<Message: 'static>(id: Id, offset: operation::RelativeOffset) -> Command<Message> {
+    Command::widget(operation::snap_to(id.0, offset))
 }
 
 /// Produces a [`Command`] that scrolls the [`GridScrollable`] with the given [`Id`]
 /// to the provided [`AbsoluteOffset`] along the x & y axis.
 #[allow(dead_code)]
-pub fn scroll_to<Message: 'static>(id: Id, offset: AbsoluteOffset) -> Command<Message> {
-    Command::widget(operation::scrollable::scroll_to(id.0, offset))
+pub fn scroll_to<Message: 'static>(id: Id, offset: operation::AbsoluteOffset) -> Command<Message> {
+    Command::widget(operation::scroll_to(id.0, offset))
 }
 
-fn notify_on_scroll<Message>(
+fn notify_on_viewport_change<Message>(
     state: &mut State,
     on_scroll: &Option<Box<dyn Fn(Viewport) -> Message + '_>>,
     scales: ScrollScales,
@@ -1100,12 +1151,12 @@ impl Default for State {
     }
 }
 
-impl operation::Scrollable for State {
-    fn snap_to(&mut self, offset: RelativeOffset) {
+impl operation::GridScrollable for State {
+    fn snap_to(&mut self, offset: operation::RelativeOffset) {
         State::snap_to(self, offset);
     }
 
-    fn scroll_to(&mut self, offset: AbsoluteOffset) {
+    fn scroll_to(&mut self, offset: operation::AbsoluteOffset) {
         State::scroll_to(self, offset)
     }
 }
@@ -1128,33 +1179,56 @@ impl Offset {
 /// The current [`Viewport`] of the [`GridScrollable`].
 #[derive(Debug, Clone, Copy)]
 pub struct Viewport {
-    absolute: AbsoluteOffset,
-    relative: RelativeOffset,
+    absolute: operation::AbsoluteOffset,
+    relative: operation::RelativeOffset,
+    range: CellRange,
 }
 
 impl Viewport {
     fn new(offset_x: Offset, offset_y: Offset, scales: ScrollScales) -> Self {
-        let x = offset_x.absolute(&scales.x());
-        let y = offset_y.absolute(&scales.y());
+        let x_scale = scales.x();
+        let y_scale = scales.y();
 
-        let absolute = AbsoluteOffset { x, y };
+        let x = offset_x.absolute(&x_scale);
+        let y = offset_y.absolute(&y_scale);
+        let absolute = operation::AbsoluteOffset { x, y };
 
-        let x = scales.x().absolute_to_relative(x);
-        let y = scales.y().absolute_to_relative(y);
+        let start_column = x_scale.discretes.index_of_sum(x, Rounding::Up).unwrap_or(0) as u32;
+        let start_row = y_scale.discretes.index_of_sum(y, Rounding::Up).unwrap_or(0) as u32;
+        let end_column = x_scale
+            .discretes
+            .index_of_sum(x + scales.viewport.width, Rounding::Down)
+            .unwrap_or(x_scale.discretes.len() - 1) as u32;
+        let end_row = y_scale
+            .discretes
+            .index_of_sum(y + scales.viewport.height, Rounding::Down)
+            .unwrap_or(y_scale.discretes.len() - 1) as u32;
+        let range = CellRange::new((start_row, start_column), (end_row, end_column));
 
-        let relative = RelativeOffset { x, y };
+        let x = x_scale.absolute_to_relative(x);
+        let y = y_scale.absolute_to_relative(y);
+        let relative = operation::RelativeOffset { x, y };
 
-        Self { absolute, relative }
+        Self {
+            absolute,
+            relative,
+            range,
+        }
     }
 
     /// Returns the [`AbsoluteOffset`] of the current [`Viewport`].
-    pub fn absolute_offset(&self) -> AbsoluteOffset {
+    pub fn absolute_offset(&self) -> operation::AbsoluteOffset {
         self.absolute
     }
 
     /// Returns the [`RelativeOffset`] of the current [`Viewport`].
-    pub fn relative_offset(&self) -> RelativeOffset {
+    pub fn relative_offset(&self) -> operation::RelativeOffset {
         self.relative
+    }
+
+    /// Returns the [`CellRange`] of the current [`Viewport`].
+    pub fn cell_range(&self) -> CellRange {
+        self.range
     }
 }
 
@@ -1198,13 +1272,13 @@ impl State {
     }
 
     /// Snaps the scroll position to a [`RelativeOffset`].
-    fn snap_to(&mut self, offset: RelativeOffset) {
+    fn snap_to(&mut self, offset: operation::RelativeOffset) {
         self.offset_x = Offset::Relative(offset.x.clamp(0.0, 1.0));
         self.offset_y = Offset::Relative(offset.y.clamp(0.0, 1.0));
     }
 
     /// Scroll to the provided [`AbsoluteOffset`].
-    fn scroll_to(&mut self, offset: AbsoluteOffset) {
+    fn scroll_to(&mut self, offset: operation::AbsoluteOffset) {
         self.offset_x = Offset::Absolute(offset.x.max(0.0));
         self.offset_y = Offset::Absolute(offset.y.max(0.0));
     }
@@ -1281,16 +1355,20 @@ impl Properties {
 struct ScrollScale {
     viewport: f32,
     onto: f32,
-    discretes: Option<Rc<SumSeq>>,
+    discretes: Rc<SumSeq>,
+    granularity: Granularity,
 }
 
 impl ScrollScale {
     fn quantize(&self, value: f32) -> f32 {
         let value = value.clamp(0.0, (self.onto - self.viewport).max(0.0));
-        if let Some(ref discretes) = self.discretes {
-            let index = discretes.index_of_sum(value);
-            let start = discretes.sum_to(index);
-            let end = discretes.sum_to(index + 1);
+        if self.granularity == Granularity::Discrete {
+            let index = self
+                .discretes
+                .index_of_sum(value, Rounding::Down)
+                .unwrap_or(0);
+            let start = self.discretes.sum_to(index);
+            let end = self.discretes.sum_to(index + 1);
             if value > (start + end) / 2.0 {
                 end
             } else {
@@ -1329,7 +1407,8 @@ impl ScrollScales {
         ScrollScale {
             viewport: self.viewport.width,
             onto: self.grid_measures.cells_bounds.width,
-            discretes: self.grid_measures.column_widths.clone(),
+            discretes: Rc::clone(&self.grid_measures.column_widths),
+            granularity: self.grid_measures.horizontal_granularity,
         }
     }
 
@@ -1337,7 +1416,8 @@ impl ScrollScales {
         ScrollScale {
             viewport: self.viewport.height,
             onto: self.grid_measures.cells_bounds.height,
-            discretes: self.grid_measures.row_heights.clone(),
+            discretes: Rc::clone(&self.grid_measures.row_heights),
+            granularity: self.grid_measures.vertical_granularity,
         }
     }
 }
@@ -1345,8 +1425,10 @@ impl ScrollScales {
 #[derive(Debug, Clone)]
 struct GridMeasures {
     cells_bounds: Rectangle,
-    row_heights: Option<Rc<SumSeq>>,
-    column_widths: Option<Rc<SumSeq>>,
+    row_heights: Rc<SumSeq>,
+    column_widths: Rc<SumSeq>,
+    vertical_granularity: Granularity,
+    horizontal_granularity: Granularity,
 }
 
 #[derive(Debug)]

@@ -101,7 +101,23 @@ impl SumSeq {
         }
     }
 
-    pub fn index_of_sum(&self, sum: f32) -> usize {
+    /// Given a value this returns the index of the element whose sum it most closely represents.
+    /// For example the sequence [10, 15, 20] can be mapped to the sums [10, 25, 45].  A given
+    /// value isseacrched for in this space so 5 would equate to Some(0) and 20 to Some(1).
+    ///
+    /// If the search value exactly matches a value in the sum sequence it can be viewed as
+    /// the last value in the search or as the first value of the subseqent.  In this circumstance
+    /// the rounding determines which.  So 25 rounded Rounding::Down is Some(1) whilst 25
+    /// rounded Rounding::Up is Some(2).
+    ///
+    /// If the search value is greater than the last term None is returned. None will also be returned
+    /// if the sequence is empty or if the search value is 0.0 and rounding is Rounding::Down.
+    pub fn index_of_sum(&self, sum: f32, rounding: Rounding) -> Option<usize> {
+        let len = self.len();
+        if len == 0 {
+            return None;
+        }
+
         match self.data {
             Representation::Compact(values) => {
                 let mut remaining = sum;
@@ -112,14 +128,21 @@ impl SumSeq {
                         index += repeat.0 as isize;
                         remaining -= repeat_sum;
                     } else if remaining > 0.0 {
-                        index += (remaining / repeat.1).ceil() as isize;
-                        remaining = 0.0;
+                        let full_units = (remaining / repeat.1).floor();
+                        remaining -= full_units * repeat.1;
+                        index += full_units as isize;
+                        break;
                     }
                 }
-                if remaining > 0.0 {
+                if remaining > 0.0 || rounding == Rounding::Up {
                     index += 1;
                 }
-                index.max(0) as usize
+                let index = index as usize;
+                if index < len {
+                    Some(index)
+                } else {
+                    None
+                }
             }
             Representation::Tree => todo!(),
         }
@@ -140,8 +163,16 @@ impl Default for SumSeq {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Rounding {
+    #[default]
+    Down,
+    Up,
+}
+
 #[derive(Debug, Clone)]
-pub enum Representation {
+#[allow(dead_code)]
+enum Representation {
     Compact(CompactArray),
     Tree,
 }
@@ -276,22 +307,25 @@ mod tests {
         for v in 1..=5 {
             seq.push(v as f32);
         }
-        assert_eq!(0, seq.index_of_sum(0.0));
-        assert_eq!(0, seq.index_of_sum(0.5));
-        assert_eq!(0, seq.index_of_sum(1.0));
-        assert_eq!(1, seq.index_of_sum(1.1));
-        assert_eq!(1, seq.index_of_sum(2.0));
-        assert_eq!(1, seq.index_of_sum(3.0));
-        assert_eq!(2, seq.index_of_sum(3.1));
-        assert_eq!(2, seq.index_of_sum(4.5));
-        assert_eq!(2, seq.index_of_sum(6.0));
-        assert_eq!(3, seq.index_of_sum(6.1));
-        assert_eq!(3, seq.index_of_sum(8.0));
-        assert_eq!(3, seq.index_of_sum(10.0));
-        assert_eq!(4, seq.index_of_sum(10.1));
-        assert_eq!(4, seq.index_of_sum(12.5));
-        assert_eq!(4, seq.index_of_sum(15.0));
-        assert_eq!(5, seq.index_of_sum(20.0));
+        assert_eq!(None, seq.index_of_sum(0.0, Rounding::Down));
+        assert_eq!(Some(0), seq.index_of_sum(0.0, Rounding::Up));
+        assert_eq!(Some(0), seq.index_of_sum(0.5, Rounding::Down));
+        assert_eq!(Some(0), seq.index_of_sum(0.5, Rounding::Up));
+        assert_eq!(Some(0), seq.index_of_sum(1.0, Rounding::Down));
+        assert_eq!(Some(1), seq.index_of_sum(1.0, Rounding::Up));
+        assert_eq!(Some(1), seq.index_of_sum(1.1, Rounding::Down));
+        assert_eq!(Some(1), seq.index_of_sum(1.1, Rounding::Up));
+        assert_eq!(Some(1), seq.index_of_sum(3.0, Rounding::Down));
+        assert_eq!(Some(2), seq.index_of_sum(3.0, Rounding::Up));
+        assert_eq!(Some(2), seq.index_of_sum(3.1, Rounding::Down));
+        assert_eq!(Some(2), seq.index_of_sum(3.1, Rounding::Up));
+        assert_eq!(Some(2), seq.index_of_sum(6.0, Rounding::Down));
+        assert_eq!(Some(3), seq.index_of_sum(6.0, Rounding::Up));
+        assert_eq!(Some(3), seq.index_of_sum(10.0, Rounding::Down));
+        assert_eq!(Some(4), seq.index_of_sum(10.0, Rounding::Up));
+        assert_eq!(Some(4), seq.index_of_sum(15.0, Rounding::Down));
+        assert_eq!(None, seq.index_of_sum(15.0, Rounding::Up));
+        assert_eq!(None, seq.index_of_sum(20.0, Rounding::Up));
     }
 
     fn assert_compact(seq: &SumSeq, expected: Vec<Repeat>) {

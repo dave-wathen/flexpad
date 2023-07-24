@@ -56,6 +56,7 @@ impl From<(u32, u32)> for RowCol {
 
 /// A [`CellRange`] represents a contiguous block of cells in a [`Grid`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+// TODO Empty cell range
 pub struct CellRange {
     pub start: RowCol,
     pub end: RowCol,
@@ -110,7 +111,7 @@ impl CellRange {
     }
 
     /// Returns an iterator of the individual [`RowCol]s in this [`CellRange`]
-    pub fn iter(&self) -> impl Iterator<Item = RowCol> + '_ {
+    pub fn cells(&self) -> impl Iterator<Item = RowCol> + '_ {
         let mut rw = self.start.row;
         let mut cl = self.start.column;
 
@@ -275,7 +276,7 @@ mod tests {
         let range = CellRange::new_single((1, 2));
         assert_eq!(1, range.count());
 
-        let mut iter = range.iter();
+        let mut iter = range.cells();
         assert_eq!(Some(RowCol::new(1, 2)), iter.next());
         assert_eq!(None, iter.next());
     }
@@ -285,7 +286,7 @@ mod tests {
         let range = CellRange::new((1, 2), (3, 4));
         assert_eq!(9, range.count());
 
-        let mut iter = range.iter();
+        let mut iter = range.cells();
         assert_eq!(Some(RowCol::new(1, 2)), iter.next());
         assert_eq!(Some(RowCol::new(1, 3)), iter.next());
         assert_eq!(Some(RowCol::new(1, 4)), iter.next());

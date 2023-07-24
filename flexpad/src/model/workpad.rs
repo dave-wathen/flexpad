@@ -47,10 +47,10 @@ pub struct SheetData {
 impl SheetData {
     fn new(name: impl ToCompactString) -> Self {
         // TODO Temporarilly overridden until scroll window only is working
-        // let columns = (0..99).map(ColumnData::new).collect();
-        // let rows = (0..999).map(RowData::new).collect();
-        let columns = (0..30).map(ColumnData::new).collect();
-        let rows = (0..99).map(RowData::new).collect();
+        let columns = (0..99).map(ColumnData::new).collect();
+        let rows = (0..999).map(RowData::new).collect();
+        // let columns = (0..30).map(ColumnData::new).collect();
+        // let rows = (0..99).map(RowData::new).collect();
         Self {
             name: name.to_compact_string(),
             column_header_height: 20.0,

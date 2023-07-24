@@ -14,6 +14,7 @@ use crate::{ColumnHead, GridCell, GridCorner, RowCol, RowHead, SumSeq};
 pub mod addressing;
 pub mod cell;
 pub mod head;
+pub mod operation;
 pub mod scroll;
 pub mod style;
 
@@ -584,29 +585,29 @@ where
 
         // Track which cells of the grid have been included
         // This should only cover visible ranges once scrolling is introduced
-        let mut absent_cells = BTreeSet::new();
-        for rw in 0..self.row_heights.len() {
-            for cl in 0..self.column_widths.len() {
-                absent_cells.insert(RowCol::new(rw as u32, cl as u32));
-            }
-        }
+        // let mut absent_cells = BTreeSet::new();
+        // for rw in 0..self.row_heights.len() {
+        //     for cl in 0..self.column_widths.len() {
+        //         absent_cells.insert(RowCol::new(rw as u32, cl as u32));
+        //     }
+        // }
 
         // Cells (that are present)
         for ((cell, tree), layout) in self.cells.iter().zip(child_trees).zip(child_layouts) {
             // Rule lines for this (posssible spanning) cell
-            renderer.fill_quad(
-                renderer::Quad {
-                    bounds: layout.bounds(),
-                    border_radius: 0.0.into(),
-                    border_width: appearance.rule_width,
-                    border_color: appearance.rule_color,
-                },
-                Color::TRANSPARENT,
-            );
+            // renderer.fill_quad(
+            //     renderer::Quad {
+            //         bounds: layout.bounds(),
+            //         border_radius: 0.0.into(),
+            //         border_width: appearance.rule_width,
+            //         border_color: appearance.rule_color,
+            //     },
+            //     Color::TRANSPARENT,
+            // );
 
-            cell.range.iter().for_each(|rc| {
-                absent_cells.remove(&rc);
-            });
+            // cell.range.cells().for_each(|rc| {
+            //     absent_cells.remove(&rc);
+            // });
 
             cell.draw(
                 tree,
@@ -620,28 +621,28 @@ where
         }
 
         // Draw rule lines for the absent cells
-        let heads_offset = Vector::new(r_heads_width, c_heads_height);
-        for absent_cell in absent_cells {
-            let rows = absent_cell.rows();
-            let y1 = self.row_heights.sum_to(rows.start as usize);
-            let y2 = self.row_heights.sum_to(rows.end as usize);
-            let columns = absent_cell.columns();
-            let x1 = self.column_widths.sum_to(columns.start as usize);
-            let x2 = self.column_widths.sum_to(columns.end as usize);
-            let cell_bounds = Rectangle::new(
-                bounds.position() + Vector::new(x1, y1) + heads_offset,
-                Size::new(x2 - x1, y2 - y1),
-            );
-            renderer.fill_quad(
-                renderer::Quad {
-                    bounds: cell_bounds,
-                    border_radius: 0.0.into(),
-                    border_width: appearance.rule_width,
-                    border_color: appearance.rule_color,
-                },
-                Color::TRANSPARENT,
-            );
-        }
+        // let heads_offset = Vector::new(r_heads_width, c_heads_height);
+        // for absent_cell in absent_cells {
+        //     let rows = absent_cell.rows();
+        //     let y1 = self.row_heights.sum_to(rows.start as usize);
+        //     let y2 = self.row_heights.sum_to(rows.end as usize);
+        //     let columns = absent_cell.columns();
+        //     let x1 = self.column_widths.sum_to(columns.start as usize);
+        //     let x2 = self.column_widths.sum_to(columns.end as usize);
+        //     let cell_bounds = Rectangle::new(
+        //         bounds.position() + Vector::new(x1, y1) + heads_offset,
+        //         Size::new(x2 - x1, y2 - y1),
+        //     );
+        //     renderer.fill_quad(
+        //         renderer::Quad {
+        //             bounds: cell_bounds,
+        //             border_radius: 0.0.into(),
+        //             border_width: appearance.rule_width,
+        //             border_color: appearance.rule_color,
+        //         },
+        //         Color::TRANSPARENT,
+        //     );
+        // }
     }
 
     fn overlay<'b>(
