@@ -137,6 +137,7 @@ impl Sheet<'_> {
         self.cell(0, 0)
     }
 
+    #[allow(dead_code)]
     pub fn cells(&self) -> impl Iterator<Item = Cell<'_>> {
         // TODO use a range
         let rows = self.data.rows.len();
@@ -168,11 +169,13 @@ impl Sheet<'_> {
     }
 }
 
+#[allow(dead_code)]
 pub struct Column<'pad> {
     data: &'pad ColumnData,
     index: usize,
 }
 
+#[allow(dead_code)]
 impl Column<'_> {
     fn new(data: &'_ ColumnData, index: usize) -> Column<'_> {
         Column { data, index }
@@ -194,11 +197,13 @@ impl Column<'_> {
     }
 }
 
+#[allow(dead_code)]
 pub struct Row<'pad> {
     data: &'pad RowData,
     index: usize,
 }
 
+#[allow(dead_code)]
 impl Row<'_> {
     fn new(data: &'_ RowData, index: usize) -> Row<'_> {
         Row { data, index }

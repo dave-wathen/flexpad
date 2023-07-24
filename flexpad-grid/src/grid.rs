@@ -6,10 +6,9 @@ use iced::advanced::{layout, mouse, overlay, renderer, Clipboard, Layout, Shell,
 use iced::mouse::{Cursor, Interaction};
 use iced::{event, Color, Element, Event, Length, Point, Rectangle, Size, Vector};
 use std::borrow::Borrow;
-use std::collections::BTreeSet;
 use std::rc::Rc;
 
-use crate::{ColumnHead, GridCell, GridCorner, RowCol, RowHead, SumSeq};
+use crate::{ColumnHead, GridCell, GridCorner, RowHead, SumSeq};
 
 pub mod addressing;
 pub mod cell;

@@ -13,6 +13,7 @@ pub trait GridScrollable {
 
 /// Produces an [`Operation`] that snaps the widget with the given [`Id`] to
 /// the provided `percentage`.
+#[allow(dead_code)]
 pub fn snap_to<T>(target: Id, offset: RelativeOffset) -> impl Operation<T> {
     struct SnapTo {
         target: Id,
@@ -40,6 +41,7 @@ pub fn snap_to<T>(target: Id, offset: RelativeOffset) -> impl Operation<T> {
 
 /// Produces an [`Operation`] that scrolls the widget with the given [`Id`] to
 /// the provided [`AbsoluteOffset`].
+#[allow(dead_code)]
 pub fn scroll_to<T>(target: Id, offset: AbsoluteOffset) -> impl Operation<T> {
     struct ScrollTo {
         target: Id,

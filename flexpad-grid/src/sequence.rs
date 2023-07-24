@@ -14,9 +14,11 @@ type CompactArray = [Repeat; COMPACT_SIZE];
 /// # use flexpad_grid::SumSeq;
 /// #
 ///
-/// let seq: Sequence = SumSeq::new();
-/// assert_eq!(0, seq.count());
-/// assert_eq!(0.0, seq.sum());
+/// let mut seq = SumSeq::new();
+/// seq.push(10.0);
+/// seq.push_many(4, 15.0);
+/// assert_eq!(5, seq.len());
+/// assert_eq!(70.0, seq.sum());
 /// ```
 #[derive(Debug, Clone)]
 // TODO Tree representation for larger sequences
