@@ -9,11 +9,13 @@ use iced::{
     alignment, event, Alignment, Color, Element, Event, Length, Padding, Point, Rectangle, Size,
 };
 
-use crate::{Border, Borders, CellRange};
+use crate::grid::style::StyleSheet;
+use crate::{style, Border, Borders, CellRange};
 
 pub struct GridCell<'a, Message, Renderer = crate::Renderer>
 where
     Renderer: iced::advanced::Renderer,
+    Renderer::Theme: StyleSheet,
 {
     pub range: CellRange,
     content: Element<'a, Message, Renderer>,
@@ -21,11 +23,13 @@ where
     horizontal_alignment: alignment::Horizontal,
     vertical_alignment: alignment::Vertical,
     borders: Borders,
+    style: <Renderer::Theme as StyleSheet>::Style,
 }
 
 impl<'a, Message, Renderer> GridCell<'a, Message, Renderer>
 where
     Renderer: iced::advanced::Renderer,
+    Renderer::Theme: StyleSheet,
 {
     /// Creates a  [`GridCell`].
     pub fn new<R, T>(range: R, content: T) -> Self
@@ -40,6 +44,7 @@ where
             horizontal_alignment: alignment::Horizontal::Center,
             vertical_alignment: alignment::Vertical::Center,
             borders: Borders::NONE,
+            style: Default::default(),
         }
     }
 
@@ -71,6 +76,7 @@ where
 impl<'a, Message, Renderer> Widget<Message, Renderer> for GridCell<'a, Message, Renderer>
 where
     Renderer: iced::advanced::Renderer,
+    Renderer::Theme: StyleSheet,
 {
     fn children(&self) -> Vec<Tree> {
         vec![Tree::new(&self.content)]
@@ -180,6 +186,19 @@ where
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
+        let appearance = theme.appearance(&self.style);
+
+        // Rule lines for this (posssible spanning) cell
+        renderer.fill_quad(
+            renderer::Quad {
+                bounds: layout.bounds(),
+                border_radius: 0.0.into(),
+                border_width: appearance.rule_width,
+                border_color: appearance.rule_color,
+            },
+            Color::TRANSPARENT,
+        );
+
         let bounds = layout.bounds();
         let mut draw_border = |bounds, color: Color| {
             renderer.fill_quad(
@@ -272,10 +291,22 @@ where
     }
 }
 
+impl<'a, Message, Renderer> super::GridComponent<Renderer> for GridCell<'a, Message, Renderer>
+where
+    Renderer: iced::advanced::Renderer,
+    Renderer::Theme: StyleSheet,
+    <Renderer::Theme as StyleSheet>::Style: Clone,
+{
+    fn set_style(&mut self, style: <Renderer::Theme as StyleSheet>::Style) {
+        self.style = style;
+    }
+}
+
 impl<'a, Message, Renderer> From<GridCell<'a, Message, Renderer>> for Element<'a, Message, Renderer>
 where
     Message: 'a,
     Renderer: 'a + iced::advanced::Renderer,
+    Renderer::Theme: style::StyleSheet,
 {
     fn from(cell: GridCell<'a, Message, Renderer>) -> Element<'a, Message, Renderer> {
         Element::new(cell)
@@ -287,6 +318,7 @@ impl<'a, Message, Renderer> Borrow<dyn Widget<Message, Renderer> + 'a>
 where
     Message: 'a,
     Renderer: 'a + iced::advanced::Renderer,
+    Renderer::Theme: style::StyleSheet,
 {
     fn borrow(&self) -> &(dyn Widget<Message, Renderer> + 'a) {
         *self

@@ -1243,8 +1243,8 @@ impl State {
         if scales.can_scroll_y() {
             let dimension = scales.y();
             self.offset_y =
-                Offset::Absolute(dimension.quantize(self.offset_y.absolute(&dimension) - delta.y))
-        }
+                Offset::Absolute(dimension.quantize(self.offset_y.absolute(&dimension) - delta.y));
+        };
 
         if scales.can_scroll_x() {
             let dimension = scales.x();

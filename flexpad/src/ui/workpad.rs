@@ -234,7 +234,6 @@ impl WorkpadUI {
     // TODO Cancel editing using Esc/Button
     pub fn update(&mut self, message: WorkpadMessage) -> Command<WorkpadMessage> {
         if let WorkpadMessage::ViewportChanged(viewport) = message {
-            dbg!(viewport.cell_range());
             self.visible_cells = Some(viewport.cell_range())
         }
 

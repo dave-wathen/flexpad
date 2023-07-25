@@ -72,8 +72,9 @@ where
     }
 
     /// Adds an [`GridCell`] element to the [`Grid`].
-    pub fn push_cell(mut self, cell: GridCell<'a, Message, Renderer>) -> Self {
+    pub fn push_cell(mut self, mut cell: GridCell<'a, Message, Renderer>) -> Self {
         // TODO check for existing cells that this overlaps and remove them
+        cell.set_style(self.style.clone());
         self.cells.push(cell);
         self
     }
@@ -82,10 +83,13 @@ where
     pub fn push_row_head(mut self, head: RowHead<'a, Message, Renderer>) -> Self {
         let rh = match self.row_heads {
             Some(rh) => rh,
-            None => RowHeads::new(Rc::clone(&self.row_heights)),
+            None => {
+                let mut rh = RowHeads::new(self.row_heights.clone());
+                rh.set_style(self.style.clone());
+                rh
+            }
         };
         let rh = rh.push(head.head);
-        let rh = rh.style(self.style.clone());
         self.row_heads = Some(rh);
         self
     }
@@ -94,10 +98,13 @@ where
     pub fn row_head_width(mut self, width: impl Into<Length>) -> Self {
         let rh = match self.row_heads {
             Some(rh) => rh,
-            None => RowHeads::new(self.row_heights.clone()),
+            None => {
+                let mut rh = RowHeads::new(self.row_heights.clone());
+                rh.set_style(self.style.clone());
+                rh
+            }
         };
         let rh = rh.width(width.into());
-        let rh = rh.style(self.style.clone());
         self.row_heads = Some(rh);
         self
     }
@@ -106,10 +113,13 @@ where
     pub fn push_column_head(mut self, head: ColumnHead<'a, Message, Renderer>) -> Self {
         let ch = match self.column_heads {
             Some(ch) => ch,
-            None => ColumnHeads::new(Rc::clone(&self.column_widths)),
+            None => {
+                let mut ch = ColumnHeads::new(self.column_widths.clone());
+                ch.set_style(self.style.clone());
+                ch
+            }
         };
         let ch = ch.push(head.head);
-        let ch = ch.style(self.style.clone());
         self.column_heads = Some(ch);
         self
     }
@@ -118,17 +128,21 @@ where
     pub fn column_head_height(mut self, height: impl Into<Length>) -> Self {
         let ch = match self.column_heads {
             Some(ch) => ch,
-            None => ColumnHeads::new(self.column_widths.clone()),
+            None => {
+                let mut ch = ColumnHeads::new(self.column_widths.clone());
+                ch.set_style(self.style.clone());
+                ch
+            }
         };
         let ch = ch.height(height.into());
-        let ch = ch.style(self.style.clone());
         self.column_heads = Some(ch);
         self
     }
 
     /// Adds a [`GridCorner`] element to the [`Grid`].  Note that the corner is only visible
     /// where both row and column heads are used.
-    pub fn push_corner(mut self, head: GridCorner<'a, Message, Renderer>) -> Self {
+    pub fn push_corner(mut self, mut head: GridCorner<'a, Message, Renderer>) -> Self {
+        head.head.set_style(self.style.clone());
         self.corner = Some(head);
         self
     }
@@ -136,17 +150,7 @@ where
     /// Sets the style of the [`Grid`].
     pub fn style(mut self, style: impl Into<<Renderer::Theme as StyleSheet>::Style>) -> Self {
         self.style = style.into();
-
-        if let Some(rh) = self.row_heads {
-            let rh = rh.style(self.style.clone());
-            self.row_heads = Some(rh);
-        }
-
-        if let Some(ch) = self.column_heads {
-            let ch = ch.style(self.style.clone());
-            self.column_heads = Some(ch);
-        }
-
+        self.cascade_style();
         self
     }
 
@@ -509,17 +513,14 @@ where
         let mut child_trees = tree.children.iter();
         let mut child_layouts = layout.children();
 
-        let appearance = theme.appearance(&self.style);
         let bounds = layout.bounds();
 
         self.draw_background(bounds, renderer, theme);
 
         // Row Header
-        let mut r_heads_width = 0.0;
         if let Some(ref r_heads) = self.row_heads {
             let r_heads_tree = child_trees.next().unwrap();
             let r_heads_layout = child_layouts.next().unwrap();
-            r_heads_width = r_heads_layout.bounds().width;
 
             r_heads.draw(
                 r_heads_tree,
@@ -533,11 +534,9 @@ where
         };
 
         // Column Header
-        let mut c_heads_height = 0.0;
         if let Some(ref c_heads) = self.column_heads {
             let c_heads_tree = child_trees.next().unwrap();
             let c_heads_layout = child_layouts.next().unwrap();
-            c_heads_height = c_heads_layout.bounds().height;
 
             c_heads.draw(
                 c_heads_tree,
@@ -552,20 +551,6 @@ where
 
         // Corner
         if self.row_heads.is_some() && self.column_heads.is_some() {
-            // Draw corner rule lines
-            renderer.fill_quad(
-                renderer::Quad {
-                    bounds: Rectangle::new(
-                        layout.position(),
-                        Size::new(r_heads_width, c_heads_height),
-                    ),
-                    border_radius: 0.0.into(),
-                    border_width: appearance.heads_rule_width,
-                    border_color: appearance.heads_rule_color,
-                },
-                Color::TRANSPARENT,
-            );
-
             if let Some(ref corner) = self.corner {
                 let corner_tree = child_trees.next().unwrap();
                 let corner_layout = child_layouts.next().unwrap();
@@ -582,32 +567,7 @@ where
             }
         }
 
-        // Track which cells of the grid have been included
-        // This should only cover visible ranges once scrolling is introduced
-        // let mut absent_cells = BTreeSet::new();
-        // for rw in 0..self.row_heights.len() {
-        //     for cl in 0..self.column_widths.len() {
-        //         absent_cells.insert(RowCol::new(rw as u32, cl as u32));
-        //     }
-        // }
-
-        // Cells (that are present)
         for ((cell, tree), layout) in self.cells.iter().zip(child_trees).zip(child_layouts) {
-            // Rule lines for this (posssible spanning) cell
-            // renderer.fill_quad(
-            //     renderer::Quad {
-            //         bounds: layout.bounds(),
-            //         border_radius: 0.0.into(),
-            //         border_width: appearance.rule_width,
-            //         border_color: appearance.rule_color,
-            //     },
-            //     Color::TRANSPARENT,
-            // );
-
-            // cell.range.cells().for_each(|rc| {
-            //     absent_cells.remove(&rc);
-            // });
-
             cell.draw(
                 tree,
                 renderer,
@@ -618,30 +578,6 @@ where
                 viewport,
             );
         }
-
-        // Draw rule lines for the absent cells
-        // let heads_offset = Vector::new(r_heads_width, c_heads_height);
-        // for absent_cell in absent_cells {
-        //     let rows = absent_cell.rows();
-        //     let y1 = self.row_heights.sum_to(rows.start as usize);
-        //     let y2 = self.row_heights.sum_to(rows.end as usize);
-        //     let columns = absent_cell.columns();
-        //     let x1 = self.column_widths.sum_to(columns.start as usize);
-        //     let x2 = self.column_widths.sum_to(columns.end as usize);
-        //     let cell_bounds = Rectangle::new(
-        //         bounds.position() + Vector::new(x1, y1) + heads_offset,
-        //         Size::new(x2 - x1, y2 - y1),
-        //     );
-        //     renderer.fill_quad(
-        //         renderer::Quad {
-        //             bounds: cell_bounds,
-        //             border_radius: 0.0.into(),
-        //             border_width: appearance.rule_width,
-        //             border_color: appearance.rule_color,
-        //         },
-        //         Color::TRANSPARENT,
-        //     );
-        // }
     }
 
     fn overlay<'b>(
@@ -725,5 +661,44 @@ where
 {
     fn borrow(&self) -> &(dyn Widget<Message, Renderer> + 'a) {
         *self
+    }
+}
+
+trait GridComponent<Renderer>
+where
+    Renderer: iced::advanced::Renderer,
+    Renderer::Theme: StyleSheet,
+    <Renderer::Theme as StyleSheet>::Style: Clone,
+{
+    fn set_style(&mut self, style: <Renderer::Theme as StyleSheet>::Style);
+    fn cascade_style(&mut self) {}
+}
+
+impl<'a, Message, Renderer> GridComponent<Renderer> for Grid<'a, Message, Renderer>
+where
+    Renderer: iced::advanced::Renderer,
+    Renderer::Theme: StyleSheet,
+    <Renderer::Theme as StyleSheet>::Style: Clone,
+{
+    fn set_style(&mut self, style: <Renderer::Theme as StyleSheet>::Style) {
+        self.style = style;
+    }
+
+    fn cascade_style(&mut self) {
+        if let Some(ref mut rh) = self.row_heads {
+            rh.set_style(self.style.clone());
+        }
+
+        if let Some(ref mut ch) = self.column_heads {
+            ch.set_style(self.style.clone());
+        }
+
+        if let Some(ref mut c) = self.corner {
+            c.head.set_style(self.style.clone());
+        }
+
+        self.cells
+            .iter_mut()
+            .for_each(|c| c.set_style(self.style.clone()))
     }
 }

@@ -8,15 +8,17 @@ use iced::advanced::{layout, overlay, renderer, Clipboard, Layout, Shell, Widget
 use iced::mouse::{self, Cursor};
 use iced::{
     alignment, event, Alignment, Color, Element, Event, Length, Padding, Point, Rectangle, Size,
-    Vector,
 };
 
 use crate::{StyleSheet, SumSeq};
+
+use super::GridComponent;
 
 // A heading for a row in a [`Grid`]
 pub struct RowHead<'a, Message, Renderer = crate::Renderer>
 where
     Renderer: iced::advanced::Renderer,
+    Renderer::Theme: StyleSheet,
 {
     pub(crate) head: Head<'a, Message, Renderer>,
 }
@@ -25,6 +27,7 @@ where
 impl<'a, Message, Renderer> RowHead<'a, Message, Renderer>
 where
     Renderer: iced::advanced::Renderer,
+    Renderer::Theme: StyleSheet,
 {
     /// Creates a  [`RowHead`].
     pub fn new<T>(row: u32, content: T) -> Self
@@ -38,6 +41,7 @@ where
                 padding: Padding::from(4),
                 horizontal_alignment: alignment::Horizontal::Center,
                 vertical_alignment: alignment::Vertical::Center,
+                style: Default::default(),
             },
         }
     }
@@ -65,6 +69,7 @@ where
 pub struct ColumnHead<'a, Message, Renderer = crate::Renderer>
 where
     Renderer: iced::advanced::Renderer,
+    Renderer::Theme: StyleSheet,
 {
     pub(crate) head: Head<'a, Message, Renderer>,
 }
@@ -73,6 +78,7 @@ where
 impl<'a, Message, Renderer> ColumnHead<'a, Message, Renderer>
 where
     Renderer: iced::advanced::Renderer,
+    Renderer::Theme: StyleSheet,
 {
     /// Creates a  [`ColumnHead`].
     pub fn new<T>(column: u32, content: T) -> Self
@@ -86,6 +92,7 @@ where
                 padding: Padding::from(4),
                 horizontal_alignment: alignment::Horizontal::Center,
                 vertical_alignment: alignment::Vertical::Center,
+                style: Default::default(),
             },
         }
     }
@@ -114,6 +121,7 @@ where
 pub struct GridCorner<'a, Message, Renderer = crate::Renderer>
 where
     Renderer: iced::advanced::Renderer,
+    Renderer::Theme: StyleSheet,
 {
     pub(crate) head: Head<'a, Message, Renderer>,
 }
@@ -122,6 +130,7 @@ where
 impl<'a, Message, Renderer> GridCorner<'a, Message, Renderer>
 where
     Renderer: iced::advanced::Renderer,
+    Renderer::Theme: StyleSheet,
 {
     /// Creates a  [`GridCorner`].
     pub fn new<T>(content: T) -> Self
@@ -135,6 +144,7 @@ where
                 padding: Padding::from(4),
                 horizontal_alignment: alignment::Horizontal::Center,
                 vertical_alignment: alignment::Vertical::Center,
+                style: Default::default(),
             },
         }
     }
@@ -161,17 +171,20 @@ where
 pub struct Head<'a, Message, Renderer = crate::Renderer>
 where
     Renderer: iced::advanced::Renderer,
+    Renderer::Theme: StyleSheet,
 {
     pub index: u32,
     content: Element<'a, Message, Renderer>,
     padding: Padding,
     horizontal_alignment: alignment::Horizontal,
     vertical_alignment: alignment::Vertical,
+    style: <Renderer::Theme as StyleSheet>::Style,
 }
 
 impl<'a, Message, Renderer> Widget<Message, Renderer> for Head<'a, Message, Renderer>
 where
     Renderer: iced::advanced::Renderer,
+    Renderer::Theme: StyleSheet,
 {
     fn children(&self) -> Vec<Tree> {
         vec![Tree::new(&self.content)]
@@ -281,6 +294,20 @@ where
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
+        let bounds = layout.bounds();
+        let appearance = theme.appearance(&self.style);
+
+        // Draw rule lines
+        renderer.fill_quad(
+            renderer::Quad {
+                bounds,
+                border_radius: 0.0.into(),
+                border_width: appearance.heads_rule_width,
+                border_color: appearance.heads_rule_color,
+            },
+            Color::TRANSPARENT,
+        );
+
         self.content.as_widget().draw(
             &tree.children[0],
             renderer,
@@ -308,10 +335,22 @@ where
     }
 }
 
+impl<'a, Message, Renderer> super::GridComponent<Renderer> for Head<'a, Message, Renderer>
+where
+    Renderer: iced::advanced::Renderer,
+    Renderer::Theme: StyleSheet,
+    <Renderer::Theme as StyleSheet>::Style: Clone,
+{
+    fn set_style(&mut self, style: <Renderer::Theme as StyleSheet>::Style) {
+        self.style = style;
+    }
+}
+
 impl<'a, Message, Renderer> From<Head<'a, Message, Renderer>> for Element<'a, Message, Renderer>
 where
     Message: 'a,
     Renderer: 'a + iced::advanced::Renderer,
+    Renderer::Theme: StyleSheet,
 {
     fn from(cell: Head<'a, Message, Renderer>) -> Element<'a, Message, Renderer> {
         Element::new(cell)
@@ -323,6 +362,7 @@ impl<'a, Message, Renderer> Borrow<dyn Widget<Message, Renderer> + 'a>
 where
     Message: 'a,
     Renderer: 'a + iced::advanced::Renderer,
+    Renderer::Theme: StyleSheet,
 {
     fn borrow(&self) -> &(dyn Widget<Message, Renderer> + 'a) {
         *self
@@ -347,6 +387,7 @@ where
     Message: 'a,
     Renderer: iced::advanced::Renderer + 'a,
     Renderer::Theme: StyleSheet,
+    <Renderer::Theme as StyleSheet>::Style: Clone,
 {
     /// Creates an empty [`RowHeads`].
     pub fn new(row_heights: Rc<SumSeq>) -> Self {
@@ -365,15 +406,10 @@ where
     }
 
     /// Adds an [`RowHead`] element to the [`RowHeads`].
-    pub fn push(mut self, cell: Head<'a, Message, Renderer>) -> Self {
+    pub fn push(mut self, mut cell: Head<'a, Message, Renderer>) -> Self {
         self.row_heads.retain(|ch| ch.index != cell.index);
+        cell.set_style(self.style.clone());
         self.row_heads.push(cell);
-        self
-    }
-
-    /// Sets the style of the [`RowHeads`].
-    pub fn style(mut self, style: impl Into<<Renderer::Theme as StyleSheet>::Style>) -> Self {
-        self.style = style.into();
         self
     }
 }
@@ -382,6 +418,7 @@ impl<'a, Message, Renderer> Widget<Message, Renderer> for RowHeads<'a, Message, 
 where
     Renderer: iced::advanced::Renderer,
     Renderer::Theme: StyleSheet,
+    <Renderer::Theme as StyleSheet>::Style: Clone,
 {
     fn children(&self) -> Vec<Tree> {
         self.row_heads.iter().map(Tree::new).collect()
@@ -496,26 +533,6 @@ where
         cursor: Cursor,
         viewport: &Rectangle,
     ) {
-        let bounds = layout.bounds();
-        let appearance = theme.appearance(&self.style);
-
-        // Draw rule lines
-        let mut cell_start = bounds.position();
-        for row_height in self.row_heights.values() {
-            let cell_bounds = Rectangle::new(cell_start, Size::new(bounds.width, row_height));
-            renderer.fill_quad(
-                renderer::Quad {
-                    bounds: cell_bounds,
-                    border_radius: 0.0.into(),
-                    border_width: appearance.heads_rule_width,
-                    border_color: appearance.heads_rule_color,
-                },
-                Color::TRANSPARENT,
-            );
-            cell_start = cell_start + Vector::new(0.0, row_height);
-        }
-
-        // Children
         for ((child, state), layout) in self
             .row_heads
             .iter()
@@ -552,11 +569,30 @@ where
     }
 }
 
+impl<'a, Message, Renderer> super::GridComponent<Renderer> for RowHeads<'a, Message, Renderer>
+where
+    Renderer: iced::advanced::Renderer,
+    Renderer::Theme: StyleSheet,
+    <Renderer::Theme as StyleSheet>::Style: Clone,
+{
+    fn set_style(&mut self, style: <Renderer::Theme as StyleSheet>::Style) {
+        self.style = style;
+        self.cascade_style();
+    }
+
+    fn cascade_style(&mut self) {
+        self.row_heads
+            .iter_mut()
+            .for_each(|h| h.set_style(self.style.clone()));
+    }
+}
+
 impl<'a, Message, Renderer> From<RowHeads<'a, Message, Renderer>> for Element<'a, Message, Renderer>
 where
     Message: 'a,
     Renderer: 'a + iced::advanced::Renderer,
     Renderer::Theme: StyleSheet,
+    <Renderer::Theme as StyleSheet>::Style: Clone,
 {
     fn from(column_heads: RowHeads<'a, Message, Renderer>) -> Self {
         Self::new(column_heads)
@@ -569,6 +605,7 @@ where
     Message: 'a,
     Renderer: 'a + iced::advanced::Renderer,
     Renderer::Theme: StyleSheet,
+    <Renderer::Theme as StyleSheet>::Style: Clone,
 {
     fn borrow(&self) -> &(dyn Widget<Message, Renderer> + 'a) {
         *self
@@ -593,6 +630,7 @@ where
     Message: 'a,
     Renderer: iced::advanced::Renderer + 'a,
     Renderer::Theme: StyleSheet,
+    <Renderer::Theme as StyleSheet>::Style: Clone,
 {
     /// Creates an empty [`ColumnHeads`].
     pub fn new(column_widths: Rc<SumSeq>) -> Self {
@@ -611,15 +649,10 @@ where
     }
 
     /// Adds an [`RowHead`] element to the [`ColumnHeads`].
-    pub fn push(mut self, cell: Head<'a, Message, Renderer>) -> Self {
+    pub fn push(mut self, mut cell: Head<'a, Message, Renderer>) -> Self {
         self.column_heads.retain(|ch| ch.index != cell.index);
+        cell.set_style(self.style.clone());
         self.column_heads.push(cell);
-        self
-    }
-
-    /// Sets the style of the [`ColumnHeads`].
-    pub fn style(mut self, style: impl Into<<Renderer::Theme as StyleSheet>::Style>) -> Self {
-        self.style = style.into();
         self
     }
 }
@@ -628,6 +661,7 @@ impl<'a, Message, Renderer> Widget<Message, Renderer> for ColumnHeads<'a, Messag
 where
     Renderer: iced::advanced::Renderer,
     Renderer::Theme: StyleSheet,
+    <Renderer::Theme as StyleSheet>::Style: Clone,
 {
     fn children(&self) -> Vec<Tree> {
         self.column_heads.iter().map(Tree::new).collect()
@@ -742,26 +776,6 @@ where
         cursor: Cursor,
         viewport: &Rectangle,
     ) {
-        let bounds = layout.bounds();
-        let appearance = theme.appearance(&self.style);
-
-        // Draw rule lines
-        let mut cell_start = bounds.position();
-        for column_width in self.column_widths.values() {
-            let cell_bounds = Rectangle::new(cell_start, Size::new(column_width, bounds.height));
-            renderer.fill_quad(
-                renderer::Quad {
-                    bounds: cell_bounds,
-                    border_radius: 0.0.into(),
-                    border_width: appearance.heads_rule_width,
-                    border_color: appearance.heads_rule_color,
-                },
-                Color::TRANSPARENT,
-            );
-            cell_start = cell_start + Vector::new(column_width, 0.0);
-        }
-
-        // Children
         for ((child, state), layout) in self
             .column_heads
             .iter()
@@ -798,12 +812,31 @@ where
     }
 }
 
+impl<'a, Message, Renderer> super::GridComponent<Renderer> for ColumnHeads<'a, Message, Renderer>
+where
+    Renderer: iced::advanced::Renderer,
+    Renderer::Theme: StyleSheet,
+    <Renderer::Theme as StyleSheet>::Style: Clone,
+{
+    fn set_style(&mut self, style: <Renderer::Theme as StyleSheet>::Style) {
+        self.style = style;
+        self.cascade_style();
+    }
+
+    fn cascade_style(&mut self) {
+        self.column_heads
+            .iter_mut()
+            .for_each(|h| h.set_style(self.style.clone()));
+    }
+}
+
 impl<'a, Message, Renderer> From<ColumnHeads<'a, Message, Renderer>>
     for Element<'a, Message, Renderer>
 where
     Message: 'a,
     Renderer: 'a + iced::advanced::Renderer,
     Renderer::Theme: StyleSheet,
+    <Renderer::Theme as StyleSheet>::Style: Clone,
 {
     fn from(column_heads: ColumnHeads<'a, Message, Renderer>) -> Self {
         Self::new(column_heads)
@@ -816,6 +849,7 @@ where
     Message: 'a,
     Renderer: 'a + iced::advanced::Renderer,
     Renderer::Theme: StyleSheet,
+    <Renderer::Theme as StyleSheet>::Style: Clone,
 {
     fn borrow(&self) -> &(dyn Widget<Message, Renderer> + 'a) {
         *self
