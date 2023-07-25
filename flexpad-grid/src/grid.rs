@@ -6,6 +6,7 @@ use iced::advanced::{layout, mouse, overlay, renderer, Clipboard, Layout, Shell,
 use iced::mouse::{Cursor, Interaction};
 use iced::{event, Color, Element, Event, Length, Point, Rectangle, Size, Vector};
 use std::borrow::Borrow;
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::{ColumnHead, GridCell, GridCorner, RowHead, SumSeq};
@@ -26,15 +27,13 @@ where
     Renderer: iced::advanced::Renderer,
     Renderer::Theme: StyleSheet,
 {
-    row_heights: Rc<SumSeq>,
-    column_widths: Rc<SumSeq>,
     width: Length,
     height: Length,
     cells: Vec<GridCell<'a, Message, Renderer>>,
     row_heads: Option<RowHeads<'a, Message, Renderer>>,
     column_heads: Option<ColumnHeads<'a, Message, Renderer>>,
     corner: Option<GridCorner<'a, Message, Renderer>>,
-    style: <Renderer::Theme as StyleSheet>::Style,
+    info: Rc<RefCell<GridInfo<Renderer>>>,
 }
 
 impl<'a, Message, Renderer> Grid<'a, Message, Renderer>
@@ -46,16 +45,20 @@ where
 {
     /// Creates an empty [`Grid`].
     pub fn new(row_heights: SumSeq, column_widths: SumSeq) -> Self {
-        Grid {
+        let info = GridInfo {
             row_heights: Rc::new(row_heights),
             column_widths: Rc::new(column_widths),
+            style: Default::default(),
+        };
+
+        Grid {
             width: Length::Shrink,
             height: Length::Shrink,
             cells: vec![],
             row_heads: None,
             column_heads: None,
             corner: None,
-            style: Default::default(),
+            info: Rc::new(RefCell::new(info)),
         }
     }
 
@@ -74,7 +77,7 @@ where
     /// Adds an [`GridCell`] element to the [`Grid`].
     pub fn push_cell(mut self, mut cell: GridCell<'a, Message, Renderer>) -> Self {
         // TODO check for existing cells that this overlaps and remove them
-        cell.set_style(self.style.clone());
+        cell.set_info(Rc::clone(&self.info));
         self.cells.push(cell);
         self
     }
@@ -83,11 +86,7 @@ where
     pub fn push_row_head(mut self, head: RowHead<'a, Message, Renderer>) -> Self {
         let rh = match self.row_heads {
             Some(rh) => rh,
-            None => {
-                let mut rh = RowHeads::new(self.row_heights.clone());
-                rh.set_style(self.style.clone());
-                rh
-            }
+            None => RowHeads::new(Rc::clone(&self.info)),
         };
         let rh = rh.push(head.head);
         self.row_heads = Some(rh);
@@ -98,11 +97,7 @@ where
     pub fn row_head_width(mut self, width: impl Into<Length>) -> Self {
         let rh = match self.row_heads {
             Some(rh) => rh,
-            None => {
-                let mut rh = RowHeads::new(self.row_heights.clone());
-                rh.set_style(self.style.clone());
-                rh
-            }
+            None => RowHeads::new(Rc::clone(&self.info)),
         };
         let rh = rh.width(width.into());
         self.row_heads = Some(rh);
@@ -113,11 +108,7 @@ where
     pub fn push_column_head(mut self, head: ColumnHead<'a, Message, Renderer>) -> Self {
         let ch = match self.column_heads {
             Some(ch) => ch,
-            None => {
-                let mut ch = ColumnHeads::new(self.column_widths.clone());
-                ch.set_style(self.style.clone());
-                ch
-            }
+            None => ColumnHeads::new(Rc::clone(&self.info)),
         };
         let ch = ch.push(head.head);
         self.column_heads = Some(ch);
@@ -128,11 +119,7 @@ where
     pub fn column_head_height(mut self, height: impl Into<Length>) -> Self {
         let ch = match self.column_heads {
             Some(ch) => ch,
-            None => {
-                let mut ch = ColumnHeads::new(self.column_widths.clone());
-                ch.set_style(self.style.clone());
-                ch
-            }
+            None => ColumnHeads::new(Rc::clone(&self.info)),
         };
         let ch = ch.height(height.into());
         self.column_heads = Some(ch);
@@ -142,20 +129,23 @@ where
     /// Adds a [`GridCorner`] element to the [`Grid`].  Note that the corner is only visible
     /// where both row and column heads are used.
     pub fn push_corner(mut self, mut head: GridCorner<'a, Message, Renderer>) -> Self {
-        head.head.set_style(self.style.clone());
+        head.head.set_info(Rc::clone(&self.info));
         self.corner = Some(head);
         self
     }
 
     /// Sets the style of the [`Grid`].
-    pub fn style(mut self, style: impl Into<<Renderer::Theme as StyleSheet>::Style>) -> Self {
-        self.style = style.into();
-        self.cascade_style();
+    pub fn style(self, style: impl Into<<Renderer::Theme as StyleSheet>::Style>) -> Self {
+        {
+            let mut info = (*self.info).borrow_mut();
+            info.style = style.into();
+        }
         self
     }
 
     fn draw_background(&self, bounds: Rectangle, renderer: &mut Renderer, theme: &Renderer::Theme) {
-        let appearance = theme.appearance(&self.style);
+        let info = (*self.info).borrow();
+        let appearance = theme.appearance(&info.style);
 
         // Background
         renderer.fill_quad(
@@ -251,8 +241,9 @@ where
     }
 
     fn layout(&self, renderer: &Renderer, limits: &layout::Limits) -> layout::Node {
-        let width = self.column_widths.sum();
-        let height = self.row_heights.sum();
+        let info = (*self.info).borrow();
+        let width = info.column_widths.sum();
+        let height = info.row_heights.sum();
 
         let mut children = vec![];
 
@@ -297,11 +288,11 @@ where
 
         for child_cell in self.cells.iter() {
             let rows = child_cell.range.rows();
-            let y1 = self.row_heights.sum_to(rows.start as usize);
-            let y2 = self.row_heights.sum_to(rows.end as usize);
+            let y1 = info.row_heights.sum_to(rows.start as usize);
+            let y2 = info.row_heights.sum_to(rows.end as usize);
             let columns = child_cell.range.columns();
-            let x1 = self.column_widths.sum_to(columns.start as usize);
-            let x2 = self.column_widths.sum_to(columns.end as usize);
+            let x1 = info.column_widths.sum_to(columns.start as usize);
+            let x2 = info.column_widths.sum_to(columns.end as usize);
             let cell_size = Size::new(x2 - x1, y2 - y1);
             let cell_limits = Limits::new(cell_size, cell_size);
             let mut child_layout = child_cell.layout(renderer, &cell_limits);
@@ -664,41 +655,21 @@ where
     }
 }
 
+pub struct GridInfo<Renderer = crate::Renderer>
+where
+    Renderer: iced::advanced::Renderer,
+    Renderer::Theme: StyleSheet,
+{
+    row_heights: Rc<SumSeq>,
+    column_widths: Rc<SumSeq>,
+    style: <Renderer::Theme as StyleSheet>::Style,
+}
+
 trait GridComponent<Renderer>
 where
     Renderer: iced::advanced::Renderer,
     Renderer::Theme: StyleSheet,
     <Renderer::Theme as StyleSheet>::Style: Clone,
 {
-    fn set_style(&mut self, style: <Renderer::Theme as StyleSheet>::Style);
-    fn cascade_style(&mut self) {}
-}
-
-impl<'a, Message, Renderer> GridComponent<Renderer> for Grid<'a, Message, Renderer>
-where
-    Renderer: iced::advanced::Renderer,
-    Renderer::Theme: StyleSheet,
-    <Renderer::Theme as StyleSheet>::Style: Clone,
-{
-    fn set_style(&mut self, style: <Renderer::Theme as StyleSheet>::Style) {
-        self.style = style;
-    }
-
-    fn cascade_style(&mut self) {
-        if let Some(ref mut rh) = self.row_heads {
-            rh.set_style(self.style.clone());
-        }
-
-        if let Some(ref mut ch) = self.column_heads {
-            ch.set_style(self.style.clone());
-        }
-
-        if let Some(ref mut c) = self.corner {
-            c.head.set_style(self.style.clone());
-        }
-
-        self.cells
-            .iter_mut()
-            .for_each(|c| c.set_style(self.style.clone()))
-    }
+    fn set_info(&mut self, info: Rc<RefCell<GridInfo<Renderer>>>);
 }

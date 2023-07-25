@@ -1,4 +1,5 @@
 use std::borrow::Borrow;
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use iced::advanced::overlay::Group;
@@ -10,9 +11,9 @@ use iced::{
     alignment, event, Alignment, Color, Element, Event, Length, Padding, Point, Rectangle, Size,
 };
 
-use crate::{StyleSheet, SumSeq};
+use crate::StyleSheet;
 
-use super::GridComponent;
+use super::{GridComponent, GridInfo};
 
 // A heading for a row in a [`Grid`]
 pub struct RowHead<'a, Message, Renderer = crate::Renderer>
@@ -41,7 +42,7 @@ where
                 padding: Padding::from(4),
                 horizontal_alignment: alignment::Horizontal::Center,
                 vertical_alignment: alignment::Vertical::Center,
-                style: Default::default(),
+                info: None,
             },
         }
     }
@@ -92,7 +93,7 @@ where
                 padding: Padding::from(4),
                 horizontal_alignment: alignment::Horizontal::Center,
                 vertical_alignment: alignment::Vertical::Center,
-                style: Default::default(),
+                info: None,
             },
         }
     }
@@ -144,7 +145,7 @@ where
                 padding: Padding::from(4),
                 horizontal_alignment: alignment::Horizontal::Center,
                 vertical_alignment: alignment::Vertical::Center,
-                style: Default::default(),
+                info: None,
             },
         }
     }
@@ -178,7 +179,7 @@ where
     padding: Padding,
     horizontal_alignment: alignment::Horizontal,
     vertical_alignment: alignment::Vertical,
-    style: <Renderer::Theme as StyleSheet>::Style,
+    info: Option<Rc<RefCell<GridInfo<Renderer>>>>,
 }
 
 impl<'a, Message, Renderer> Widget<Message, Renderer> for Head<'a, Message, Renderer>
@@ -295,7 +296,8 @@ where
         viewport: &Rectangle,
     ) {
         let bounds = layout.bounds();
-        let appearance = theme.appearance(&self.style);
+        let info = (**self.info.as_ref().expect("Head can only be used in a Grid")).borrow();
+        let appearance = theme.appearance(&info.style);
 
         // Draw rule lines
         renderer.fill_quad(
@@ -341,8 +343,8 @@ where
     Renderer::Theme: StyleSheet,
     <Renderer::Theme as StyleSheet>::Style: Clone,
 {
-    fn set_style(&mut self, style: <Renderer::Theme as StyleSheet>::Style) {
-        self.style = style;
+    fn set_info(&mut self, info: Rc<RefCell<GridInfo<Renderer>>>) {
+        self.info = Some(info);
     }
 }
 
@@ -376,10 +378,9 @@ where
     Renderer: iced::advanced::Renderer,
     Renderer::Theme: StyleSheet,
 {
-    row_heights: Rc<SumSeq>,
+    info: Rc<RefCell<GridInfo<Renderer>>>,
     width: Length,
     row_heads: Vec<Head<'a, Message, Renderer>>,
-    style: <Renderer::Theme as StyleSheet>::Style,
 }
 
 impl<'a, Message, Renderer> RowHeads<'a, Message, Renderer>
@@ -390,12 +391,11 @@ where
     <Renderer::Theme as StyleSheet>::Style: Clone,
 {
     /// Creates an empty [`RowHeads`].
-    pub fn new(row_heights: Rc<SumSeq>) -> Self {
+    pub fn new(info: Rc<RefCell<GridInfo<Renderer>>>) -> Self {
         Self {
-            row_heights,
+            info,
             width: Length::Shrink,
             row_heads: vec![],
-            style: Default::default(),
         }
     }
 
@@ -406,10 +406,10 @@ where
     }
 
     /// Adds an [`RowHead`] element to the [`RowHeads`].
-    pub fn push(mut self, mut cell: Head<'a, Message, Renderer>) -> Self {
-        self.row_heads.retain(|ch| ch.index != cell.index);
-        cell.set_style(self.style.clone());
-        self.row_heads.push(cell);
+    pub fn push(mut self, mut head: Head<'a, Message, Renderer>) -> Self {
+        self.row_heads.retain(|ch| ch.index != head.index);
+        head.set_info(Rc::clone(&self.info));
+        self.row_heads.push(head);
         self
     }
 }
@@ -437,15 +437,16 @@ where
     }
 
     fn layout(&self, renderer: &Renderer, limits: &layout::Limits) -> layout::Node {
-        let height = self.row_heights.sum();
+        let info = (*self.info).borrow();
+        let height = info.row_heights.sum();
         let limits = limits.width(self.width).height(height);
 
         let mut children = vec![];
         let mut max_width: f32 = 0.0;
         for r_head in self.row_heads.iter() {
             let rw = r_head.index;
-            let y1 = self.row_heights.sum_to(rw as usize);
-            let y2 = self.row_heights.sum_to((rw + 1) as usize);
+            let y1 = info.row_heights.sum_to(rw as usize);
+            let y2 = info.row_heights.sum_to((rw + 1) as usize);
             let cell_limits = limits.loose().max_height(y2 - y1);
             let mut child_layout = r_head.layout(renderer, &cell_limits);
             max_width = max_width.max(child_layout.size().width);
@@ -575,15 +576,8 @@ where
     Renderer::Theme: StyleSheet,
     <Renderer::Theme as StyleSheet>::Style: Clone,
 {
-    fn set_style(&mut self, style: <Renderer::Theme as StyleSheet>::Style) {
-        self.style = style;
-        self.cascade_style();
-    }
-
-    fn cascade_style(&mut self) {
-        self.row_heads
-            .iter_mut()
-            .for_each(|h| h.set_style(self.style.clone()));
+    fn set_info(&mut self, info: Rc<RefCell<GridInfo<Renderer>>>) {
+        self.info = info;
     }
 }
 
@@ -594,8 +588,8 @@ where
     Renderer::Theme: StyleSheet,
     <Renderer::Theme as StyleSheet>::Style: Clone,
 {
-    fn from(column_heads: RowHeads<'a, Message, Renderer>) -> Self {
-        Self::new(column_heads)
+    fn from(row_heads: RowHeads<'a, Message, Renderer>) -> Self {
+        Self::new(row_heads)
     }
 }
 
@@ -619,10 +613,9 @@ where
     Renderer: iced::advanced::Renderer,
     Renderer::Theme: StyleSheet,
 {
-    column_widths: Rc<SumSeq>,
+    info: Rc<RefCell<GridInfo<Renderer>>>,
     height: Length,
     column_heads: Vec<Head<'a, Message, Renderer>>,
-    style: <Renderer::Theme as StyleSheet>::Style,
 }
 
 impl<'a, Message, Renderer> ColumnHeads<'a, Message, Renderer>
@@ -633,12 +626,11 @@ where
     <Renderer::Theme as StyleSheet>::Style: Clone,
 {
     /// Creates an empty [`ColumnHeads`].
-    pub fn new(column_widths: Rc<SumSeq>) -> Self {
+    pub fn new(info: Rc<RefCell<GridInfo<Renderer>>>) -> Self {
         Self {
-            column_widths,
+            info,
             height: Length::Shrink,
             column_heads: vec![],
-            style: Default::default(),
         }
     }
 
@@ -649,10 +641,10 @@ where
     }
 
     /// Adds an [`RowHead`] element to the [`ColumnHeads`].
-    pub fn push(mut self, mut cell: Head<'a, Message, Renderer>) -> Self {
-        self.column_heads.retain(|ch| ch.index != cell.index);
-        cell.set_style(self.style.clone());
-        self.column_heads.push(cell);
+    pub fn push(mut self, mut head: Head<'a, Message, Renderer>) -> Self {
+        self.column_heads.retain(|ch| ch.index != head.index);
+        head.set_info(Rc::clone(&self.info));
+        self.column_heads.push(head);
         self
     }
 }
@@ -680,15 +672,16 @@ where
     }
 
     fn layout(&self, renderer: &Renderer, limits: &layout::Limits) -> layout::Node {
-        let width = self.column_widths.sum();
+        let info = (*self.info).borrow();
+        let width = info.column_widths.sum();
         let limits = limits.width(width).height(self.height);
 
         let mut children = vec![];
         let mut max_height: f32 = 0.0;
         for c_head in self.column_heads.iter() {
             let cl = c_head.index;
-            let x1 = self.column_widths.sum_to(cl as usize);
-            let x2 = self.column_widths.sum_to((cl + 1) as usize);
+            let x1 = info.column_widths.sum_to(cl as usize);
+            let x2 = info.column_widths.sum_to((cl + 1) as usize);
             let cell_limits = limits.loose().max_width(x2 - x1);
             let mut child_layout = c_head.layout(renderer, &cell_limits);
             max_height = max_height.max(child_layout.size().height);
@@ -818,15 +811,8 @@ where
     Renderer::Theme: StyleSheet,
     <Renderer::Theme as StyleSheet>::Style: Clone,
 {
-    fn set_style(&mut self, style: <Renderer::Theme as StyleSheet>::Style) {
-        self.style = style;
-        self.cascade_style();
-    }
-
-    fn cascade_style(&mut self) {
-        self.column_heads
-            .iter_mut()
-            .for_each(|h| h.set_style(self.style.clone()));
+    fn set_info(&mut self, info: Rc<RefCell<GridInfo<Renderer>>>) {
+        self.info = info;
     }
 }
 

@@ -232,10 +232,11 @@ where
             _ => None,
         };
 
+        let info = (*self.content.info).borrow();
         let grid_measures = GridMeasures {
             cells_bounds: grid_cells_bounds,
-            row_heights: Rc::clone(&self.content.row_heights),
-            column_widths: Rc::clone(&self.content.column_widths),
+            row_heights: Rc::clone(&info.row_heights),
+            column_widths: Rc::clone(&info.column_widths),
             vertical_granularity: self.vertical_granularity,
             horizontal_granularity: self.horizontal_granularity,
         };

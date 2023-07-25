@@ -1,4 +1,6 @@
 use std::borrow::Borrow;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use iced::advanced::renderer::Quad;
 use iced::advanced::widget::tree::Tree;
@@ -9,6 +11,7 @@ use iced::{
     alignment, event, Alignment, Color, Element, Event, Length, Padding, Point, Rectangle, Size,
 };
 
+use super::GridInfo;
 use crate::grid::style::StyleSheet;
 use crate::{style, Border, Borders, CellRange};
 
@@ -23,7 +26,7 @@ where
     horizontal_alignment: alignment::Horizontal,
     vertical_alignment: alignment::Vertical,
     borders: Borders,
-    style: <Renderer::Theme as StyleSheet>::Style,
+    info: Option<Rc<RefCell<GridInfo<Renderer>>>>,
 }
 
 impl<'a, Message, Renderer> GridCell<'a, Message, Renderer>
@@ -44,7 +47,7 @@ where
             horizontal_alignment: alignment::Horizontal::Center,
             vertical_alignment: alignment::Vertical::Center,
             borders: Borders::NONE,
-            style: Default::default(),
+            info: None,
         }
     }
 
@@ -186,7 +189,12 @@ where
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
-        let appearance = theme.appearance(&self.style);
+        let info = (**self
+            .info
+            .as_ref()
+            .expect("GridCell can only be used in a Grid"))
+        .borrow();
+        let appearance = theme.appearance(&info.style);
 
         // Rule lines for this (posssible spanning) cell
         renderer.fill_quad(
@@ -297,8 +305,8 @@ where
     Renderer::Theme: StyleSheet,
     <Renderer::Theme as StyleSheet>::Style: Clone,
 {
-    fn set_style(&mut self, style: <Renderer::Theme as StyleSheet>::Style) {
-        self.style = style;
+    fn set_info(&mut self, info: Rc<RefCell<super::GridInfo<Renderer>>>) {
+        self.info = Some(info);
     }
 }
 
