@@ -10,7 +10,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::{ColumnHead, GridCell, GridCorner, RowHead, SumSeq};
-
 pub mod addressing;
 pub mod cell;
 pub mod head;
@@ -18,7 +17,8 @@ pub mod operation;
 pub mod scroll;
 pub mod style;
 
-use head::{ColumnHeads, RowHeads};
+use cell::GridCellWidget;
+use head::{ColumnHeads, Head, RowHeads};
 pub use style::{Appearance, StyleSheet};
 
 /// A container that distributes its contents as a grid.
@@ -29,10 +29,10 @@ where
 {
     width: Length,
     height: Length,
-    cells: Vec<GridCell<'a, Message, Renderer>>,
+    cells: Vec<GridCellWidget<'a, Message, Renderer>>,
     row_heads: Option<RowHeads<'a, Message, Renderer>>,
     column_heads: Option<ColumnHeads<'a, Message, Renderer>>,
-    corner: Option<GridCorner<'a, Message, Renderer>>,
+    corner: Option<Head<'a, Message, Renderer>>,
     info: Rc<RefCell<GridInfo<Renderer>>>,
 }
 
@@ -75,20 +75,21 @@ where
     }
 
     /// Adds an [`GridCell`] element to the [`Grid`].
-    pub fn push_cell(mut self, mut cell: GridCell<'a, Message, Renderer>) -> Self {
+    pub fn push_cell(mut self, cell: GridCell<'a, Message, Renderer>) -> Self {
         // TODO check for existing cells that this overlaps and remove them
-        cell.set_info(Rc::clone(&self.info));
-        self.cells.push(cell);
+        let info = Rc::clone(&self.info);
+        self.cells.push(cell.into_grid_widget(info));
         self
     }
 
     /// Adds a [`RowHead`] element to the [`Grid`].
-    pub fn push_row_head(mut self, head: RowHead<'a, Message, Renderer>) -> Self {
+    pub fn push_row_head(mut self, row_head: RowHead<'a, Message, Renderer>) -> Self {
         let rh = match self.row_heads {
             Some(rh) => rh,
             None => RowHeads::new(Rc::clone(&self.info)),
         };
-        let rh = rh.push(head.head);
+        let info = Rc::clone(&self.info);
+        let rh = rh.push(row_head.into_grid_widget(info));
         self.row_heads = Some(rh);
         self
     }
@@ -105,12 +106,13 @@ where
     }
 
     /// Adds a [`ColumnHead`] element to the [`Grid`].
-    pub fn push_column_head(mut self, head: ColumnHead<'a, Message, Renderer>) -> Self {
+    pub fn push_column_head(mut self, column_head: ColumnHead<'a, Message, Renderer>) -> Self {
         let ch = match self.column_heads {
             Some(ch) => ch,
             None => ColumnHeads::new(Rc::clone(&self.info)),
         };
-        let ch = ch.push(head.head);
+        let info = Rc::clone(&self.info);
+        let ch = ch.push(column_head.into_grid_widget(info));
         self.column_heads = Some(ch);
         self
     }
@@ -128,9 +130,9 @@ where
 
     /// Adds a [`GridCorner`] element to the [`Grid`].  Note that the corner is only visible
     /// where both row and column heads are used.
-    pub fn push_corner(mut self, mut head: GridCorner<'a, Message, Renderer>) -> Self {
-        head.head.set_info(Rc::clone(&self.info));
-        self.corner = Some(head);
+    pub fn push_corner(mut self, corner: GridCorner<'a, Message, Renderer>) -> Self {
+        let info = Rc::clone(&self.info);
+        self.corner = Some(corner.into_grid_widget(info));
         self
     }
 
@@ -177,8 +179,8 @@ where
             result.push(Tree::new(widget));
         }
         if self.row_heads.is_some() && self.column_heads.is_some() {
-            if let Some(ref widget) = self.corner {
-                result.push(Tree::new(&widget.head));
+            if let Some(ref head) = self.corner {
+                result.push(Tree::new(head));
             }
         }
         result.extend(self.cells.iter().map(Tree::new));
@@ -212,11 +214,11 @@ where
         }
 
         if self.row_heads.is_some() && self.column_heads.is_some() {
-            if let Some(ref widget) = self.corner {
+            if let Some(ref head) = self.corner {
                 if i < tree.children.len() {
-                    tree.children[i].diff(&widget.head)
+                    tree.children[i].diff(head)
                 } else {
-                    tree.children.push(Tree::new(&widget.head))
+                    tree.children.push(Tree::new(head))
                 }
                 i += 1;
             }
@@ -276,9 +278,9 @@ where
                 children.push(ch_layout);
 
                 // Corner only used when row and column heads are used
-                if let Some(ref widget) = self.corner {
+                if let Some(ref head) = self.corner {
                     let corner_limits = limits.loose().max_width(result.x).max_height(result.y);
-                    let corner_layout = widget.head.layout(renderer, &corner_limits);
+                    let corner_layout = head.layout(renderer, &corner_limits);
                     children.push(corner_layout);
                 }
 
@@ -336,8 +338,8 @@ where
             };
 
             if self.row_heads.is_some() && self.column_heads.is_some() {
-                if let Some(ref widget) = self.corner {
-                    widget.head.operate(
+                if let Some(ref head) = self.corner {
+                    head.operate(
                         child_trees.next().unwrap(),
                         child_layouts.next().unwrap(),
                         renderer,
@@ -400,8 +402,8 @@ where
         };
 
         if self.row_heads.is_some() && self.column_heads.is_some() {
-            if let Some(ref mut widget) = self.corner {
-                let s = widget.head.on_event(
+            if let Some(ref mut head) = self.corner {
+                let s = head.on_event(
                     child_trees.next().unwrap(),
                     event.clone(),
                     child_layouts.next().unwrap(),
@@ -469,8 +471,8 @@ where
         };
 
         if self.row_heads.is_some() && self.column_heads.is_some() {
-            if let Some(ref widget) = self.corner {
-                let i = widget.head.mouse_interaction(
+            if let Some(ref head) = self.corner {
+                let i = head.mouse_interaction(
                     child_trees.next().unwrap(),
                     child_layouts.next().unwrap(),
                     cursor,
@@ -542,11 +544,11 @@ where
 
         // Corner
         if self.row_heads.is_some() && self.column_heads.is_some() {
-            if let Some(ref corner) = self.corner {
+            if let Some(ref head) = self.corner {
                 let corner_tree = child_trees.next().unwrap();
                 let corner_layout = child_layouts.next().unwrap();
 
-                corner.head.draw(
+                head.draw(
                     corner_tree,
                     renderer,
                     theme,
@@ -606,8 +608,8 @@ where
         };
 
         if corner_visible {
-            if let Some(ref mut widget) = self.corner {
-                let o = widget.head.overlay(
+            if let Some(ref mut head) = self.corner {
+                let o = head.overlay(
                     child_trees.next().unwrap(),
                     child_layouts.next().unwrap(),
                     renderer,
@@ -663,13 +665,4 @@ where
     row_heights: Rc<SumSeq>,
     column_widths: Rc<SumSeq>,
     style: <Renderer::Theme as StyleSheet>::Style,
-}
-
-trait GridComponent<Renderer>
-where
-    Renderer: iced::advanced::Renderer,
-    Renderer::Theme: StyleSheet,
-    <Renderer::Theme as StyleSheet>::Style: Clone,
-{
-    fn set_info(&mut self, info: Rc<RefCell<GridInfo<Renderer>>>);
 }

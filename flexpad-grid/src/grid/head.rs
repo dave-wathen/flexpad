@@ -13,7 +13,7 @@ use iced::{
 
 use crate::StyleSheet;
 
-use super::{GridComponent, GridInfo};
+use super::GridInfo;
 
 // A heading for a row in a [`Grid`]
 pub struct RowHead<'a, Message, Renderer = crate::Renderer>
@@ -21,7 +21,11 @@ where
     Renderer: iced::advanced::Renderer,
     Renderer::Theme: StyleSheet,
 {
-    pub(crate) head: Head<'a, Message, Renderer>,
+    row: u32,
+    content: Element<'a, Message, Renderer>,
+    padding: Padding,
+    horizontal_alignment: alignment::Horizontal,
+    vertical_alignment: alignment::Vertical,
 }
 
 #[allow(dead_code)]
@@ -36,33 +40,44 @@ where
         T: Into<Element<'a, Message, Renderer>>,
     {
         Self {
-            head: Head {
-                index: row,
-                content: content.into(),
-                padding: Padding::from(4),
-                horizontal_alignment: alignment::Horizontal::Center,
-                vertical_alignment: alignment::Vertical::Center,
-                info: None,
-            },
+            row,
+            content: content.into(),
+            padding: Padding::from(4),
+            horizontal_alignment: alignment::Horizontal::Center,
+            vertical_alignment: alignment::Vertical::Center,
         }
     }
 
     /// Sets the [`Padding`] around the contents of the [`RowHead`].
     pub fn padding<P: Into<Padding>>(mut self, padding: P) -> Self {
-        self.head.padding = padding.into();
+        self.padding = padding.into();
         self
     }
 
     /// Sets the content alignment for the horizontal axis of the [`RowHead`].
     pub fn align_x(mut self, alignment: alignment::Horizontal) -> Self {
-        self.head.horizontal_alignment = alignment;
+        self.horizontal_alignment = alignment;
         self
     }
 
     /// Sets the content alignment for the vertical axis of the [`RowHead`].
     pub fn align_y(mut self, alignment: alignment::Vertical) -> Self {
-        self.head.vertical_alignment = alignment;
+        self.vertical_alignment = alignment;
         self
+    }
+
+    pub(super) fn into_grid_widget(
+        self,
+        info: Rc<RefCell<GridInfo<Renderer>>>,
+    ) -> Head<'a, Message, Renderer> {
+        Head {
+            index: self.row,
+            content: self.content,
+            padding: self.padding,
+            horizontal_alignment: self.horizontal_alignment,
+            vertical_alignment: self.vertical_alignment,
+            info,
+        }
     }
 }
 
@@ -72,7 +87,11 @@ where
     Renderer: iced::advanced::Renderer,
     Renderer::Theme: StyleSheet,
 {
-    pub(crate) head: Head<'a, Message, Renderer>,
+    column: u32,
+    content: Element<'a, Message, Renderer>,
+    padding: Padding,
+    horizontal_alignment: alignment::Horizontal,
+    vertical_alignment: alignment::Vertical,
 }
 
 #[allow(dead_code)]
@@ -87,33 +106,44 @@ where
         T: Into<Element<'a, Message, Renderer>>,
     {
         Self {
-            head: Head {
-                index: column,
-                content: content.into(),
-                padding: Padding::from(4),
-                horizontal_alignment: alignment::Horizontal::Center,
-                vertical_alignment: alignment::Vertical::Center,
-                info: None,
-            },
+            column,
+            content: content.into(),
+            padding: Padding::from(4),
+            horizontal_alignment: alignment::Horizontal::Center,
+            vertical_alignment: alignment::Vertical::Center,
         }
     }
 
     /// Sets the [`Padding`] around the contents of the [`ColumnHead`].
     pub fn padding<P: Into<Padding>>(mut self, padding: P) -> Self {
-        self.head.padding = padding.into();
+        self.padding = padding.into();
         self
     }
 
     /// Sets the content alignment for the horizontal axis of the [`ColumnHead`].
     pub fn align_x(mut self, alignment: alignment::Horizontal) -> Self {
-        self.head.horizontal_alignment = alignment;
+        self.horizontal_alignment = alignment;
         self
     }
 
     /// Sets the content alignment for the vertical axis of the [`ColumnHead`].
     pub fn align_y(mut self, alignment: alignment::Vertical) -> Self {
-        self.head.vertical_alignment = alignment;
+        self.vertical_alignment = alignment;
         self
+    }
+
+    pub(super) fn into_grid_widget(
+        self,
+        info: Rc<RefCell<GridInfo<Renderer>>>,
+    ) -> Head<'a, Message, Renderer> {
+        Head {
+            index: self.column,
+            content: self.content,
+            padding: self.padding,
+            horizontal_alignment: self.horizontal_alignment,
+            vertical_alignment: self.vertical_alignment,
+            info,
+        }
     }
 }
 
@@ -124,7 +154,10 @@ where
     Renderer: iced::advanced::Renderer,
     Renderer::Theme: StyleSheet,
 {
-    pub(crate) head: Head<'a, Message, Renderer>,
+    content: Element<'a, Message, Renderer>,
+    padding: Padding,
+    horizontal_alignment: alignment::Horizontal,
+    vertical_alignment: alignment::Vertical,
 }
 
 #[allow(dead_code)]
@@ -139,33 +172,43 @@ where
         T: Into<Element<'a, Message, Renderer>>,
     {
         Self {
-            head: Head {
-                index: 0,
-                content: content.into(),
-                padding: Padding::from(4),
-                horizontal_alignment: alignment::Horizontal::Center,
-                vertical_alignment: alignment::Vertical::Center,
-                info: None,
-            },
+            content: content.into(),
+            padding: Padding::from(4),
+            horizontal_alignment: alignment::Horizontal::Center,
+            vertical_alignment: alignment::Vertical::Center,
         }
     }
 
     /// Sets the [`Padding`] around the contents of the [`GridCorner`].
     pub fn padding<P: Into<Padding>>(mut self, padding: P) -> Self {
-        self.head.padding = padding.into();
+        self.padding = padding.into();
         self
     }
 
     /// Sets the content alignment for the horizontal axis of the [`GridCorner`].
     pub fn align_x(mut self, alignment: alignment::Horizontal) -> Self {
-        self.head.horizontal_alignment = alignment;
+        self.horizontal_alignment = alignment;
         self
     }
 
     /// Sets the content alignment for the vertical axis of the [`GridCorner`].
     pub fn align_y(mut self, alignment: alignment::Vertical) -> Self {
-        self.head.vertical_alignment = alignment;
+        self.vertical_alignment = alignment;
         self
+    }
+
+    pub(super) fn into_grid_widget(
+        self,
+        info: Rc<RefCell<GridInfo<Renderer>>>,
+    ) -> Head<'a, Message, Renderer> {
+        Head {
+            index: 0,
+            content: self.content,
+            padding: self.padding,
+            horizontal_alignment: self.horizontal_alignment,
+            vertical_alignment: self.vertical_alignment,
+            info,
+        }
     }
 }
 
@@ -179,7 +222,7 @@ where
     padding: Padding,
     horizontal_alignment: alignment::Horizontal,
     vertical_alignment: alignment::Vertical,
-    info: Option<Rc<RefCell<GridInfo<Renderer>>>>,
+    info: Rc<RefCell<GridInfo<Renderer>>>,
 }
 
 impl<'a, Message, Renderer> Widget<Message, Renderer> for Head<'a, Message, Renderer>
@@ -296,7 +339,7 @@ where
         viewport: &Rectangle,
     ) {
         let bounds = layout.bounds();
-        let info = (**self.info.as_ref().expect("Head can only be used in a Grid")).borrow();
+        let info = (*self.info).borrow();
         let appearance = theme.appearance(&info.style);
 
         // Draw rule lines
@@ -334,17 +377,6 @@ where
             layout.children().next().unwrap(),
             renderer,
         )
-    }
-}
-
-impl<'a, Message, Renderer> super::GridComponent<Renderer> for Head<'a, Message, Renderer>
-where
-    Renderer: iced::advanced::Renderer,
-    Renderer::Theme: StyleSheet,
-    <Renderer::Theme as StyleSheet>::Style: Clone,
-{
-    fn set_info(&mut self, info: Rc<RefCell<GridInfo<Renderer>>>) {
-        self.info = Some(info);
     }
 }
 
@@ -406,9 +438,8 @@ where
     }
 
     /// Adds an [`RowHead`] element to the [`RowHeads`].
-    pub fn push(mut self, mut head: Head<'a, Message, Renderer>) -> Self {
+    pub fn push(mut self, head: Head<'a, Message, Renderer>) -> Self {
         self.row_heads.retain(|ch| ch.index != head.index);
-        head.set_info(Rc::clone(&self.info));
         self.row_heads.push(head);
         self
     }
@@ -570,17 +601,6 @@ where
     }
 }
 
-impl<'a, Message, Renderer> super::GridComponent<Renderer> for RowHeads<'a, Message, Renderer>
-where
-    Renderer: iced::advanced::Renderer,
-    Renderer::Theme: StyleSheet,
-    <Renderer::Theme as StyleSheet>::Style: Clone,
-{
-    fn set_info(&mut self, info: Rc<RefCell<GridInfo<Renderer>>>) {
-        self.info = info;
-    }
-}
-
 impl<'a, Message, Renderer> From<RowHeads<'a, Message, Renderer>> for Element<'a, Message, Renderer>
 where
     Message: 'a,
@@ -641,9 +661,8 @@ where
     }
 
     /// Adds an [`RowHead`] element to the [`ColumnHeads`].
-    pub fn push(mut self, mut head: Head<'a, Message, Renderer>) -> Self {
+    pub fn push(mut self, head: Head<'a, Message, Renderer>) -> Self {
         self.column_heads.retain(|ch| ch.index != head.index);
-        head.set_info(Rc::clone(&self.info));
         self.column_heads.push(head);
         self
     }
@@ -802,17 +821,6 @@ where
             .collect::<Vec<_>>();
 
         (!children.is_empty()).then(|| Group::with_children(children).overlay())
-    }
-}
-
-impl<'a, Message, Renderer> super::GridComponent<Renderer> for ColumnHeads<'a, Message, Renderer>
-where
-    Renderer: iced::advanced::Renderer,
-    Renderer::Theme: StyleSheet,
-    <Renderer::Theme as StyleSheet>::Style: Clone,
-{
-    fn set_info(&mut self, info: Rc<RefCell<GridInfo<Renderer>>>) {
-        self.info = info;
     }
 }
 

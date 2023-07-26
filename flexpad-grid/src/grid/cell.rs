@@ -26,7 +26,6 @@ where
     horizontal_alignment: alignment::Horizontal,
     vertical_alignment: alignment::Vertical,
     borders: Borders,
-    info: Option<Rc<RefCell<GridInfo<Renderer>>>>,
 }
 
 impl<'a, Message, Renderer> GridCell<'a, Message, Renderer>
@@ -47,7 +46,6 @@ where
             horizontal_alignment: alignment::Horizontal::Center,
             vertical_alignment: alignment::Vertical::Center,
             borders: Borders::NONE,
-            info: None,
         }
     }
 
@@ -74,9 +72,38 @@ where
         self.vertical_alignment = alignment;
         self
     }
+
+    pub(super) fn into_grid_widget(
+        self,
+        info: Rc<RefCell<GridInfo<Renderer>>>,
+    ) -> GridCellWidget<'a, Message, Renderer> {
+        GridCellWidget {
+            range: self.range,
+            content: self.content,
+            padding: self.padding,
+            horizontal_alignment: self.horizontal_alignment,
+            vertical_alignment: self.vertical_alignment,
+            borders: self.borders,
+            info,
+        }
+    }
 }
 
-impl<'a, Message, Renderer> Widget<Message, Renderer> for GridCell<'a, Message, Renderer>
+pub(super) struct GridCellWidget<'a, Message, Renderer = crate::Renderer>
+where
+    Renderer: iced::advanced::Renderer,
+    Renderer::Theme: StyleSheet,
+{
+    pub range: CellRange,
+    content: Element<'a, Message, Renderer>,
+    padding: Padding,
+    horizontal_alignment: alignment::Horizontal,
+    vertical_alignment: alignment::Vertical,
+    borders: Borders,
+    info: Rc<RefCell<GridInfo<Renderer>>>,
+}
+
+impl<'a, Message, Renderer> Widget<Message, Renderer> for GridCellWidget<'a, Message, Renderer>
 where
     Renderer: iced::advanced::Renderer,
     Renderer::Theme: StyleSheet,
@@ -189,11 +216,7 @@ where
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
-        let info = (**self
-            .info
-            .as_ref()
-            .expect("GridCell can only be used in a Grid"))
-        .borrow();
+        let info = (*self.info).borrow();
         let appearance = theme.appearance(&info.style);
 
         // Rule lines for this (posssible spanning) cell
@@ -299,30 +322,20 @@ where
     }
 }
 
-impl<'a, Message, Renderer> super::GridComponent<Renderer> for GridCell<'a, Message, Renderer>
-where
-    Renderer: iced::advanced::Renderer,
-    Renderer::Theme: StyleSheet,
-    <Renderer::Theme as StyleSheet>::Style: Clone,
-{
-    fn set_info(&mut self, info: Rc<RefCell<super::GridInfo<Renderer>>>) {
-        self.info = Some(info);
-    }
-}
-
-impl<'a, Message, Renderer> From<GridCell<'a, Message, Renderer>> for Element<'a, Message, Renderer>
+impl<'a, Message, Renderer> From<GridCellWidget<'a, Message, Renderer>>
+    for Element<'a, Message, Renderer>
 where
     Message: 'a,
     Renderer: 'a + iced::advanced::Renderer,
     Renderer::Theme: style::StyleSheet,
 {
-    fn from(cell: GridCell<'a, Message, Renderer>) -> Element<'a, Message, Renderer> {
+    fn from(cell: GridCellWidget<'a, Message, Renderer>) -> Element<'a, Message, Renderer> {
         Element::new(cell)
     }
 }
 
 impl<'a, Message, Renderer> Borrow<dyn Widget<Message, Renderer> + 'a>
-    for &GridCell<'a, Message, Renderer>
+    for &GridCellWidget<'a, Message, Renderer>
 where
     Message: 'a,
     Renderer: 'a + iced::advanced::Renderer,
