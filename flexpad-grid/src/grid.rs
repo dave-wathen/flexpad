@@ -5,7 +5,7 @@ use iced::advanced::widget::Operation;
 use iced::advanced::{layout, mouse, overlay, renderer, Clipboard, Layout, Shell, Widget};
 use iced::mouse::{Cursor, Interaction};
 use iced::{event, Color, Element, Event, Length, Point, Rectangle, Size, Vector};
-use std::borrow::Borrow;
+use std::borrow::{Borrow, BorrowMut};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -162,11 +162,137 @@ where
                 .unwrap_or(iced::Background::Color(Color::TRANSPARENT)),
         );
     }
+
+    fn for_each_widget(
+        &self,
+        tree: &Tree,
+        layout: Layout<'_>,
+        mut f: impl FnMut(&dyn Widget<Message, Renderer>, &Tree, Layout),
+    ) {
+        let mut child_trees = tree.children.iter();
+        let mut child_layouts = layout.children();
+
+        if let Some(ref r_heads) = self.row_heads {
+            f(
+                r_heads.borrow(),
+                child_trees.next().unwrap(),
+                child_layouts.next().unwrap(),
+            );
+        };
+
+        if let Some(ref c_heads) = self.column_heads {
+            f(
+                c_heads.borrow(),
+                child_trees.next().unwrap(),
+                child_layouts.next().unwrap(),
+            );
+        };
+
+        if self.row_heads.is_some() && self.column_heads.is_some() {
+            if let Some(ref head) = self.corner {
+                f(
+                    head.borrow(),
+                    child_trees.next().unwrap(),
+                    child_layouts.next().unwrap(),
+                );
+            }
+        }
+
+        self.cells
+            .iter()
+            .zip(child_trees)
+            .zip(child_layouts)
+            .for_each(|((cell, tree), layout)| f(cell.borrow(), tree, layout))
+    }
+
+    fn for_each_widget_mut_tree(
+        &self,
+        tree: &mut Tree,
+        layout: Layout<'_>,
+        mut f: impl FnMut(&dyn Widget<Message, Renderer>, &mut Tree, Layout),
+    ) {
+        let mut child_trees = tree.children.iter_mut();
+        let mut child_layouts = layout.children();
+
+        if let Some(ref r_heads) = self.row_heads {
+            f(
+                r_heads.borrow(),
+                child_trees.next().unwrap(),
+                child_layouts.next().unwrap(),
+            );
+        };
+
+        if let Some(ref c_heads) = self.column_heads {
+            f(
+                c_heads.borrow(),
+                child_trees.next().unwrap(),
+                child_layouts.next().unwrap(),
+            );
+        };
+
+        if self.row_heads.is_some() && self.column_heads.is_some() {
+            if let Some(ref head) = self.corner {
+                f(
+                    head.borrow(),
+                    child_trees.next().unwrap(),
+                    child_layouts.next().unwrap(),
+                );
+            }
+        }
+
+        self.cells
+            .iter()
+            .zip(child_trees)
+            .zip(child_layouts)
+            .for_each(|((cell, tree), layout)| f(cell.borrow(), tree, layout))
+    }
+
+    fn for_each_widget_mut(
+        &mut self,
+        tree: &mut Tree,
+        layout: Layout<'_>,
+        mut f: impl FnMut(&mut dyn Widget<Message, Renderer>, &mut Tree, Layout),
+    ) {
+        let mut child_trees = tree.children.iter_mut();
+        let mut child_layouts = layout.children();
+
+        if let Some(ref mut r_heads) = self.row_heads {
+            f(
+                r_heads.borrow_mut(),
+                child_trees.next().unwrap(),
+                child_layouts.next().unwrap(),
+            );
+        };
+
+        if let Some(ref mut c_heads) = self.column_heads {
+            f(
+                c_heads.borrow_mut(),
+                child_trees.next().unwrap(),
+                child_layouts.next().unwrap(),
+            );
+        };
+
+        if self.row_heads.is_some() && self.column_heads.is_some() {
+            if let Some(ref mut head) = self.corner {
+                f(
+                    head.borrow_mut(),
+                    child_trees.next().unwrap(),
+                    child_layouts.next().unwrap(),
+                );
+            }
+        }
+
+        self.cells
+            .iter_mut()
+            .zip(child_trees)
+            .zip(child_layouts)
+            .for_each(|((cell, tree), layout)| f(cell.borrow_mut(), tree, layout))
+    }
 }
 
-impl<'a, Message, Renderer> Widget<Message, Renderer> for Grid<'a, Message, Renderer>
+impl<'a, Message: 'a, Renderer> Widget<Message, Renderer> for Grid<'a, Message, Renderer>
 where
-    Renderer: iced::advanced::Renderer,
+    Renderer: iced::advanced::Renderer + 'a,
     Renderer::Theme: StyleSheet,
     <Renderer::Theme as StyleSheet>::Style: Clone,
 {
@@ -316,45 +442,9 @@ where
         operation: &mut dyn Operation<Message>,
     ) {
         operation.container(None, &mut |operation| {
-            let mut child_trees = tree.children.iter_mut();
-            let mut child_layouts = layout.children();
-
-            if let Some(ref r_heads) = self.row_heads {
-                r_heads.operate(
-                    child_trees.next().unwrap(),
-                    child_layouts.next().unwrap(),
-                    renderer,
-                    operation,
-                );
-            };
-
-            if let Some(ref c_heads) = self.column_heads {
-                c_heads.operate(
-                    child_trees.next().unwrap(),
-                    child_layouts.next().unwrap(),
-                    renderer,
-                    operation,
-                );
-            };
-
-            if self.row_heads.is_some() && self.column_heads.is_some() {
-                if let Some(ref head) = self.corner {
-                    head.operate(
-                        child_trees.next().unwrap(),
-                        child_layouts.next().unwrap(),
-                        renderer,
-                        operation,
-                    );
-                }
-            }
-
-            self.cells
-                .iter()
-                .zip(child_trees)
-                .zip(child_layouts)
-                .for_each(|((cell, tree), layout)| {
-                    cell.operate(tree, layout, renderer, operation);
-                })
+            self.for_each_widget_mut_tree(tree, layout, |widget, tree, layout| {
+                widget.operate(tree, layout, renderer, operation);
+            });
         });
     }
 
@@ -369,15 +459,13 @@ where
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) -> event::Status {
-        let mut child_trees = tree.children.iter_mut();
-        let mut child_layouts = layout.children();
         let mut status = event::Status::Ignored;
 
-        if let Some(ref mut r_heads) = self.row_heads {
-            let s = r_heads.on_event(
-                child_trees.next().unwrap(),
+        self.for_each_widget_mut(tree, layout, |widget, tree, layout| {
+            let s = widget.on_event(
+                tree,
                 event.clone(),
-                child_layouts.next().unwrap(),
+                layout,
                 cursor,
                 renderer,
                 clipboard,
@@ -385,55 +473,9 @@ where
                 viewport,
             );
             status = status.merge(s);
-        };
+        });
 
-        if let Some(ref mut c_heads) = self.column_heads {
-            let s = c_heads.on_event(
-                child_trees.next().unwrap(),
-                event.clone(),
-                child_layouts.next().unwrap(),
-                cursor,
-                renderer,
-                clipboard,
-                shell,
-                viewport,
-            );
-            status = status.merge(s);
-        };
-
-        if self.row_heads.is_some() && self.column_heads.is_some() {
-            if let Some(ref mut head) = self.corner {
-                let s = head.on_event(
-                    child_trees.next().unwrap(),
-                    event.clone(),
-                    child_layouts.next().unwrap(),
-                    cursor,
-                    renderer,
-                    clipboard,
-                    shell,
-                    viewport,
-                );
-                status = status.merge(s);
-            }
-        }
-
-        self.cells
-            .iter_mut()
-            .zip(child_trees)
-            .zip(child_layouts)
-            .map(|((child, tree), layout)| {
-                child.on_event(
-                    tree,
-                    event.clone(),
-                    layout,
-                    cursor,
-                    renderer,
-                    clipboard,
-                    shell,
-                    viewport,
-                )
-            })
-            .fold(status, event::Status::merge)
+        status
     }
 
     fn mouse_interaction(
@@ -444,53 +486,14 @@ where
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
-        let mut child_trees = tree.children.iter();
-        let mut child_layouts = layout.children();
         let mut result = Interaction::default();
 
-        if let Some(ref r_heads) = self.row_heads {
-            let i = r_heads.mouse_interaction(
-                child_trees.next().unwrap(),
-                child_layouts.next().unwrap(),
-                cursor,
-                viewport,
-                renderer,
-            );
+        self.for_each_widget(tree, layout, |widget, tree, layout| {
+            let i = widget.mouse_interaction(tree, layout, cursor, viewport, renderer);
             result = result.max(i);
-        };
+        });
 
-        if let Some(ref c_heads) = self.column_heads {
-            let i = c_heads.mouse_interaction(
-                child_trees.next().unwrap(),
-                child_layouts.next().unwrap(),
-                cursor,
-                viewport,
-                renderer,
-            );
-            result = result.max(i);
-        };
-
-        if self.row_heads.is_some() && self.column_heads.is_some() {
-            if let Some(ref head) = self.corner {
-                let i = head.mouse_interaction(
-                    child_trees.next().unwrap(),
-                    child_layouts.next().unwrap(),
-                    cursor,
-                    viewport,
-                    renderer,
-                );
-                result = result.max(i);
-            }
-        }
-
-        self.cells
-            .iter()
-            .zip(child_trees)
-            .zip(child_layouts)
-            .map(|((child, tree), layout)| {
-                child.mouse_interaction(tree, layout, cursor, viewport, renderer)
-            })
-            .fold(result, Interaction::max)
+        result
     }
 
     fn draw(
@@ -503,74 +506,21 @@ where
         cursor: Cursor,
         viewport: &Rectangle,
     ) {
-        let mut child_trees = tree.children.iter();
-        let mut child_layouts = layout.children();
-
         let bounds = layout.bounds();
-
         self.draw_background(bounds, renderer, theme);
-
-        // Row Header
-        if let Some(ref r_heads) = self.row_heads {
-            let r_heads_tree = child_trees.next().unwrap();
-            let r_heads_layout = child_layouts.next().unwrap();
-
-            r_heads.draw(
-                r_heads_tree,
-                renderer,
-                theme,
-                renderer_style,
-                r_heads_layout,
-                cursor,
-                viewport,
-            );
-        };
-
-        // Column Header
-        if let Some(ref c_heads) = self.column_heads {
-            let c_heads_tree = child_trees.next().unwrap();
-            let c_heads_layout = child_layouts.next().unwrap();
-
-            c_heads.draw(
-                c_heads_tree,
-                renderer,
-                theme,
-                renderer_style,
-                c_heads_layout,
-                cursor,
-                viewport,
-            );
-        };
-
-        // Corner
-        if self.row_heads.is_some() && self.column_heads.is_some() {
-            if let Some(ref head) = self.corner {
-                let corner_tree = child_trees.next().unwrap();
-                let corner_layout = child_layouts.next().unwrap();
-
-                head.draw(
-                    corner_tree,
+        self.for_each_widget(tree, layout, |widget, tree, layout| {
+            if viewport.intersects(&layout.bounds()) {
+                widget.draw(
+                    tree,
                     renderer,
                     theme,
                     renderer_style,
-                    corner_layout,
+                    layout,
                     cursor,
                     viewport,
                 );
             }
-        }
-
-        for ((cell, tree), layout) in self.cells.iter().zip(child_trees).zip(child_layouts) {
-            cell.draw(
-                tree,
-                renderer,
-                theme,
-                renderer_style,
-                layout,
-                cursor,
-                viewport,
-            );
-        }
+        });
     }
 
     fn overlay<'b>(
@@ -579,8 +529,8 @@ where
         layout: Layout<'_>,
         renderer: &Renderer,
     ) -> Option<overlay::Element<'b, Message, Renderer>> {
+        // TODO can for_each_widget_mut be used here?
         let mut children = vec![];
-
         let mut child_trees = tree.children.iter_mut();
         let mut child_layouts = layout.children();
         let corner_visible = self.row_heads.is_some() && self.column_heads.is_some();

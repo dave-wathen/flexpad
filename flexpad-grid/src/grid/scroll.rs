@@ -377,9 +377,9 @@ where
     }
 }
 
-impl<'a, Message, Renderer> Widget<Message, Renderer> for GridScrollable<'a, Message, Renderer>
+impl<'a, Message: 'a, Renderer> Widget<Message, Renderer> for GridScrollable<'a, Message, Renderer>
 where
-    Renderer: iced::advanced::Renderer,
+    Renderer: iced::advanced::Renderer + 'a,
     Renderer::Theme: StyleSheet,
     Renderer::Theme: crate::style::StyleSheet,
     <Renderer::Theme as crate::style::StyleSheet>::Style: Clone,
