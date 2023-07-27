@@ -36,6 +36,8 @@ where
     info: Rc<RefCell<GridInfo<Renderer>>>,
 }
 
+#[allow(unknown_lints)]
+#[allow(clippy::suspicious_double_ref_op)]
 impl<'a, Message, Renderer> Grid<'a, Message, Renderer>
 where
     Message: 'a,
