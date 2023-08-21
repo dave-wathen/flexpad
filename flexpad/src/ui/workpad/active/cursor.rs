@@ -67,6 +67,7 @@ impl Cursor {
         self.move_right_by_amount(value, 1)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn move_right_by_words(&mut self, value: &Value) {
         self.move_to(value.next_end_of_word(self.right(value)))
     }
@@ -86,6 +87,7 @@ impl Cursor {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn move_left_by_words(&mut self, value: &Value) {
         self.move_to(value.previous_start_of_word(self.left(value)));
     }
@@ -98,6 +100,7 @@ impl Cursor {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn select_left(&mut self, value: &Value) {
         match self.state(value) {
             State::Index(index) if index > 0 => self.select_range(index, index - 1),
@@ -106,6 +109,7 @@ impl Cursor {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn select_right(&mut self, value: &Value) {
         match self.state(value) {
             State::Index(index) if index < value.len() => self.select_range(index, index + 1),
@@ -125,6 +129,7 @@ impl Cursor {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn select_right_by_words(&mut self, value: &Value) {
         match self.state(value) {
             State::Index(index) => self.select_range(index, value.next_end_of_word(index)),
@@ -134,6 +139,7 @@ impl Cursor {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn select_all(&mut self, value: &Value) {
         self.select_range(0, value.len());
     }

@@ -7,6 +7,7 @@ pub struct Editor<'a> {
     cursor: &'a mut Cursor,
 }
 
+#[allow(dead_code)]
 impl<'a> Editor<'a> {
     pub fn new(value: &'a mut Value, cursor: &'a mut Cursor) -> Editor<'a> {
         Editor { value, cursor }

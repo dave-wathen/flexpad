@@ -373,7 +373,10 @@ where
                 }
                 Status::Captured
             }
-            Event::Keyboard(keyboard::Event::KeyReleased { key_code, .. }) => {
+            Event::Keyboard(keyboard::Event::KeyReleased {
+                key_code: _key_code,
+                ..
+            }) => {
                 let state = tree.state.downcast_mut::<State>();
 
                 if state.is_focused.is_some() {

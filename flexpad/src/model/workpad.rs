@@ -321,7 +321,7 @@ impl Cell<'_> {
     pub fn value(&self) -> &str {
         match &self.cell_data.value {
             Value::Empty => "",
-            Value::String(s) => &s,
+            Value::String(s) => s,
         }
     }
 }
