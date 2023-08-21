@@ -11,5 +11,5 @@ vergen = { version = "8.2.1", features = [ "build", "git", "gitoxide" ] }
 
 [dependencies]
 compact_str = "0.7.1"
-iced = { git = "https://github.com/iced-rs/iced", features = ["advanced", "image"], branch = "master"}
+iced = { workspace = true }
 flexpad-grid = { path = "../flexpad-grid" }

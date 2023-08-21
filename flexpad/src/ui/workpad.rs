@@ -2,16 +2,20 @@ use std::sync::{Arc, RwLock};
 
 use crate::model::workpad::Workpad;
 use flexpad_grid::{
-    style, CellRange, ColumnHead, Grid, GridCell, GridCorner, GridScrollable, RowCol, RowHead,
-    SumSeq, Viewport,
+    style, Border, Borders, CellRange, ColumnHead, Grid, GridCell, GridCorner, GridScrollable,
+    RowCol, RowHead, SumSeq, Viewport,
 };
 use iced::{
     alignment, theme,
     widget::{self, button, column, horizontal_space, image, row, text, text_input, vertical_rule},
-    Alignment, Command, Element, Length,
+    Alignment, Color, Command, Element, Length,
 };
 
+use self::active::ActiveCell;
+
 use super::images;
+
+mod active;
 
 #[derive(Debug, Default, Clone)]
 enum State {
@@ -32,6 +36,8 @@ pub enum WorkpadMessage {
     SheetNameEdited(String),
     SheetNameEditEnd,
     ViewportChanged(Viewport),
+    ActiveCellMove(active::Move),
+    ActiveCellNewValue(String),
 }
 
 pub struct WorkpadUI {
@@ -39,7 +45,8 @@ pub struct WorkpadUI {
     state: State,
     name_edit_id: text_input::Id,
     sheet_edit_id: text_input::Id,
-    visible_cells: Option<CellRange>,
+    visible_cells: CellRange,
+    active_cell: RowCol,
 }
 
 impl Default for WorkpadUI {
@@ -49,7 +56,8 @@ impl Default for WorkpadUI {
             state: Default::default(),
             name_edit_id: text_input::Id::unique(),
             sheet_edit_id: text_input::Id::unique(),
-            visible_cells: None,
+            visible_cells: CellRange::empty(),
+            active_cell: (0, 0).into(),
         }
     }
 }
@@ -154,12 +162,17 @@ impl WorkpadUI {
             .into(),
         };
 
-        let cell_name: iced::Element<'_, WorkpadMessage> =
-            text(self.pad.read().unwrap().active_sheet().active_cell().name())
-                .size(18)
-                .width(100)
-                .horizontal_alignment(alignment::Horizontal::Center)
-                .into();
+        let pad = self.pad.read().unwrap();
+        let active_sheet = pad.active_sheet();
+        let active_cell = active_sheet.cell(
+            self.active_cell.row as usize,
+            self.active_cell.column as usize,
+        );
+        let cell_name: iced::Element<'_, WorkpadMessage> = text(active_cell.name())
+            .size(18)
+            .width(100)
+            .horizontal_alignment(alignment::Horizontal::Center)
+            .into();
 
         let formula: iced::Element<'_, WorkpadMessage> = text("formula")
             .size(18)
@@ -203,26 +216,41 @@ impl WorkpadUI {
             .row_head_width(sheet.row_header_width())
             .column_head_height(sheet.column_header_height());
 
-        if let Some(visibles) = self.visible_cells {
-            for cl in visibles.columns() {
-                let column = sheet.column(cl as usize);
-                grid = grid.push_column_head(ColumnHead::new(cl, text(column.name()).size(10)))
-            }
-
-            for rw in visibles.rows() {
-                let row = sheet.row(rw as usize);
-                grid = grid.push_row_head(RowHead::new(rw, text(row.name()).size(10)))
-            }
-
-            for RowCol {
-                row: rw,
-                column: cl,
-            } in visibles.cells()
-            {
-                let cell = sheet.cell(rw as usize, cl as usize);
-                grid = grid.push_cell(GridCell::new((rw, cl), text(cell.name()).size(10)))
-            }
+        for cl in self.visible_cells.columns() {
+            let column = sheet.column(cl as usize);
+            grid = grid.push_column_head(ColumnHead::new(cl, text(column.name()).size(10)))
         }
+
+        for rw in self.visible_cells.rows() {
+            let row = sheet.row(rw as usize);
+            grid = grid.push_row_head(RowHead::new(rw, text(row.name()).size(10)))
+        }
+
+        for RowCol {
+            row: rw,
+            column: cl,
+        } in self.visible_cells.cells()
+        {
+            if self.active_cell.row != rw || self.active_cell.column != cl {
+                let cell = sheet.cell(rw as usize, cl as usize);
+                let grid_cell = GridCell::new((rw, cl), text(cell.value()).size(10));
+                grid = grid.push_cell(grid_cell);
+            };
+        }
+
+        // Always add the active cell even when not visible so keystrokes are handled
+        // TODO Cell value
+        let cell = sheet.cell(
+            self.active_cell.row as usize,
+            self.active_cell.column as usize,
+        );
+        let ac = ActiveCell::new(cell.value())
+            .on_move(WorkpadMessage::ActiveCellMove)
+            .on_new_value(WorkpadMessage::ActiveCellNewValue);
+        let grid_cell = GridCell::new(self.active_cell, ac)
+            // TODO Hardcoding
+            .borders(Borders::new(Border::new(1.0, Color::from_rgb8(0, 0, 255))));
+        grid = grid.push_cell(grid_cell);
 
         GridScrollable::new(grid)
             .width(Length::Fill)
@@ -234,11 +262,57 @@ impl WorkpadUI {
     // TODO Cancel editing using Esc/Button
     pub fn update(&mut self, message: WorkpadMessage) -> Command<WorkpadMessage> {
         if let WorkpadMessage::ViewportChanged(viewport) = message {
-            self.visible_cells = Some(viewport.cell_range())
+            self.visible_cells = viewport.cell_range()
         }
 
         match &self.state {
             State::Passive => match message {
+                WorkpadMessage::ActiveCellNewValue(s) => {
+                    // TODO Move this to model and perform updates (and recaclulations) on another thread
+                    let mut pad = self.pad.write().unwrap();
+                    pad.set_cell_value(
+                        self.active_cell.row as usize,
+                        self.active_cell.column as usize,
+                        s,
+                    );
+                    Command::none()
+                }
+                WorkpadMessage::ActiveCellMove(mve) => {
+                    let pad = self.pad.read().unwrap();
+                    let sheet = pad.active_sheet();
+                    // TODO Scroll if necessary
+                    match mve {
+                        active::Move::Left => {
+                            if self.active_cell.column > 0 {
+                                self.active_cell =
+                                    RowCol::new(self.active_cell.row, self.active_cell.column - 1);
+                            }
+                        }
+                        active::Move::Right => {
+                            // TODO Maybe cache in self
+                            let columns_count = sheet.columns().count() as u32;
+                            if self.active_cell.column + 1 < columns_count {
+                                self.active_cell =
+                                    RowCol::new(self.active_cell.row, self.active_cell.column + 1);
+                            }
+                        }
+                        active::Move::Up => {
+                            if self.active_cell.row > 0 {
+                                self.active_cell =
+                                    RowCol::new(self.active_cell.row - 1, self.active_cell.column);
+                            }
+                        }
+                        active::Move::Down => {
+                            // TODO Maybe cache in self
+                            let rows_count = sheet.rows().count() as u32;
+                            if self.active_cell.row + 1 < rows_count {
+                                self.active_cell =
+                                    RowCol::new(self.active_cell.row + 1, self.active_cell.column);
+                            }
+                        }
+                    }
+                    Command::none()
+                }
                 WorkpadMessage::PadNameEditStart => {
                     self.state = State::EditingPadName(self.pad.read().unwrap().name().to_owned());
                     Command::batch(vec![

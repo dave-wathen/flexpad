@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use compact_str::{CompactString, ToCompactString};
 
 pub struct Workpad {
@@ -34,6 +36,16 @@ impl Workpad {
     pub fn set_name(&mut self, value: impl ToCompactString) {
         self.name = value.to_compact_string()
     }
+
+    // TODO better than this!
+    pub fn set_cell_value(&mut self, row: usize, column: usize, s: String) {
+        let sheet_data = &mut self.sheets[self.current];
+        let cell_data = sheet_data
+            .cells
+            .entry((row, column))
+            .or_insert_with(Default::default);
+        cell_data.value = Value::String(s.to_compact_string());
+    }
 }
 
 pub struct SheetData {
@@ -42,26 +54,26 @@ pub struct SheetData {
     row_header_width: f32,
     columns: Vec<ColumnData>,
     rows: Vec<RowData>,
+    // TODO need something that allows insertions/deletion of rows/columns
+    cells: HashMap<(usize, usize), CellData>,
 }
 
 impl SheetData {
     fn new(name: impl ToCompactString) -> Self {
-        // TODO Temporarilly overridden until scroll window only is working
         let columns = (0..99).map(ColumnData::new).collect();
         let rows = (0..999).map(RowData::new).collect();
-        // let columns = (0..30).map(ColumnData::new).collect();
-        // let rows = (0..99).map(RowData::new).collect();
         Self {
             name: name.to_compact_string(),
             column_header_height: 20.0,
             row_header_width: 60.0,
             columns,
             rows,
+            cells: HashMap::new(),
         }
     }
 }
 
-pub struct ColumnData {
+struct ColumnData {
     name: Name,
     width: f32,
 }
@@ -75,7 +87,7 @@ impl ColumnData {
     }
 }
 
-pub struct RowData {
+struct RowData {
     name: Name,
     height: f32,
 }
@@ -86,6 +98,25 @@ impl RowData {
             name: Name::Auto((index + 1).to_compact_string()),
             height: 20.0,
         }
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub enum Value {
+    #[default]
+    Empty,
+    String(CompactString),
+}
+
+// TODO value types, borders, alignment, etc.
+#[derive(Debug, Default, Clone)]
+struct CellData {
+    value: Value,
+}
+
+impl CellData {
+    fn new() -> Self {
+        Default::default()
     }
 }
 
@@ -132,11 +163,6 @@ impl Sheet<'_> {
         self.data.row_header_width
     }
 
-    pub fn active_cell(&self) -> Cell<'_> {
-        // TODO
-        self.cell(0, 0)
-    }
-
     #[allow(dead_code)]
     pub fn cells(&self) -> impl Iterator<Item = Cell<'_>> {
         // TODO use a range
@@ -160,11 +186,18 @@ impl Sheet<'_> {
     }
 
     pub fn cell(&self, row: usize, column: usize) -> Cell<'_> {
+        let cell_data = self
+            .data
+            .cells
+            .get(&(row, column))
+            .cloned()
+            .unwrap_or_else(CellData::new);
         Cell::new(
             &self.data.rows[row],
             row,
             &self.data.columns[column],
             column,
+            cell_data,
         )
     }
 }
@@ -230,6 +263,7 @@ pub struct Cell<'pad> {
     row_index: usize,
     column_data: &'pad ColumnData,
     column_index: usize,
+    cell_data: CellData,
     name: Name,
 }
 
@@ -240,6 +274,7 @@ impl Cell<'_> {
         row_index: usize,
         column_data: &'pad ColumnData,
         column_index: usize,
+        cell_data: CellData,
     ) -> Cell<'pad> {
         let name = match (&row_data.name, &column_data.name) {
             (Name::Auto(row_name), Name::Auto(column_name)) => {
@@ -254,6 +289,7 @@ impl Cell<'_> {
             row_index,
             column_data,
             column_index,
+            cell_data,
             name,
         }
     }
@@ -278,6 +314,14 @@ impl Cell<'_> {
         match &self.name {
             Name::Auto(n) => n,
             Name::Custom(n) => n,
+        }
+    }
+
+    // TODO How do we want to expose values?
+    pub fn value(&self) -> &str {
+        match &self.cell_data.value {
+            Value::Empty => "",
+            Value::String(s) => &s,
         }
     }
 }

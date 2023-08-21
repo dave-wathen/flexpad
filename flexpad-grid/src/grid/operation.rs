@@ -1,6 +1,9 @@
 //! Operate on [`GridScrollable`] widgets.
 
-use iced::advanced::widget::{Id, Operation};
+use iced::{
+    advanced::widget::{Id, Operation},
+    Rectangle,
+};
 
 /// Abilities to scroll a [`GridScrollable`].
 pub trait GridScrollable {
@@ -24,6 +27,7 @@ pub fn snap_to<T>(target: Id, offset: RelativeOffset) -> impl Operation<T> {
         fn container(
             &mut self,
             _id: Option<&Id>,
+            _bounds: Rectangle,
             operate_on_children: &mut dyn FnMut(&mut dyn Operation<T>),
         ) {
             operate_on_children(self)
@@ -52,6 +56,7 @@ pub fn scroll_to<T>(target: Id, offset: AbsoluteOffset) -> impl Operation<T> {
         fn container(
             &mut self,
             _id: Option<&Id>,
+            _bounds: Rectangle,
             operate_on_children: &mut dyn FnMut(&mut dyn Operation<T>),
         ) {
             operate_on_children(self)

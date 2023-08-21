@@ -55,54 +55,83 @@ impl From<(u32, u32)> for RowCol {
 }
 
 /// A [`CellRange`] represents a contiguous block of cells in a [`Grid`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-// TODO Empty cell range
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CellRange {
-    pub start: RowCol,
-    pub end: RowCol,
+    kind: RangeKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RangeKind {
+    Empty,
+    Single(RowCol),
+    FromTo(RowCol, RowCol),
 }
 
 impl CellRange {
-    pub fn new<RC1: Into<RowCol>, RC2: Into<RowCol>>(start: RC1, end: RC2) -> Self {
-        let start = start.into();
-        let end = end.into();
+    pub fn new<RC1: Into<RowCol>, RC2: Into<RowCol>>(from: RC1, to: RC2) -> Self {
+        let from = from.into();
+        let to = to.into();
 
-        debug_assert!(end.row >= start.row, "Start row cannot be after end row");
+        debug_assert!(to.row >= from.row, "From row cannot be after to row");
         debug_assert!(
-            end.column >= start.column,
-            "Start column cannot be after end column"
+            to.column >= from.column,
+            "From column cannot be after to column"
         );
 
-        Self { start, end }
+        Self {
+            kind: RangeKind::FromTo(from, to),
+        }
+    }
+
+    pub fn empty() -> Self {
+        Self {
+            kind: RangeKind::Empty,
+        }
     }
 
     pub fn new_single<RC: Into<RowCol>>(rc: RC) -> Self {
-        let rc = rc.into();
-        Self::new(rc, rc)
+        Self {
+            kind: RangeKind::Single(rc.into()),
+        }
     }
 
     /// Determines if there is an intersection between two [`CellRange`]s.
     pub fn intersects(&self, other: &CellRange) -> bool {
-        let CellRange {
-            start: rs1,
-            end: re1,
-        } = self;
-        let CellRange {
-            start: rs2,
-            end: re2,
-        } = other;
-        (rs1.row <= re2.row && re1.row >= rs2.row)
-            && (rs1.column <= re2.column && re1.column >= rs2.column)
+        match (self.kind, other.kind) {
+            (RangeKind::Empty, _) => false,
+            (_, RangeKind::Empty) => false,
+            (RangeKind::Single(s_one), RangeKind::Single(o_one)) => s_one == o_one,
+            (RangeKind::Single(s_one), RangeKind::FromTo(o_from, o_to)) => {
+                (o_from.row <= s_one.row && s_one.row <= o_to.row)
+                    && (o_from.column <= s_one.column && s_one.column <= o_to.column)
+            }
+            (RangeKind::FromTo(s_from, s_to), RangeKind::Single(o_one)) => {
+                (s_from.row <= o_one.row && o_one.row <= s_to.row)
+                    && (s_from.column <= o_one.column && o_one.column <= s_to.column)
+            }
+            (RangeKind::FromTo(s_from, s_to), RangeKind::FromTo(o_from, o_to)) => {
+                (s_from.row <= o_to.row && s_to.row >= o_from.row)
+                    && (s_from.column <= o_to.column && s_to.column >= o_from.column)
+            }
+        }
     }
 
     /// Returns the row range for this [`CellRange`]
     pub fn rows(&self) -> Range<u32> {
-        (self.start.row)..(self.end.row + 1)
+        match self.kind {
+            RangeKind::Empty => 0..0,
+            RangeKind::Single(one) => (one.row)..(one.row + 1),
+            RangeKind::FromTo(from, to) => (from.row)..(to.row + 1),
+        }
     }
 
     /// Returns the column range for this [`CellRange`]
     pub fn columns(&self) -> Range<u32> {
-        (self.start.column)..(self.end.column + 1)
+        match self.kind {
+            RangeKind::Empty => 0..0,
+            RangeKind::Single(one) => (one.column)..(one.column + 1),
+            RangeKind::FromTo(from, to) => (from.column)..(to.column + 1),
+        }
     }
 
     /// Returns the number of [`RowCol`]s in this [`CellRange`]
@@ -110,19 +139,26 @@ impl CellRange {
         self.rows().count() * self.columns().count()
     }
 
+    pub fn is_empty(&self) -> bool {
+        matches!(self.kind, RangeKind::Empty)
+    }
+
     /// Returns an iterator of the individual [`RowCol]s in this [`CellRange`]
     pub fn cells(&self) -> impl Iterator<Item = RowCol> + '_ {
-        let mut rw = self.start.row;
-        let mut cl = self.start.column;
+        let (mut rw, mut cl, to_rw, from_cl, to_cl) = match self.kind {
+            RangeKind::Empty => (1, 0, 0, 0, 0),
+            RangeKind::Single(one) => (one.row, one.column, one.row, one.column, one.column),
+            RangeKind::FromTo(from, to) => (from.row, from.column, to.row, from.column, to.column),
+        };
 
         std::iter::from_fn(move || {
-            if rw <= self.end.row {
+            if rw <= to_rw {
                 let rc = RowCol::new(rw, cl);
 
                 cl += 1;
-                if cl > self.end.column {
+                if cl > to_cl {
                     rw += 1;
-                    cl = self.start.column;
+                    cl = from_cl;
                 }
 
                 Some(rc)
@@ -173,6 +209,17 @@ mod tests {
             assert!(!r1.intersects(&r2), "{r1:?} shouldn't intersect {r2:?}");
             assert!(!r2.intersects(&r1), "{r2:?} shouldn't intersect {r1:?}");
         }
+
+        // empty/empty
+        assert_not_intersects(CellRange::empty(), CellRange::empty());
+
+        // empty/single
+        assert_not_intersects(CellRange::empty(), (10, 20));
+        assert_not_intersects((10, 20), CellRange::empty());
+
+        // empty/range
+        assert_not_intersects(CellRange::empty(), CellRange::new((10, 20), (10, 25)));
+        assert_not_intersects(CellRange::new((10, 20), (10, 25)), CellRange::empty());
 
         // single/single
         assert_intersects((10, 20), (10, 20));
@@ -269,6 +316,15 @@ mod tests {
             CellRange::new((10, 20), (15, 25)),
             CellRange::new((4, 14), (9, 19)),
         );
+    }
+
+    #[test]
+    fn range_iteration_empty() {
+        let range = CellRange::empty();
+        assert_eq!(0, range.count());
+
+        let mut iter = range.cells();
+        assert_eq!(None, iter.next());
     }
 
     #[test]

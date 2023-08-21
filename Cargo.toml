@@ -10,3 +10,6 @@ version = "0.0.2"
 authors = ["Dave Wathen <dave@wathenweb.com>"]
 rust-version = "1.65"
 edition = "2021"
+
+[workspace.dependencies]
+iced = { version = "0.10.0", features = ["advanced", "image"] }

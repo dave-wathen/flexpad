@@ -442,7 +442,7 @@ where
         renderer: &Renderer,
         operation: &mut dyn Operation<Message>,
     ) {
-        operation.container(None, &mut |operation| {
+        operation.container(None, layout.bounds(), &mut |operation| {
             self.for_each_widget_mut_tree(tree, layout, |widget, tree, layout| {
                 widget.operate(tree, layout, renderer, operation);
             });
