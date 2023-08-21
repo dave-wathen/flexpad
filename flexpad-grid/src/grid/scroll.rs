@@ -7,13 +7,12 @@ use iced::event::{self, Event};
 use iced::mouse;
 use iced::overlay;
 use iced::touch;
-use iced::widget::scrollable::{Scrollbar, StyleSheet};
-use iced::Command;
+use iced::widget::scrollable::{AbsoluteOffset, RelativeOffset, Scrollbar, StyleSheet};
 use iced::{keyboard, window};
 use iced::{Background, Color, Element, Length, Pixels, Point, Rectangle, Size, Vector};
 
 use crate::sequence::Rounding;
-use crate::{operation, CellRange, Grid, SumSeq};
+use crate::{CellRange, Grid, SumSeq};
 
 // TODO: Visible only contents to allow large grids
 // TODO: Programatic scrolling to row/column?
@@ -1078,20 +1077,6 @@ enum Granularity {
     Continuous,
 }
 
-/// Produces a [`Command`] that snaps the [`GridScrollable`] with the given [`Id`]
-/// to the provided `percentage` along the x & y axis.
-#[allow(dead_code)]
-pub fn snap_to<Message: 'static>(id: Id, offset: operation::RelativeOffset) -> Command<Message> {
-    Command::widget(operation::snap_to(id.0, offset))
-}
-
-/// Produces a [`Command`] that scrolls the [`GridScrollable`] with the given [`Id`]
-/// to the provided [`AbsoluteOffset`] along the x & y axis.
-#[allow(dead_code)]
-pub fn scroll_to<Message: 'static>(id: Id, offset: operation::AbsoluteOffset) -> Command<Message> {
-    Command::widget(operation::scroll_to(id.0, offset))
-}
-
 fn notify_on_viewport_change<Message>(
     state: &mut State,
     on_scroll: &Option<Box<dyn Fn(Viewport) -> Message + '_>>,
@@ -1156,12 +1141,12 @@ impl Default for State {
     }
 }
 
-impl operation::GridScrollable for State {
-    fn snap_to(&mut self, offset: operation::RelativeOffset) {
+impl iced::advanced::widget::operation::Scrollable for State {
+    fn snap_to(&mut self, offset: RelativeOffset) {
         State::snap_to(self, offset);
     }
 
-    fn scroll_to(&mut self, offset: operation::AbsoluteOffset) {
+    fn scroll_to(&mut self, offset: AbsoluteOffset) {
         State::scroll_to(self, offset)
     }
 }
@@ -1184,8 +1169,8 @@ impl Offset {
 /// The current [`Viewport`] of the [`GridScrollable`].
 #[derive(Debug, Clone, Copy)]
 pub struct Viewport {
-    absolute: operation::AbsoluteOffset,
-    relative: operation::RelativeOffset,
+    absolute: AbsoluteOffset,
+    relative: RelativeOffset,
     range: CellRange,
 }
 
@@ -1196,7 +1181,7 @@ impl Viewport {
 
         let x = offset_x.absolute(&x_scale);
         let y = offset_y.absolute(&y_scale);
-        let absolute = operation::AbsoluteOffset { x, y };
+        let absolute = AbsoluteOffset { x, y };
 
         let start_column = x_scale.discretes.index_of_sum(x, Rounding::Up).unwrap_or(0) as u32;
         let start_row = y_scale.discretes.index_of_sum(y, Rounding::Up).unwrap_or(0) as u32;
@@ -1212,7 +1197,7 @@ impl Viewport {
 
         let x = x_scale.absolute_to_relative(x);
         let y = y_scale.absolute_to_relative(y);
-        let relative = operation::RelativeOffset { x, y };
+        let relative = RelativeOffset { x, y };
 
         Self {
             absolute,
@@ -1222,12 +1207,12 @@ impl Viewport {
     }
 
     /// Returns the [`AbsoluteOffset`] of the current [`Viewport`].
-    pub fn absolute_offset(&self) -> operation::AbsoluteOffset {
+    pub fn absolute_offset(&self) -> AbsoluteOffset {
         self.absolute
     }
 
     /// Returns the [`RelativeOffset`] of the current [`Viewport`].
-    pub fn relative_offset(&self) -> operation::RelativeOffset {
+    pub fn relative_offset(&self) -> RelativeOffset {
         self.relative
     }
 
@@ -1277,13 +1262,13 @@ impl State {
     }
 
     /// Snaps the scroll position to a [`RelativeOffset`].
-    fn snap_to(&mut self, offset: operation::RelativeOffset) {
+    fn snap_to(&mut self, offset: RelativeOffset) {
         self.offset_x = Offset::Relative(offset.x.clamp(0.0, 1.0));
         self.offset_y = Offset::Relative(offset.y.clamp(0.0, 1.0));
     }
 
     /// Scroll to the provided [`AbsoluteOffset`].
-    fn scroll_to(&mut self, offset: operation::AbsoluteOffset) {
+    fn scroll_to(&mut self, offset: AbsoluteOffset) {
         self.offset_x = Offset::Absolute(offset.x.max(0.0));
         self.offset_y = Offset::Absolute(offset.y.max(0.0));
     }
