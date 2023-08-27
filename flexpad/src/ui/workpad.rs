@@ -2,8 +2,8 @@ use std::sync::{Arc, RwLock};
 
 use crate::model::workpad::Workpad;
 use flexpad_grid::{
-    style, Border, Borders, CellRange, ColumnHead, Grid, GridCell, GridCorner, GridScrollable,
-    RowCol, RowHead, SumSeq, Viewport,
+    scroll::ensure_cell_visible, style, Border, Borders, CellRange, ColumnHead, Grid, GridCell,
+    GridCorner, GridScrollable, RowCol, RowHead, SumSeq, Viewport,
 };
 use iced::{
     alignment, theme,
@@ -16,6 +16,11 @@ use self::active::ActiveCell;
 use super::images;
 
 mod active;
+
+use once_cell::sync::Lazy;
+
+static GRID_SCROLLABLE_ID: Lazy<flexpad_grid::scroll::Id> =
+    Lazy::new(flexpad_grid::scroll::Id::unique);
 
 #[derive(Debug, Default, Clone)]
 enum State {
@@ -253,6 +258,7 @@ impl WorkpadUI {
         grid = grid.push_cell(grid_cell);
 
         GridScrollable::new(grid)
+            .id(GRID_SCROLLABLE_ID.clone())
             .width(Length::Fill)
             .height(Length::Fill)
             .on_viewport_change(WorkpadMessage::ViewportChanged)
@@ -311,7 +317,9 @@ impl WorkpadUI {
                             }
                         }
                     }
-                    Command::none()
+
+                    ensure_cell_visible(GRID_SCROLLABLE_ID.clone(), self.active_cell)
+                        .map(WorkpadMessage::ViewportChanged)
                 }
                 WorkpadMessage::PadNameEditStart => {
                     self.state = State::EditingPadName(self.pad.read().unwrap().name().to_owned());

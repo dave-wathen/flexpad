@@ -89,7 +89,7 @@ where
     }
 }
 
-pub(super) struct GridCellWidget<'a, Message, Renderer = crate::Renderer>
+pub(crate) struct GridCellWidget<'a, Message, Renderer = crate::Renderer>
 where
     Renderer: iced::advanced::Renderer,
     Renderer::Theme: StyleSheet,

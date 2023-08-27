@@ -100,18 +100,23 @@ impl CellRange {
         match (self.kind, other.kind) {
             (RangeKind::Empty, _) => false,
             (_, RangeKind::Empty) => false,
-            (RangeKind::Single(s_one), RangeKind::Single(o_one)) => s_one == o_one,
-            (RangeKind::Single(s_one), RangeKind::FromTo(o_from, o_to)) => {
-                (o_from.row <= s_one.row && s_one.row <= o_to.row)
-                    && (o_from.column <= s_one.column && s_one.column <= o_to.column)
-            }
-            (RangeKind::FromTo(s_from, s_to), RangeKind::Single(o_one)) => {
-                (s_from.row <= o_one.row && o_one.row <= s_to.row)
-                    && (s_from.column <= o_one.column && o_one.column <= s_to.column)
-            }
+            (RangeKind::Single(rc), _) => other.contains(&rc),
+            (_, RangeKind::Single(rc)) => self.contains(&rc),
             (RangeKind::FromTo(s_from, s_to), RangeKind::FromTo(o_from, o_to)) => {
                 (s_from.row <= o_to.row && s_to.row >= o_from.row)
                     && (s_from.column <= o_to.column && s_to.column >= o_from.column)
+            }
+        }
+    }
+
+    /// Determines if there is an intersection between two [`CellRange`]s.
+    pub fn contains(&self, rc: &RowCol) -> bool {
+        match self.kind {
+            RangeKind::Empty => false,
+            RangeKind::Single(s_one) => s_one == *rc,
+            RangeKind::FromTo(s_from, s_to) => {
+                (s_from.row <= rc.row && rc.row <= s_to.row)
+                    && (s_from.column <= rc.column && rc.column <= s_to.column)
             }
         }
     }

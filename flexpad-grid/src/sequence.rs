@@ -55,7 +55,7 @@ impl SumSeq {
                         return;
                     }
                 }
-                todo!("Representation is full")
+                todo!("Representation is full - switch to tree")
             }
             Representation::Tree => todo!(),
         }

@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use iced::advanced::overlay::Group;
-use iced::advanced::widget::tree::Tree;
+use iced::advanced::widget::tree;
 use iced::advanced::widget::Operation;
 use iced::advanced::{layout, overlay, renderer, Clipboard, Layout, Shell, Widget};
 use iced::mouse::{self, Cursor};
@@ -77,6 +77,7 @@ where
             horizontal_alignment: self.horizontal_alignment,
             vertical_alignment: self.vertical_alignment,
             info,
+            tag: None,
         }
     }
 }
@@ -143,6 +144,7 @@ where
             horizontal_alignment: self.horizontal_alignment,
             vertical_alignment: self.vertical_alignment,
             info,
+            tag: None,
         }
     }
 }
@@ -208,6 +210,7 @@ where
             horizontal_alignment: self.horizontal_alignment,
             vertical_alignment: self.vertical_alignment,
             info,
+            tag: Some(tree::Tag::of::<super::CornerState>()),
         }
     }
 }
@@ -223,6 +226,7 @@ where
     horizontal_alignment: alignment::Horizontal,
     vertical_alignment: alignment::Vertical,
     info: Rc<RefCell<GridInfo<Renderer>>>,
+    tag: Option<tree::Tag>,
 }
 
 impl<'a, Message, Renderer> Widget<Message, Renderer> for Head<'a, Message, Renderer>
@@ -230,11 +234,15 @@ where
     Renderer: iced::advanced::Renderer,
     Renderer::Theme: StyleSheet,
 {
-    fn children(&self) -> Vec<Tree> {
-        vec![Tree::new(&self.content)]
+    fn tag(&self) -> tree::Tag {
+        self.tag.as_ref().cloned().unwrap_or(tree::Tag::stateless())
     }
 
-    fn diff(&self, tree: &mut Tree) {
+    fn children(&self) -> Vec<tree::Tree> {
+        vec![tree::Tree::new(&self.content)]
+    }
+
+    fn diff(&self, tree: &mut tree::Tree) {
         tree.diff_children(std::slice::from_ref(&self.content))
     }
 
@@ -273,7 +281,7 @@ where
 
     fn operate(
         &self,
-        tree: &mut Tree,
+        tree: &mut tree::Tree,
         layout: Layout<'_>,
         renderer: &Renderer,
         operation: &mut dyn Operation<Message>,
@@ -290,7 +298,7 @@ where
 
     fn on_event(
         &mut self,
-        tree: &mut Tree,
+        tree: &mut tree::Tree,
         event: Event,
         layout: Layout<'_>,
         cursor: Cursor,
@@ -313,7 +321,7 @@ where
 
     fn mouse_interaction(
         &self,
-        tree: &Tree,
+        tree: &tree::Tree,
         layout: Layout<'_>,
         cursor: Cursor,
         viewport: &Rectangle,
@@ -330,7 +338,7 @@ where
 
     fn draw(
         &self,
-        tree: &Tree,
+        tree: &tree::Tree,
         renderer: &mut Renderer,
         theme: &Renderer::Theme,
         renderer_style: &renderer::Style,
@@ -368,7 +376,7 @@ where
 
     fn overlay<'b>(
         &'b mut self,
-        tree: &'b mut Tree,
+        tree: &'b mut tree::Tree,
         layout: Layout<'_>,
         renderer: &Renderer,
     ) -> Option<overlay::Element<'b, Message, Renderer>> {
@@ -420,7 +428,6 @@ where
     Message: 'a,
     Renderer: iced::advanced::Renderer + 'a,
     Renderer::Theme: StyleSheet,
-    <Renderer::Theme as StyleSheet>::Style: Clone,
 {
     /// Creates an empty [`RowHeads`].
     pub fn new(info: Rc<RefCell<GridInfo<Renderer>>>) -> Self {
@@ -449,13 +456,16 @@ impl<'a, Message, Renderer> Widget<Message, Renderer> for RowHeads<'a, Message, 
 where
     Renderer: iced::advanced::Renderer,
     Renderer::Theme: StyleSheet,
-    <Renderer::Theme as StyleSheet>::Style: Clone,
 {
-    fn children(&self) -> Vec<Tree> {
-        self.row_heads.iter().map(Tree::new).collect()
+    fn tag(&self) -> tree::Tag {
+        tree::Tag::of::<super::RowHeadsState>()
     }
 
-    fn diff(&self, tree: &mut Tree) {
+    fn children(&self) -> Vec<tree::Tree> {
+        self.row_heads.iter().map(tree::Tree::new).collect()
+    }
+
+    fn diff(&self, tree: &mut tree::Tree) {
         tree.diff_children(&self.row_heads.iter().collect::<Vec<_>>());
     }
 
@@ -490,7 +500,7 @@ where
 
     fn operate(
         &self,
-        tree: &mut Tree,
+        tree: &mut tree::Tree,
         layout: Layout<'_>,
         renderer: &Renderer,
         operation: &mut dyn Operation<Message>,
@@ -508,7 +518,7 @@ where
 
     fn on_event(
         &mut self,
-        tree: &mut Tree,
+        tree: &mut tree::Tree,
         event: Event,
         layout: Layout<'_>,
         cursor: mouse::Cursor,
@@ -538,7 +548,7 @@ where
 
     fn mouse_interaction(
         &self,
-        tree: &Tree,
+        tree: &tree::Tree,
         layout: Layout<'_>,
         cursor: mouse::Cursor,
         viewport: &Rectangle,
@@ -557,7 +567,7 @@ where
 
     fn draw(
         &self,
-        tree: &Tree,
+        tree: &tree::Tree,
         renderer: &mut Renderer,
         theme: &Renderer::Theme,
         renderer_style: &renderer::Style,
@@ -585,7 +595,7 @@ where
 
     fn overlay<'b>(
         &'b mut self,
-        tree: &'b mut Tree,
+        tree: &'b mut tree::Tree,
         layout: Layout<'_>,
         renderer: &Renderer,
     ) -> Option<overlay::Element<'b, Message, Renderer>> {
@@ -606,7 +616,6 @@ where
     Message: 'a,
     Renderer: 'a + iced::advanced::Renderer,
     Renderer::Theme: StyleSheet,
-    <Renderer::Theme as StyleSheet>::Style: Clone,
 {
     fn from(row_heads: RowHeads<'a, Message, Renderer>) -> Self {
         Self::new(row_heads)
@@ -619,7 +628,6 @@ where
     Message: 'a,
     Renderer: 'a + iced::advanced::Renderer,
     Renderer::Theme: StyleSheet,
-    <Renderer::Theme as StyleSheet>::Style: Clone,
 {
     fn borrow(&self) -> &(dyn Widget<Message, Renderer> + 'a) {
         *self
@@ -643,7 +651,6 @@ where
     Message: 'a,
     Renderer: iced::advanced::Renderer + 'a,
     Renderer::Theme: StyleSheet,
-    <Renderer::Theme as StyleSheet>::Style: Clone,
 {
     /// Creates an empty [`ColumnHeads`].
     pub fn new(info: Rc<RefCell<GridInfo<Renderer>>>) -> Self {
@@ -672,13 +679,16 @@ impl<'a, Message, Renderer> Widget<Message, Renderer> for ColumnHeads<'a, Messag
 where
     Renderer: iced::advanced::Renderer,
     Renderer::Theme: StyleSheet,
-    <Renderer::Theme as StyleSheet>::Style: Clone,
 {
-    fn children(&self) -> Vec<Tree> {
-        self.column_heads.iter().map(Tree::new).collect()
+    fn tag(&self) -> tree::Tag {
+        tree::Tag::of::<super::ColumnHeadsState>()
     }
 
-    fn diff(&self, tree: &mut Tree) {
+    fn children(&self) -> Vec<tree::Tree> {
+        self.column_heads.iter().map(tree::Tree::new).collect()
+    }
+
+    fn diff(&self, tree: &mut tree::Tree) {
         tree.diff_children(&self.column_heads.iter().collect::<Vec<_>>());
     }
 
@@ -713,7 +723,7 @@ where
 
     fn operate(
         &self,
-        tree: &mut Tree,
+        tree: &mut tree::Tree,
         layout: Layout<'_>,
         renderer: &Renderer,
         operation: &mut dyn Operation<Message>,
@@ -731,7 +741,7 @@ where
 
     fn on_event(
         &mut self,
-        tree: &mut Tree,
+        tree: &mut tree::Tree,
         event: Event,
         layout: Layout<'_>,
         cursor: mouse::Cursor,
@@ -761,7 +771,7 @@ where
 
     fn mouse_interaction(
         &self,
-        tree: &Tree,
+        tree: &tree::Tree,
         layout: Layout<'_>,
         cursor: mouse::Cursor,
         viewport: &Rectangle,
@@ -780,7 +790,7 @@ where
 
     fn draw(
         &self,
-        tree: &Tree,
+        tree: &tree::Tree,
         renderer: &mut Renderer,
         theme: &Renderer::Theme,
         renderer_style: &renderer::Style,
@@ -808,7 +818,7 @@ where
 
     fn overlay<'b>(
         &'b mut self,
-        tree: &'b mut Tree,
+        tree: &'b mut tree::Tree,
         layout: Layout<'_>,
         renderer: &Renderer,
     ) -> Option<overlay::Element<'b, Message, Renderer>> {
@@ -830,7 +840,6 @@ where
     Message: 'a,
     Renderer: 'a + iced::advanced::Renderer,
     Renderer::Theme: StyleSheet,
-    <Renderer::Theme as StyleSheet>::Style: Clone,
 {
     fn from(column_heads: ColumnHeads<'a, Message, Renderer>) -> Self {
         Self::new(column_heads)
@@ -843,7 +852,6 @@ where
     Message: 'a,
     Renderer: 'a + iced::advanced::Renderer,
     Renderer::Theme: StyleSheet,
-    <Renderer::Theme as StyleSheet>::Style: Clone,
 {
     fn borrow(&self) -> &(dyn Widget<Message, Renderer> + 'a) {
         *self
