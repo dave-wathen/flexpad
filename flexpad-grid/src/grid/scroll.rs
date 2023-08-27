@@ -374,7 +374,7 @@ where
                 match event {
                     touch::Event::FingerPressed { .. } => {
                         let Some(cursor_position) = cursor.position() else {
-                            return event::Status::Ignored
+                            return event::Status::Ignored;
                         };
 
                         state.scroll_area_touched_at = Some(cursor_position);
@@ -382,7 +382,7 @@ where
                     touch::Event::FingerMoved { .. } => {
                         if let Some(scroll_box_touched_at) = state.scroll_area_touched_at {
                             let Some(cursor_position) = cursor.position() else {
-                                return event::Status::Ignored
+                                return event::Status::Ignored;
                             };
 
                             let delta = Vector::new(
@@ -425,7 +425,7 @@ where
                 | Event::Touch(touch::Event::FingerMoved { .. }) => {
                     if let Some(scrollbar) = parts.y_scrollbar {
                         let Some(cursor_position) = cursor.position() else {
-                            return event::Status::Ignored
+                            return event::Status::Ignored;
                         };
 
                         let grid_state = tree.children[0].state.downcast_ref::<GridState>();
@@ -452,7 +452,7 @@ where
                 Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
                 | Event::Touch(touch::Event::FingerPressed { .. }) => {
                     let Some(cursor_position) = cursor.position() else {
-                        return event::Status::Ignored
+                        return event::Status::Ignored;
                     };
 
                     if let (Some(scroller_grabbed_at), Some(scrollbar)) =
@@ -492,7 +492,7 @@ where
                 Event::Mouse(mouse::Event::CursorMoved { .. })
                 | Event::Touch(touch::Event::FingerMoved { .. }) => {
                     let Some(cursor_position) = cursor.position() else {
-                        return event::Status::Ignored
+                        return event::Status::Ignored;
                     };
 
                     if let Some(scrollbar) = parts.x_scrollbar {
@@ -520,7 +520,7 @@ where
                 Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
                 | Event::Touch(touch::Event::FingerPressed { .. }) => {
                     let Some(cursor_position) = cursor.position() else {
-                        return event::Status::Ignored
+                        return event::Status::Ignored;
                     };
 
                     if let (Some(scroller_grabbed_at), Some(scrollbar)) =
