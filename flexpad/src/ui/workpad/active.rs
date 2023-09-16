@@ -110,7 +110,11 @@ where
         let state = tree.state.downcast_ref::<State>();
         let bounds = layout.bounds();
 
-        let value = &state.value;
+        let value = if state.is_focused() {
+            &state.value
+        } else {
+            &self.value
+        };
         let text = value.to_string();
         // TODO Allow font & size config
         let font = renderer.default_font();
@@ -366,7 +370,7 @@ where
 
                     if let Some(mve) = mve {
                         if state.is_focused() {
-                            notify_on_new_value(&self.on_new_value, state.unfocus(), shell)
+                            notify_on_new_value(&self.on_new_value, state.unfocus(), shell);
                         }
                         notify_on_move(&self.on_move, mve, shell);
                     }
