@@ -205,29 +205,57 @@ where
                 renderer.with_translation(Vector::ZERO, |_| {});
             }
 
-            renderer.fill_text(Text {
-                content: &text,
-                // TODO Colors
-                // color: if text.is_empty() {
-                //     theme.placeholder_color(style)
-                // } else if is_disabled {
-                //     theme.disabled_color(style)
-                // } else {
-                //     theme.value_color(style)
-                // },
-                color: Color::BLACK,
-                font,
-                bounds: Rectangle {
-                    y: bounds.center_y(),
-                    width: f32::INFINITY,
-                    ..bounds
-                },
-                size,
-                line_height: LineHeight::default(),
-                horizontal_alignment: alignment::Horizontal::Left,
-                vertical_alignment: alignment::Vertical::Center,
-                shaping: text::Shaping::Advanced,
-            });
+            let text = if state.is_focused() {
+                Text {
+                    content: &text,
+                    // TODO Colors
+                    // color: if text.is_empty() {
+                    //     theme.placeholder_color(style)
+                    // } else if is_disabled {
+                    //     theme.disabled_color(style)
+                    // } else {
+                    //     theme.value_color(style)
+                    // },
+                    color: Color::BLACK,
+                    font,
+                    bounds: Rectangle {
+                        y: bounds.center_y(),
+                        width: f32::INFINITY,
+                        ..bounds
+                    },
+                    size,
+                    line_height: LineHeight::default(),
+                    horizontal_alignment: alignment::Horizontal::Left,
+                    vertical_alignment: alignment::Vertical::Center,
+                    shaping: text::Shaping::Advanced,
+                }
+            } else {
+                Text {
+                    content: &text,
+                    // TODO Colors
+                    // color: if text.is_empty() {
+                    //     theme.placeholder_color(style)
+                    // } else if is_disabled {
+                    //     theme.disabled_color(style)
+                    // } else {
+                    //     theme.value_color(style)
+                    // },
+                    color: Color::BLACK,
+                    font,
+                    bounds: Rectangle {
+                        y: bounds.center_y(),
+                        x: bounds.center_x(),
+                        ..bounds
+                    },
+                    size,
+                    line_height: LineHeight::default(),
+                    // TODO Set from data when not focused
+                    horizontal_alignment: alignment::Horizontal::Center,
+                    vertical_alignment: alignment::Vertical::Center,
+                    shaping: text::Shaping::Advanced,
+                }
+            };
+            renderer.fill_text(text);
         };
 
         if text_width > bounds.width {
@@ -303,7 +331,7 @@ where
                 state.keyboard_modifiers = modifiers;
                 Status::Ignored
             }
-            Event::Keyboard(keyboard::Event::CharacterReceived(c)) => {
+            Event::Keyboard(keyboard::Event::CharacterReceived(c)) if !c.is_control() => {
                 let state = tree.state.downcast_mut::<State>();
 
                 if !state.is_focused() {
@@ -313,10 +341,7 @@ where
                 };
 
                 if let Some(focus) = &mut state.is_focused {
-                    if state.is_pasting.is_none()
-                        && !state.keyboard_modifiers.command()
-                        && !c.is_control()
-                    {
+                    if state.is_pasting.is_none() && !state.keyboard_modifiers.command() {
                         let mut editor = Editor::new(&mut state.value, &mut state.cursor);
 
                         editor.insert(c);
@@ -347,6 +372,10 @@ where
                         if let Some(ref mut focus) = state.is_focused {
                             focus.mode = Mode::InternalNavigation;
                         }
+                    }
+                } else if key_code == keyboard::KeyCode::Escape {
+                    if state.is_focused() {
+                        state.unfocus();
                     }
                 } else if key_code == keyboard::KeyCode::Backspace {
                     let value = &mut state.value;
