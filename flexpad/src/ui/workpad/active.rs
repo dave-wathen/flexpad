@@ -394,6 +394,7 @@ where
                         keyboard::KeyCode::Right => Some(Move::Right),
                         keyboard::KeyCode::Up => Some(Move::Up),
                         keyboard::KeyCode::Down => Some(Move::Down),
+                        keyboard::KeyCode::Enter => Some(Move::Down),
                         _ => None,
                     };
 
