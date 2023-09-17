@@ -1,4 +1,8 @@
-use std::sync::{Arc, RwLock};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    sync::{Arc, RwLock},
+};
 
 use crate::model::workpad::Workpad;
 use flexpad_grid::{
@@ -11,7 +15,7 @@ use iced::{
     Alignment, Color, Command, Element, Length,
 };
 
-use self::active::ActiveCell;
+use self::active::{ActiveCell, Editor};
 
 use super::images;
 
@@ -33,6 +37,7 @@ enum State {
 #[derive(Debug, Clone)]
 pub enum WorkpadMessage {
     NoOp, // TODO Temporary
+    Multi(Vec<WorkpadMessage>),
     PadClose,
     PadNameEditStart,
     PadNameEdited(String),
@@ -41,8 +46,16 @@ pub enum WorkpadMessage {
     SheetNameEdited(String),
     SheetNameEditEnd,
     ViewportChanged(Viewport),
-    ActiveCellMove(active::Move),
+    ActiveCellMove(Move),
     ActiveCellNewValue(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Move {
+    Left,
+    Right,
+    Up,
+    Down,
 }
 
 pub struct WorkpadUI {
@@ -52,22 +65,29 @@ pub struct WorkpadUI {
     sheet_edit_id: text_input::Id,
     visible_cells: CellRange,
     active_cell: RowCol,
+    active_cell_editor: Rc<RefCell<active::Editor>>,
 }
 
-impl Default for WorkpadUI {
-    fn default() -> Self {
+impl WorkpadUI {
+    pub fn new(pad: Arc<RwLock<Workpad>>) -> Self {
+        let active_cell_editor = {
+            let pad = pad.read().unwrap();
+            let active_sheet = pad.active_sheet();
+            let active_cell = active_sheet.cell(0, 0);
+            Editor::new(active_cell.value())
+        };
+
         Self {
-            pad: Default::default(),
+            pad,
             state: Default::default(),
             name_edit_id: text_input::Id::unique(),
             sheet_edit_id: text_input::Id::unique(),
             visible_cells: CellRange::empty(),
             active_cell: (0, 0).into(),
+            active_cell_editor: Rc::new(RefCell::new(active_cell_editor)),
         }
     }
-}
 
-impl WorkpadUI {
     pub fn title(&self) -> String {
         self.pad.read().unwrap().name().to_owned()
     }
@@ -244,14 +264,7 @@ impl WorkpadUI {
         }
 
         // Always add the active cell even when not visible so keystrokes are handled
-        // TODO Cell value
-        let cell = sheet.cell(
-            self.active_cell.row as usize,
-            self.active_cell.column as usize,
-        );
-        let ac = ActiveCell::new(cell.value())
-            .on_move(WorkpadMessage::ActiveCellMove)
-            .on_new_value(WorkpadMessage::ActiveCellNewValue);
+        let ac = ActiveCell::new(self.active_cell_editor.clone());
         let grid_cell = GridCell::new(self.active_cell, ac)
             // TODO Hardcoding
             .borders(Borders::new(Border::new(1.0, Color::from_rgb8(0, 0, 255))));
@@ -267,6 +280,14 @@ impl WorkpadUI {
 
     // TODO Cancel editing using Esc/Button
     pub fn update(&mut self, message: WorkpadMessage) -> Command<WorkpadMessage> {
+        if let WorkpadMessage::Multi(messages) = message {
+            let mut commands = vec![];
+            for m in messages {
+                commands.push(self.update(m));
+            }
+            return Command::batch(commands);
+        }
+
         if let WorkpadMessage::ViewportChanged(viewport) = message {
             self.visible_cells = viewport.cell_range()
         }
@@ -276,25 +297,28 @@ impl WorkpadUI {
                 WorkpadMessage::ActiveCellNewValue(s) => {
                     // TODO Move this to model and perform updates (and recaclulations) on another thread
                     let mut pad = self.pad.write().unwrap();
+                    let editor = Editor::new(&s);
                     pad.set_cell_value(
                         self.active_cell.row as usize,
                         self.active_cell.column as usize,
                         s,
                     );
+                    self.active_cell_editor = Rc::new(RefCell::new(editor));
+
                     Command::none()
                 }
                 WorkpadMessage::ActiveCellMove(mve) => {
                     let pad = self.pad.read().unwrap();
                     let sheet = pad.active_sheet();
-                    // TODO Scroll if necessary
+                    let prior_active_cell = self.active_cell;
                     match mve {
-                        active::Move::Left => {
+                        Move::Left => {
                             if self.active_cell.column > 0 {
                                 self.active_cell =
                                     RowCol::new(self.active_cell.row, self.active_cell.column - 1);
                             }
                         }
-                        active::Move::Right => {
+                        Move::Right => {
                             // TODO Maybe cache in self
                             let columns_count = sheet.columns().count() as u32;
                             if self.active_cell.column + 1 < columns_count {
@@ -302,13 +326,13 @@ impl WorkpadUI {
                                     RowCol::new(self.active_cell.row, self.active_cell.column + 1);
                             }
                         }
-                        active::Move::Up => {
+                        Move::Up => {
                             if self.active_cell.row > 0 {
                                 self.active_cell =
                                     RowCol::new(self.active_cell.row - 1, self.active_cell.column);
                             }
                         }
-                        active::Move::Down => {
+                        Move::Down => {
                             // TODO Maybe cache in self
                             let rows_count = sheet.rows().count() as u32;
                             if self.active_cell.row + 1 < rows_count {
@@ -316,6 +340,14 @@ impl WorkpadUI {
                                     RowCol::new(self.active_cell.row + 1, self.active_cell.column);
                             }
                         }
+                    }
+
+                    if prior_active_cell != self.active_cell {
+                        let rw = self.active_cell.row as usize;
+                        let cl = self.active_cell.column as usize;
+                        let cell = sheet.cell(rw, cl);
+                        let editor = Editor::new(cell.value());
+                        self.active_cell_editor = Rc::new(RefCell::new(editor));
                     }
 
                     ensure_cell_visible(GRID_SCROLLABLE_ID.clone(), self.active_cell)

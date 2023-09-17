@@ -1,4 +1,8 @@
-use std::time::{Duration, Instant};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    time::{Duration, Instant},
+};
 
 use iced::{
     advanced::{
@@ -17,48 +21,24 @@ use iced::{
 
 mod cursor;
 mod editor;
-use cursor::Cursor;
-use editor::Editor;
+mod platform;
+pub use editor::Editor;
 
-pub struct ActiveCell<'a, Message> {
-    value: Value,
-    // is_secure: bool,
-    // font: Option<Renderer::Font>,
-    // width: Length,
-    // padding: Padding,
-    // size: Option<f32>,
-    // line_height: text::LineHeight,
-    on_new_value: Option<Box<dyn Fn(String) -> Message + 'a>>,
-    // on_paste: Option<Box<dyn Fn(String) -> Message + 'a>>,
-    // on_submit: Option<Message>,
-    // icon: Option<Icon<Renderer::Font>>,
-    // style: <Renderer::Theme as StyleSheet>::Style,
-    on_move: Option<Box<dyn Fn(Move) -> Message + 'a>>,
+use super::WorkpadMessage;
+
+pub struct ActiveCell {
+    editor: Rc<RefCell<Editor>>,
 }
 
-impl<'a, Message> ActiveCell<'a, Message> {
-    pub fn new(value: &str) -> Self {
-        Self {
-            value: Value::new(value),
-            on_new_value: None,
-            on_move: None,
-        }
-    }
-
-    pub fn on_move(mut self, f: impl Fn(Move) -> Message + 'a) -> Self {
-        self.on_move = Some(Box::new(f));
-        self
-    }
-
-    pub fn on_new_value(mut self, f: impl Fn(String) -> Message + 'a) -> Self {
-        self.on_new_value = Some(Box::new(f));
-        self
+impl ActiveCell {
+    pub fn new(editor: Rc<RefCell<Editor>>) -> Self {
+        Self { editor }
     }
 }
 
-impl<'a, Message: 'a, Renderer> Widget<Message, Renderer> for ActiveCell<'a, Message>
+impl<Renderer> Widget<WorkpadMessage, Renderer> for ActiveCell
 where
-    Renderer: iced::advanced::Renderer + 'a,
+    Renderer: iced::advanced::Renderer,
     Renderer: text::Renderer,
 {
     fn tag(&self) -> tree::Tag {
@@ -66,20 +46,8 @@ where
     }
 
     fn state(&self) -> tree::State {
-        tree::State::new(State::new(self.value.clone()))
+        tree::State::new(State::new())
     }
-
-    // fn diff(&self, tree: &mut Tree) {
-    //     let state = tree.state.downcast_mut::<State>();
-
-    //     // Unfocus text input if it becomes disabled
-    //     if self.on_input.is_none() {
-    //         state.last_click = None;
-    //         state.is_focused = None;
-    //         state.is_pasting = None;
-    //         state.is_dragging = false;
-    //     }
-    // }
 
     fn width(&self) -> iced::Length {
         iced::Length::Fill
@@ -110,12 +78,9 @@ where
         let state = tree.state.downcast_ref::<State>();
         let bounds = layout.bounds();
 
-        let value = if state.is_focused() {
-            &state.value
-        } else {
-            &self.value
-        };
-        let text = value.to_string();
+        let editor = self.editor.borrow();
+        let value = editor.value();
+        let text = editor.contents();
         // TODO Allow font & size config
         let font = renderer.default_font();
         let size = 10.0; //renderer.default_size();
@@ -125,7 +90,8 @@ where
             .as_ref()
             .filter(|focus| focus.is_window_focused)
         {
-            match state.cursor.state(value) {
+            let editor = self.editor.borrow();
+            match editor.cursor_state() {
                 cursor::State::Index(position) => {
                     let (text_value_width, offset) = measure_cursor_and_scroll_offset(
                         renderer, bounds, value, size, position, font,
@@ -205,18 +171,19 @@ where
                 renderer.with_translation(Vector::ZERO, |_| {});
             }
 
+            // TODO Colors
+            // color: if text.is_empty() {
+            //     theme.placeholder_color(style)
+            // } else if is_disabled {
+            //     theme.disabled_color(style)
+            // } else {
+            //     theme.value_color(style)
+            // },
+            let color = Color::BLACK;
             let text = if state.is_focused() {
                 Text {
                     content: &text,
-                    // TODO Colors
-                    // color: if text.is_empty() {
-                    //     theme.placeholder_color(style)
-                    // } else if is_disabled {
-                    //     theme.disabled_color(style)
-                    // } else {
-                    //     theme.value_color(style)
-                    // },
-                    color: Color::BLACK,
+                    color,
                     font,
                     bounds: Rectangle {
                         y: bounds.center_y(),
@@ -232,15 +199,7 @@ where
             } else {
                 Text {
                     content: &text,
-                    // TODO Colors
-                    // color: if text.is_empty() {
-                    //     theme.placeholder_color(style)
-                    // } else if is_disabled {
-                    //     theme.disabled_color(style)
-                    // } else {
-                    //     theme.value_color(style)
-                    // },
-                    color: Color::BLACK,
+                    color,
                     font,
                     bounds: Rectangle {
                         y: bounds.center_y(),
@@ -269,15 +228,6 @@ where
 
     fn diff(&self, _tree: &mut Tree) {}
 
-    // fn operate(
-    //     &self,
-    //     _state: &mut Tree,
-    //     _layout: Layout<'_>,
-    //     _renderer: &Renderer,
-    //     _operation: &mut dyn iced::advanced::widget::Operation<Message>,
-    // ) {
-    // }
-
     fn on_event(
         &mut self,
         tree: &mut Tree,
@@ -286,9 +236,15 @@ where
         _cursor: mouse::Cursor,
         _renderer: &Renderer,
         _clipboard: &mut dyn Clipboard,
-        shell: &mut Shell<'_, Message>,
+        shell: &mut Shell<'_, WorkpadMessage>,
         _viewport: &Rectangle,
     ) -> Status {
+        let mut publish = |msg: Option<WorkpadMessage>| {
+            if let Some(m) = msg {
+                shell.publish(m);
+            }
+        };
+
         match event {
             Event::Window(window::Event::Unfocused) => {
                 let state = tree.state.downcast_mut::<State>();
@@ -333,21 +289,10 @@ where
             }
             Event::Keyboard(keyboard::Event::CharacterReceived(c)) if !c.is_control() => {
                 let state = tree.state.downcast_mut::<State>();
-
-                if !state.is_focused() {
+                let mut editor = self.editor.borrow_mut();
+                editor.insert(c);
+                if !state.is_focused() && editor.is_editing() {
                     state.focus();
-                    state.value = Value::new("");
-                    state.cursor = Cursor::default();
-                };
-
-                if let Some(focus) = &mut state.is_focused {
-                    if state.is_pasting.is_none() && !state.keyboard_modifiers.command() {
-                        let mut editor = Editor::new(&mut state.value, &mut state.cursor);
-
-                        editor.insert(c);
-                        state.value = Value::new(&editor.contents());
-                        focus.updated_at = Instant::now();
-                    }
                 }
                 Status::Captured
             }
@@ -355,56 +300,27 @@ where
                 let state = tree.state.downcast_mut::<State>();
                 let modifiers = state.keyboard_modifiers;
 
-                if key_code == keyboard::KeyCode::F2 {
-                    if state.is_focused() {
-                        if let Some(ref mut focus) = state.is_focused {
-                            if focus.mode == Mode::InternalNavigation {
-                                focus.mode = Mode::TerminalNavigation
-                            } else {
-                                focus.mode = Mode::InternalNavigation
-                            }
-                        }
-                    } else {
-                        state.focus();
-                        state.value = self.value.clone();
-                        state.cursor = Cursor::default();
-                        state.cursor.move_to(state.value.len());
-                        if let Some(ref mut focus) = state.is_focused {
-                            focus.mode = Mode::InternalNavigation;
-                        }
-                    }
-                } else if key_code == keyboard::KeyCode::Escape {
-                    if state.is_focused() {
-                        state.unfocus();
-                    }
-                } else if key_code == keyboard::KeyCode::Backspace {
-                    let value = &mut state.value;
-                    if platform::is_jump_modifier_pressed(modifiers)
-                        && state.cursor.selection(value).is_none()
-                    {
-                        state.cursor.select_left_by_words(value);
-                    }
+                let mut editor = self.editor.borrow_mut();
+                let jump = platform::is_jump_modifier_pressed(modifiers);
+                match key_code {
+                    keyboard::KeyCode::F2 => editor.toggle_edit_mode(),
+                    keyboard::KeyCode::Escape if state.is_focused() => editor.abandon_editing(),
+                    keyboard::KeyCode::Backspace if jump => editor.jump_backspace(),
+                    keyboard::KeyCode::Backspace => editor.backspace(),
+                    keyboard::KeyCode::Left => publish(editor.left()),
+                    keyboard::KeyCode::Right => publish(editor.right()),
+                    keyboard::KeyCode::Up => publish(editor.up()),
+                    keyboard::KeyCode::Down => publish(editor.down()),
+                    keyboard::KeyCode::Enter => publish(editor.enter()),
+                    _ => {}
+                };
 
-                    let mut editor = Editor::new(value, &mut state.cursor);
-                    editor.backspace();
-                } else {
-                    // TODO Depends on mode
-                    let mve = match key_code {
-                        keyboard::KeyCode::Left => Some(Move::Left),
-                        keyboard::KeyCode::Right => Some(Move::Right),
-                        keyboard::KeyCode::Up => Some(Move::Up),
-                        keyboard::KeyCode::Down => Some(Move::Down),
-                        keyboard::KeyCode::Enter => Some(Move::Down),
-                        _ => None,
-                    };
-
-                    if let Some(mve) = mve {
-                        if state.is_focused() {
-                            notify_on_new_value(&self.on_new_value, state.unfocus(), shell);
-                        }
-                        notify_on_move(&self.on_move, mve, shell);
-                    }
+                if !state.is_focused() && editor.is_editing() {
+                    state.focus();
+                } else if state.is_focused() && !editor.is_editing() {
+                    state.unfocus();
                 }
+
                 Status::Captured
             }
             Event::Keyboard(keyboard::Event::KeyReleased {
@@ -436,45 +352,6 @@ where
             _ => Status::Ignored,
         }
     }
-
-    // fn mouse_interaction(
-    //     &self,
-    //     _state: &Tree,
-    //     _layout: Layout<'_>,
-    //     _cursor: iced::advanced::mouse::Cursor,
-    //     _viewport: &Rectangle,
-    //     _renderer: &Renderer,
-    // ) -> iced::advanced::mouse::Interaction {
-    //     iced::advanced::mouse::Interaction::Idle
-    // }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Move {
-    Left,
-    Right,
-    Up,
-    Down,
-}
-
-fn notify_on_move<Message>(
-    on_move: &Option<Box<dyn Fn(Move) -> Message + '_>>,
-    mve: Move,
-    shell: &mut Shell<'_, Message>,
-) {
-    if let Some(on_move) = on_move {
-        shell.publish(on_move(mve));
-    }
-}
-
-fn notify_on_new_value<Message>(
-    on_new_value: &Option<Box<dyn Fn(String) -> Message + '_>>,
-    new_value: String,
-    shell: &mut Shell<'_, Message>,
-) {
-    if let Some(on_new_value) = on_new_value {
-        shell.publish(on_new_value(new_value));
-    }
 }
 
 fn measure_cursor_and_scroll_offset<Renderer>(
@@ -500,13 +377,12 @@ where
 
 const CURSOR_BLINK_INTERVAL_MILLIS: u128 = 500;
 
-impl<'a, Message, Renderer> From<ActiveCell<'a, Message>> for Element<'a, Message, Renderer>
+impl<Renderer> From<ActiveCell> for Element<'_, WorkpadMessage, Renderer>
 where
-    Message: 'a,
-    Renderer: 'a + iced::advanced::Renderer,
+    Renderer: iced::advanced::Renderer,
     Renderer: text::Renderer,
 {
-    fn from(grid: ActiveCell<'a, Message>) -> Self {
+    fn from(grid: ActiveCell) -> Self {
         Self::new(grid)
     }
 }
@@ -514,20 +390,15 @@ where
 /// The state of a [`ActiveCell`].
 #[derive(Debug, Clone)]
 pub struct State {
-    value: Value,
+    // value: Value,
     is_focused: Option<Focus>,
     // is_dragging: bool,
+    #[allow(dead_code)] // TODO pasting
     is_pasting: Option<Value>,
     // last_click: Option<mouse::Click>,
-    cursor: Cursor,
+    // cursor: Cursor,
     keyboard_modifiers: keyboard::Modifiers,
     // // TODO: Add stateful horizontal scrolling offset
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Mode {
-    InternalNavigation,
-    TerminalNavigation,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -535,19 +406,16 @@ struct Focus {
     updated_at: Instant,
     now: Instant,
     is_window_focused: bool,
-    mode: Mode,
 }
 
 impl State {
     /// Creates a new [`State`], representing an unfocused [`TextInput`].
-    pub fn new(value: Value) -> Self {
+    pub fn new() -> Self {
         Self {
-            value,
             is_focused: None,
             // is_dragging: false,
             is_pasting: None,
             // last_click: None,
-            cursor: Cursor::default(),
             keyboard_modifiers: keyboard::Modifiers::default(),
         }
     }
@@ -570,16 +438,14 @@ impl State {
             updated_at: now,
             now,
             is_window_focused: true,
-            mode: Mode::TerminalNavigation,
         });
 
         //        self.move_cursor_to_end();
     }
 
     /// Unfocuses the [`ActiveCell`].
-    pub fn unfocus(&mut self) -> String {
+    pub fn unfocus(&mut self) {
         self.is_focused = None;
-        self.value.to_string()
     }
 
     // /// Moves the [`Cursor`] of the [`TextInput`] to the front of the input text.
@@ -601,16 +467,4 @@ impl State {
     // pub fn select_all(&mut self) {
     //     self.cursor.select_range(0, usize::MAX);
     // }
-}
-
-mod platform {
-    use iced::keyboard;
-
-    pub fn is_jump_modifier_pressed(modifiers: keyboard::Modifiers) -> bool {
-        if cfg!(target_os = "macos") {
-            modifiers.alt()
-        } else {
-            modifiers.control()
-        }
-    }
 }

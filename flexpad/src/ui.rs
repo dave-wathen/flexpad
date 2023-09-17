@@ -57,7 +57,7 @@ impl Application for Flexpad {
         match self.state {
             State::FrontScreen => match message {
                 Message::OpenNewWokpad => {
-                    self.state = State::Workpad(Default::default());
+                    self.state = State::Workpad(WorkpadUI::new(Default::default()));
                     Command::none()
                 }
                 _ => Command::none(),
