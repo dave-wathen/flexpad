@@ -30,6 +30,14 @@ impl Editor {
         }
     }
 
+    pub fn cursor(&self) -> Cursor {
+        self.cursor
+    }
+
+    pub fn move_to(&mut self, position: usize) {
+        self.cursor.move_to(position);
+    }
+
     pub fn toggle_edit_mode(&mut self) {
         match self.mode {
             Mode::NotEditing => {
@@ -79,6 +87,8 @@ impl Editor {
                 match mve {
                     Move::Left => self.cursor.move_left(&self.edit_value),
                     Move::Right => self.cursor.move_right(&self.edit_value),
+                    Move::JumpLeft => self.cursor.move_left_by_words(&self.edit_value),
+                    Move::JumpRight => self.cursor.move_right_by_words(&self.edit_value),
                     _ => {}
                 }
                 None
@@ -102,10 +112,56 @@ impl Editor {
         self.navigate(Move::Down)
     }
 
+    pub fn jump_left(&mut self) -> Option<WorkpadMessage> {
+        self.navigate(Move::JumpLeft)
+    }
+
+    pub fn jump_right(&mut self) -> Option<WorkpadMessage> {
+        self.navigate(Move::JumpRight)
+    }
+
+    pub fn jump_up(&mut self) -> Option<WorkpadMessage> {
+        self.navigate(Move::JumpUp)
+    }
+
+    pub fn jump_down(&mut self) -> Option<WorkpadMessage> {
+        self.navigate(Move::JumpDown)
+    }
+
     pub fn enter(&mut self) -> Option<WorkpadMessage> {
         match self.mode {
             Mode::NotEditing => self.navigate(Move::Down),
             Mode::EditingWithTerminalNavigation => self.navigate(Move::Down),
+            Mode::EditingWithInternalNavigation => {
+                Some(WorkpadMessage::ActiveCellNewValue(self.end_editing()))
+            }
+        }
+    }
+
+    pub fn back_enter(&mut self) -> Option<WorkpadMessage> {
+        match self.mode {
+            Mode::NotEditing => self.navigate(Move::Up),
+            Mode::EditingWithTerminalNavigation => self.navigate(Move::Up),
+            Mode::EditingWithInternalNavigation => {
+                Some(WorkpadMessage::ActiveCellNewValue(self.end_editing()))
+            }
+        }
+    }
+
+    pub fn tab(&mut self) -> Option<WorkpadMessage> {
+        match self.mode {
+            Mode::NotEditing => self.navigate(Move::Right),
+            Mode::EditingWithTerminalNavigation => self.navigate(Move::Right),
+            Mode::EditingWithInternalNavigation => {
+                Some(WorkpadMessage::ActiveCellNewValue(self.end_editing()))
+            }
+        }
+    }
+
+    pub fn back_tab(&mut self) -> Option<WorkpadMessage> {
+        match self.mode {
+            Mode::NotEditing => self.navigate(Move::Left),
+            Mode::EditingWithTerminalNavigation => self.navigate(Move::Left),
             Mode::EditingWithInternalNavigation => {
                 Some(WorkpadMessage::ActiveCellNewValue(self.end_editing()))
             }
@@ -120,8 +176,35 @@ impl Editor {
         self.cursor.selection(&self.edit_value)
     }
 
+    pub fn select_to(&mut self, position: usize) {
+        let start = self.cursor.start(&self.edit_value);
+        self.cursor.select_range(start, position);
+    }
+
+    pub fn select_word_at(&mut self, position: usize) {
+        let start = self.edit_value.previous_start_of_word(position);
+        let end = self.edit_value.next_end_of_word(position);
+        self.cursor.select_range(start, end);
+    }
+
+    pub fn select_left(&mut self) {
+        self.cursor.select_left(&self.edit_value);
+    }
+
+    pub fn select_right(&mut self) {
+        self.cursor.select_right(&self.edit_value);
+    }
+
     pub fn select_left_by_words(&mut self) {
         self.cursor.select_left_by_words(&self.edit_value);
+    }
+
+    pub fn select_right_by_words(&mut self) {
+        self.cursor.select_right_by_words(&self.edit_value);
+    }
+
+    pub fn select_all(&mut self) {
+        self.cursor.select_all(&self.edit_value);
     }
 
     pub fn insert(&mut self, character: char) {

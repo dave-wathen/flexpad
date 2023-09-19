@@ -7,6 +7,7 @@ use std::{
 use iced::{
     advanced::{
         layout::{Limits, Node},
+        mouse::{self, click},
         renderer::{Quad, Style},
         text,
         widget::{self, tree, Operation, Tree},
@@ -14,9 +15,9 @@ use iced::{
     },
     alignment,
     event::Status,
-    keyboard, mouse,
+    keyboard, touch,
     widget::{text::LineHeight, text_input::Value},
-    window, Color, Element, Event, Length, Rectangle, Size, Vector,
+    window, Color, Element, Event, Length, Pixels, Point, Rectangle, Size, Vector,
 };
 
 mod cursor;
@@ -49,16 +50,24 @@ impl From<Id> for widget::Id {
     }
 }
 
-pub struct ActiveCell {
+pub struct ActiveCell<Renderer>
+where
+    Renderer: text::Renderer,
+{
     id: Option<Id>,
     focused: bool,
     editor: Rc<RefCell<Editor>>,
     horizontal_alignment: alignment::Horizontal,
     vertical_alignment: alignment::Vertical,
+    font: Option<Renderer::Font>,
     font_size: f32,
 }
 
-impl ActiveCell {
+impl<Renderer> ActiveCell<Renderer>
+where
+    Renderer: text::Renderer,
+{
+    /// Creates a new [`ActiveCell`].
     pub fn new(editor: Rc<RefCell<Editor>>) -> Self {
         Self {
             id: None,
@@ -66,43 +75,63 @@ impl ActiveCell {
             editor,
             horizontal_alignment: alignment::Horizontal::Center,
             vertical_alignment: alignment::Vertical::Center,
+            font: None,
             font_size: 10.0,
         }
     }
 
+    /// Sets the [`Id`] of the [`ActiveCell`].
     pub fn id(mut self, id: Id) -> Self {
         self.id = Some(id);
         self
     }
 
+    /// Sets the focus state of the [`ActiveCell`].
     pub fn focused(mut self, is_focused: bool) -> Self {
         self.focused = is_focused;
         self
     }
 
+    /// Sets the horizontal alignment of the [`ActiveCell`].
     pub fn horizontal_alignment(mut self, alignment: alignment::Horizontal) -> Self {
         self.horizontal_alignment = alignment;
         self
     }
 
+    /// Sets the vertical alignment of the [`ActiveCell`].
     pub fn vertical_alignment(mut self, alignment: alignment::Vertical) -> Self {
         self.vertical_alignment = alignment;
         self
     }
 
-    pub fn font_size(mut self, size: f32) -> Self {
-        self.font_size = size;
+    /// Sets the [`Font`] of the [`ActiveCell`].
+    pub fn font(mut self, font: impl Into<Renderer::Font>) -> Self {
+        self.font = Some(font.into());
+        self
+    }
+
+    /// Sets the font size of the [`ActiveCell`].
+    pub fn font_size(mut self, size: impl Into<Pixels>) -> Self {
+        self.font_size = size.into().0;
         self
     }
 }
 
-impl<Renderer> Widget<WorkpadMessage, Renderer> for ActiveCell
+impl<Renderer> Widget<WorkpadMessage, Renderer> for ActiveCell<Renderer>
 where
     Renderer: iced::advanced::Renderer,
     Renderer: text::Renderer,
 {
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<State>()
+    }
+
+    fn width(&self) -> iced::Length {
+        iced::Length::Fill
+    }
+
+    fn height(&self) -> iced::Length {
+        iced::Length::Fill
     }
 
     fn state(&self) -> tree::State {
@@ -114,12 +143,15 @@ where
         tree::State::new(state)
     }
 
-    fn width(&self) -> iced::Length {
-        iced::Length::Fill
-    }
+    fn diff(&self, tree: &mut Tree) {
+        let state = tree.state.downcast_mut::<State>();
 
-    fn height(&self) -> iced::Length {
-        iced::Length::Fill
+        // Ensure state reflects widget focus
+        if self.focused {
+            state.focus();
+        } else {
+            state.unfocus();
+        }
     }
 
     fn layout(&self, _renderer: &Renderer, limits: &Limits) -> Node {
@@ -146,8 +178,7 @@ where
         let editor = self.editor.borrow();
         let value = editor.value();
         let text = editor.contents();
-        // TODO Allow font & size config
-        let font = renderer.default_font();
+        let font = self.font.unwrap_or_else(|| renderer.default_font());
         let size = self.font_size;
 
         let (cursor, offset) = if let Some(focus) = state
@@ -296,8 +327,6 @@ where
         }
     }
 
-    fn diff(&self, _tree: &mut Tree) {}
-
     fn operate(
         &self,
         _tree: &mut Tree,
@@ -315,9 +344,9 @@ where
         &mut self,
         tree: &mut Tree,
         event: Event,
-        _layout: Layout<'_>,
-        _cursor: mouse::Cursor,
-        _renderer: &Renderer,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        renderer: &Renderer,
         _clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, WorkpadMessage>,
         _viewport: &Rectangle,
@@ -362,6 +391,75 @@ where
                 }
                 Status::Ignored
             }
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
+            | Event::Touch(touch::Event::FingerPressed { .. }) => {
+                let click_position = cursor.position_over(layout.bounds());
+                if let Some(cursor_position) = click_position {
+                    if !focused {
+                        if let Some(ref id) = self.id {
+                            shell.publish(WorkpadMessage::Focus(id.0.clone()))
+                        }
+                    }
+
+                    let target = cursor_position.x - layout.bounds().x;
+                    let click = mouse::Click::new(cursor_position, state.last_click);
+
+                    let font = self.font.unwrap_or_else(|| renderer.default_font());
+                    let size = self.font_size;
+                    match click.kind() {
+                        click::Kind::Single => {
+                            let position = if target > 0.0 {
+                                find_cursor_position(
+                                    renderer,
+                                    layout.bounds(),
+                                    font,
+                                    size,
+                                    LineHeight::default(),
+                                    &self.editor.borrow(),
+                                    target,
+                                )
+                            } else {
+                                None
+                            }
+                            .unwrap_or(0);
+
+                            let mut editor = self.editor.borrow_mut();
+                            if state.keyboard_modifiers.shift() {
+                                editor.select_to(position);
+                            } else {
+                                editor.move_to(position);
+                            }
+                            state.is_dragging = true;
+                        }
+                        click::Kind::Double => {
+                            let position = find_cursor_position(
+                                renderer,
+                                layout.bounds(),
+                                font,
+                                size,
+                                LineHeight::default(),
+                                &self.editor.borrow(),
+                                target,
+                            )
+                            .unwrap_or(0);
+
+                            let mut editor = self.editor.borrow_mut();
+                            editor.select_word_at(position);
+                            state.is_dragging = false;
+                        }
+                        click::Kind::Triple => {
+                            let mut editor = self.editor.borrow_mut();
+                            editor.select_all();
+                            state.is_dragging = false;
+                        }
+                    }
+
+                    state.last_click = Some(click);
+                    Status::Captured
+                } else {
+                    Status::Ignored
+                }
+            }
             Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
                 state.keyboard_modifiers = modifiers;
                 Status::Ignored
@@ -373,21 +471,39 @@ where
                 editor.insert(c);
                 Status::Captured
             }
-            Event::Keyboard(keyboard::Event::KeyPressed { key_code, .. }) if focused => {
-                let modifiers = state.keyboard_modifiers;
+            Event::Keyboard(keyboard::Event::KeyPressed {
+                key_code,
+                modifiers,
+            }) if focused => {
+                state.keyboard_modifiers = modifiers;
 
                 let mut editor = self.editor.borrow_mut();
                 let jump = platform::is_jump_modifier_pressed(modifiers);
+                let shift = modifiers.shift();
                 match key_code {
+                    // Editing
                     keyboard::KeyCode::F2 => editor.toggle_edit_mode(),
                     keyboard::KeyCode::Escape if state.is_focused() => editor.abandon_editing(),
                     keyboard::KeyCode::Backspace if jump => editor.jump_backspace(),
                     keyboard::KeyCode::Backspace => editor.backspace(),
+                    // Selection
+                    keyboard::KeyCode::Left if jump && shift => editor.select_left_by_words(),
+                    keyboard::KeyCode::Right if jump && shift => editor.select_right_by_words(),
+                    keyboard::KeyCode::Left if shift => editor.select_left(),
+                    keyboard::KeyCode::Right if shift => editor.select_right(),
+                    // Navigation
+                    keyboard::KeyCode::Left if jump => publish(editor.jump_left()),
+                    keyboard::KeyCode::Right if jump => publish(editor.jump_right()),
+                    keyboard::KeyCode::Up if jump => publish(editor.jump_up()),
+                    keyboard::KeyCode::Down if jump => publish(editor.jump_down()),
                     keyboard::KeyCode::Left => publish(editor.left()),
                     keyboard::KeyCode::Right => publish(editor.right()),
                     keyboard::KeyCode::Up => publish(editor.up()),
                     keyboard::KeyCode::Down => publish(editor.down()),
+                    keyboard::KeyCode::Enter if shift => publish(editor.back_enter()),
+                    keyboard::KeyCode::Tab if shift => publish(editor.back_tab()),
                     keyboard::KeyCode::Enter => publish(editor.enter()),
+                    keyboard::KeyCode::Tab => publish(editor.tab()),
                     _ => {}
                 };
 
@@ -395,8 +511,9 @@ where
             }
             Event::Keyboard(keyboard::Event::KeyReleased {
                 key_code: _key_code,
-                ..
+                modifiers,
             }) if focused => {
+                state.keyboard_modifiers = modifiers;
                 // match key_code {
                 //     // keyboard::KeyCode::V => {
                 //     //     state.is_pasting = None;
@@ -416,6 +533,64 @@ where
             _ => Status::Ignored,
         }
     }
+}
+
+// TODO Convert this to work for ActiveCell and then use in Single click to position in text
+/// Computes the position of the text cursor at the given X coordinate of
+/// a [`TextInput`].
+fn find_cursor_position<Renderer>(
+    renderer: &Renderer,
+    text_bounds: Rectangle,
+    font: Renderer::Font,
+    size: f32,
+    line_height: text::LineHeight,
+    editor: &Editor,
+    x: f32,
+) -> Option<usize>
+where
+    Renderer: text::Renderer,
+{
+    let offset = offset(renderer, text_bounds, font, size, editor);
+    let value = editor.contents();
+
+    let char_offset = renderer
+        .hit_test(
+            &value,
+            size,
+            line_height,
+            font,
+            Size::INFINITY,
+            text::Shaping::Advanced,
+            Point::new(x + offset, text_bounds.height / 2.0),
+            true,
+        )
+        .map(text::Hit::cursor)?;
+
+    Some(unicode_segmentation::UnicodeSegmentation::graphemes(&value[..char_offset], true).count())
+}
+
+fn offset<Renderer>(
+    renderer: &Renderer,
+    text_bounds: Rectangle,
+    font: Renderer::Font,
+    size: f32,
+    editor: &Editor,
+) -> f32
+where
+    Renderer: text::Renderer,
+{
+    let cursor = editor.cursor();
+    let value = editor.value();
+
+    let focus_position = match cursor.state(value) {
+        cursor::State::Index(i) => i,
+        cursor::State::Selection { end, .. } => end,
+    };
+
+    let (_, offset) =
+        measure_cursor_and_scroll_offset(renderer, text_bounds, value, size, focus_position, font);
+
+    offset
 }
 
 fn measure_cursor_and_scroll_offset<Renderer>(
@@ -441,12 +616,12 @@ where
 
 const CURSOR_BLINK_INTERVAL_MILLIS: u128 = 500;
 
-impl<Renderer> From<ActiveCell> for Element<'_, WorkpadMessage, Renderer>
+impl<'a, Renderer> From<ActiveCell<Renderer>> for Element<'a, WorkpadMessage, Renderer>
 where
-    Renderer: iced::advanced::Renderer,
+    Renderer: iced::advanced::Renderer + 'a,
     Renderer: text::Renderer,
 {
-    fn from(grid: ActiveCell) -> Self {
+    fn from(grid: ActiveCell<Renderer>) -> Self {
         Self::new(grid)
     }
 }
@@ -454,15 +629,12 @@ where
 /// The state of a [`ActiveCell`].
 #[derive(Debug, Clone)]
 pub struct State {
-    // value: Value,
     is_focused: Option<Focus>,
-    // is_dragging: bool,
+    is_dragging: bool,
     #[allow(dead_code)] // TODO pasting
     is_pasting: Option<Value>,
-    // last_click: Option<mouse::Click>,
-    // cursor: Cursor,
+    last_click: Option<mouse::Click>,
     keyboard_modifiers: keyboard::Modifiers,
-    // // TODO: Add stateful horizontal scrolling offset
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -473,24 +645,25 @@ struct Focus {
 }
 
 impl State {
-    /// Creates a new [`State`], representing an unfocused [`TextInput`].
+    /// Creates a new [`State`], representing an unfocused [`ActiveCell`].
     pub fn new() -> Self {
         Self {
             is_focused: None,
-            // is_dragging: false,
+            is_dragging: false,
             is_pasting: None,
-            // last_click: None,
+            last_click: None,
             keyboard_modifiers: keyboard::Modifiers::default(),
         }
     }
 
+    /// Creates a new [`State`], representing an focused [`ActiveCell`].
     pub fn focused() -> Self {
         let mut result = Self::new();
         result.focus();
         result
     }
 
-    /// Returns whether the [`TextInput`] is currently focused or not.
+    /// Returns whether the [`ActiveCell`] is currently focused or not.
     pub fn is_focused(&self) -> bool {
         self.is_focused.is_some()
     }
@@ -504,6 +677,11 @@ impl State {
             now,
             is_window_focused: true,
         });
+    }
+
+    /// Unfocuses the [`ActiveCell`].
+    pub fn unfocus(&mut self) {
+        self.is_focused = None;
     }
 
     // /// Moves the [`Cursor`] of the [`TextInput`] to the front of the input text.

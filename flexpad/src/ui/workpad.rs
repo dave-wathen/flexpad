@@ -49,6 +49,7 @@ pub enum WorkpadMessage {
     SheetNameEditStart,
     SheetNameEdited(String),
     SheetNameEditEnd,
+    Focus(widget::Id),
     ViewportChanged(Viewport),
     ActiveCellMove(Move),
     ActiveCellNewValue(String),
@@ -60,6 +61,10 @@ pub enum Move {
     Right,
     Up,
     Down,
+    JumpLeft,
+    JumpRight,
+    JumpUp,
+    JumpDown,
 }
 
 pub struct WorkpadUI {
@@ -200,7 +205,7 @@ impl WorkpadUI {
             self.active_cell.column as usize,
         );
         let cell_name: iced::Element<'_, WorkpadMessage> = text(active_cell.name())
-            .size(18)
+            .size(14)
             .width(100)
             .horizontal_alignment(alignment::Horizontal::Center)
             .into();
@@ -211,7 +216,7 @@ impl WorkpadUI {
                 .focused(self.focus == FORMULA_BAR_ID.clone().into())
                 .horizontal_alignment(alignment::Horizontal::Left)
                 .vertical_alignment(alignment::Vertical::Center)
-                .font_size(14.0)
+                .font_size(14)
                 .into();
 
         row![
@@ -309,6 +314,11 @@ impl WorkpadUI {
 
         match &self.state {
             State::Passive => match message {
+                WorkpadMessage::Focus(id) => {
+                    // TODO check for edit in progress?
+                    self.focus = id;
+                    Command::none()
+                }
                 WorkpadMessage::ActiveCellNewValue(s) => {
                     // TODO Move this to model and perform updates (and recaclulations) on another thread
                     let mut pad = self.pad.write().unwrap();
@@ -334,9 +344,9 @@ impl WorkpadUI {
                             }
                         }
                         Move::Right => {
-                            // TODO Maybe cache in self
                             let columns_count = sheet.columns().count() as u32;
-                            if self.active_cell.column + 1 < columns_count {
+                            let max_index = columns_count.max(1) - 1;
+                            if self.active_cell.column < max_index {
                                 self.active_cell =
                                     RowCol::new(self.active_cell.row, self.active_cell.column + 1);
                             }
@@ -348,11 +358,35 @@ impl WorkpadUI {
                             }
                         }
                         Move::Down => {
-                            // TODO Maybe cache in self
                             let rows_count = sheet.rows().count() as u32;
-                            if self.active_cell.row + 1 < rows_count {
+                            let max_index = rows_count.max(1) - 1;
+                            if self.active_cell.row < max_index {
                                 self.active_cell =
                                     RowCol::new(self.active_cell.row + 1, self.active_cell.column);
+                            }
+                        }
+                        Move::JumpLeft => {
+                            if self.active_cell.column > 0 {
+                                self.active_cell = RowCol::new(self.active_cell.row, 0);
+                            }
+                        }
+                        Move::JumpRight => {
+                            let columns_count = sheet.columns().count() as u32;
+                            let max_index = columns_count.max(1) - 1;
+                            if self.active_cell.column < max_index {
+                                self.active_cell = RowCol::new(self.active_cell.row, max_index);
+                            }
+                        }
+                        Move::JumpUp => {
+                            if self.active_cell.row > 0 {
+                                self.active_cell = RowCol::new(0, self.active_cell.column);
+                            }
+                        }
+                        Move::JumpDown => {
+                            let rows_count = sheet.rows().count() as u32;
+                            let max_index = rows_count.max(1) - 1;
+                            if self.active_cell.row < max_index {
+                                self.active_cell = RowCol::new(max_index, self.active_cell.column);
                             }
                         }
                     }

@@ -13,3 +13,4 @@ edition = "2021"
 
 [workspace.dependencies]
 iced = { version = "0.10.0", features = ["advanced", "image"] }
+unicode-segmentation = "1.10.1"

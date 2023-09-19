@@ -732,6 +732,7 @@ dependencies = [
  "flexpad-grid",
  "iced",
  "once_cell",
+ "unicode-segmentation",
  "vergen",
 ]
 
