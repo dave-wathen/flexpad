@@ -23,11 +23,7 @@ impl Editor {
     }
 
     pub fn is_editing(&self) -> bool {
-        match self.mode {
-            Mode::NotEditing => false,
-            Mode::EditingWithTerminalNavigation => true,
-            Mode::EditingWithInternalNavigation => true,
-        }
+        self.mode == Mode::Editing
     }
 
     pub fn cursor(&self) -> Cursor {
@@ -38,34 +34,32 @@ impl Editor {
         self.cursor.move_to(position);
     }
 
-    pub fn toggle_edit_mode(&mut self) {
+    pub fn start_edit(&mut self) {
         match self.mode {
-            Mode::NotEditing => {
+            Mode::Viewing => {
                 self.edit_value = self.value.clone();
                 self.cursor = Cursor::default();
                 self.cursor.move_to(self.edit_value.len());
-                self.mode = Mode::EditingWithInternalNavigation
+                self.mode = Mode::Editing
             }
-            Mode::EditingWithTerminalNavigation => self.mode = Mode::EditingWithInternalNavigation,
-            Mode::EditingWithInternalNavigation => self.mode = Mode::EditingWithTerminalNavigation,
+            Mode::Editing => {}
         }
     }
 
     pub fn end_editing(&mut self) -> String {
         let result = self.edit_value.to_string();
-        self.mode = Mode::NotEditing;
+        self.mode = Mode::Viewing;
         result
     }
 
     pub fn abandon_editing(&mut self) {
-        self.mode = Mode::NotEditing;
+        self.mode = Mode::Viewing;
     }
 
     pub fn value(&self) -> &Value {
         match self.mode {
-            Mode::NotEditing => &self.value,
-            Mode::EditingWithTerminalNavigation => &self.edit_value,
-            Mode::EditingWithInternalNavigation => &self.edit_value,
+            Mode::Viewing => &self.value,
+            Mode::Editing => &self.edit_value,
         }
     }
 
@@ -73,98 +67,111 @@ impl Editor {
         self.value().to_string()
     }
 
-    pub fn navigate(&mut self, mve: Move) -> Option<WorkpadMessage> {
+    pub fn left(&mut self) -> Option<WorkpadMessage> {
         match self.mode {
-            Mode::NotEditing => Some(WorkpadMessage::ActiveCellMove(mve)),
-            Mode::EditingWithTerminalNavigation => {
-                let value = self.end_editing();
-                Some(WorkpadMessage::Multi(vec![
-                    WorkpadMessage::ActiveCellNewValue(value),
-                    WorkpadMessage::ActiveCellMove(mve),
-                ]))
-            }
-            Mode::EditingWithInternalNavigation => {
-                match mve {
-                    Move::Left => self.cursor.move_left(&self.edit_value),
-                    Move::Right => self.cursor.move_right(&self.edit_value),
-                    Move::JumpLeft => self.cursor.move_left_by_words(&self.edit_value),
-                    Move::JumpRight => self.cursor.move_right_by_words(&self.edit_value),
-                    _ => {}
-                }
+            Mode::Viewing => Some(WorkpadMessage::ActiveCellMove(Move::Left)),
+            Mode::Editing => {
+                self.cursor.move_left(&self.edit_value);
                 None
             }
         }
     }
 
-    pub fn left(&mut self) -> Option<WorkpadMessage> {
-        self.navigate(Move::Left)
-    }
-
     pub fn right(&mut self) -> Option<WorkpadMessage> {
-        self.navigate(Move::Right)
+        match self.mode {
+            Mode::Viewing => Some(WorkpadMessage::ActiveCellMove(Move::Right)),
+            Mode::Editing => {
+                self.cursor.move_right(&self.edit_value);
+                None
+            }
+        }
     }
 
     pub fn up(&mut self) -> Option<WorkpadMessage> {
-        self.navigate(Move::Up)
+        match self.mode {
+            Mode::Viewing => Some(WorkpadMessage::ActiveCellMove(Move::Up)),
+            Mode::Editing => None,
+        }
     }
 
     pub fn down(&mut self) -> Option<WorkpadMessage> {
-        self.navigate(Move::Down)
+        match self.mode {
+            Mode::Viewing => Some(WorkpadMessage::ActiveCellMove(Move::Down)),
+            Mode::Editing => None,
+        }
     }
 
     pub fn jump_left(&mut self) -> Option<WorkpadMessage> {
-        self.navigate(Move::JumpLeft)
+        match self.mode {
+            Mode::Viewing => Some(WorkpadMessage::ActiveCellMove(Move::JumpLeft)),
+            Mode::Editing => {
+                self.cursor.move_left_by_words(&self.edit_value);
+                None
+            }
+        }
     }
 
     pub fn jump_right(&mut self) -> Option<WorkpadMessage> {
-        self.navigate(Move::JumpRight)
+        match self.mode {
+            Mode::Viewing => Some(WorkpadMessage::ActiveCellMove(Move::JumpRight)),
+            Mode::Editing => {
+                self.cursor.move_right_by_words(&self.edit_value);
+                None
+            }
+        }
     }
 
     pub fn jump_up(&mut self) -> Option<WorkpadMessage> {
-        self.navigate(Move::JumpUp)
+        match self.mode {
+            Mode::Viewing => Some(WorkpadMessage::ActiveCellMove(Move::JumpUp)),
+            Mode::Editing => None,
+        }
     }
 
     pub fn jump_down(&mut self) -> Option<WorkpadMessage> {
-        self.navigate(Move::JumpDown)
+        match self.mode {
+            Mode::Viewing => Some(WorkpadMessage::ActiveCellMove(Move::JumpDown)),
+            Mode::Editing => None,
+        }
     }
 
     pub fn enter(&mut self) -> Option<WorkpadMessage> {
         match self.mode {
-            Mode::NotEditing => self.navigate(Move::Down),
-            Mode::EditingWithTerminalNavigation => self.navigate(Move::Down),
-            Mode::EditingWithInternalNavigation => {
-                Some(WorkpadMessage::ActiveCellNewValue(self.end_editing()))
-            }
+            Mode::Viewing => Some(WorkpadMessage::ActiveCellMove(Move::Down)),
+            Mode::Editing => Some(WorkpadMessage::Multi(vec![
+                WorkpadMessage::ActiveCellNewValue(self.end_editing()),
+                WorkpadMessage::ActiveCellMove(Move::Down),
+            ])),
         }
     }
 
     pub fn back_enter(&mut self) -> Option<WorkpadMessage> {
         match self.mode {
-            Mode::NotEditing => self.navigate(Move::Up),
-            Mode::EditingWithTerminalNavigation => self.navigate(Move::Up),
-            Mode::EditingWithInternalNavigation => {
-                Some(WorkpadMessage::ActiveCellNewValue(self.end_editing()))
-            }
+            Mode::Viewing => Some(WorkpadMessage::ActiveCellMove(Move::Up)),
+            Mode::Editing => Some(WorkpadMessage::Multi(vec![
+                WorkpadMessage::ActiveCellNewValue(self.end_editing()),
+                WorkpadMessage::ActiveCellMove(Move::Up),
+            ])),
         }
     }
 
     pub fn tab(&mut self) -> Option<WorkpadMessage> {
         match self.mode {
-            Mode::NotEditing => self.navigate(Move::Right),
-            Mode::EditingWithTerminalNavigation => self.navigate(Move::Right),
-            Mode::EditingWithInternalNavigation => {
-                Some(WorkpadMessage::ActiveCellNewValue(self.end_editing()))
-            }
+            Mode::Viewing => Some(WorkpadMessage::ActiveCellMove(Move::Right)),
+            Mode::Editing => Some(WorkpadMessage::Multi(vec![
+                WorkpadMessage::ActiveCellNewValue(self.end_editing()),
+                WorkpadMessage::ActiveCellMove(Move::Right),
+            ])),
         }
     }
 
     pub fn back_tab(&mut self) -> Option<WorkpadMessage> {
         match self.mode {
-            Mode::NotEditing => self.navigate(Move::Left),
-            Mode::EditingWithTerminalNavigation => self.navigate(Move::Left),
-            Mode::EditingWithInternalNavigation => {
-                Some(WorkpadMessage::ActiveCellNewValue(self.end_editing()))
-            }
+            Mode::Viewing => Some(WorkpadMessage::ActiveCellMove(Move::Left)),
+            Mode::Editing => Some(WorkpadMessage::Multi(vec![
+                WorkpadMessage::ActiveCellNewValue(self.end_editing()),
+                WorkpadMessage::ActiveCellMove(Move::Left),
+            ])),
         }
     }
 
@@ -211,7 +218,7 @@ impl Editor {
         if !self.is_editing() {
             self.edit_value = Value::new("");
             self.cursor = Cursor::default();
-            self.mode = Mode::EditingWithTerminalNavigation
+            self.mode = Mode::Editing
         }
 
         if let Some((left, right)) = self.selection() {
@@ -281,7 +288,6 @@ impl Editor {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 enum Mode {
     #[default]
-    NotEditing,
-    EditingWithTerminalNavigation,
-    EditingWithInternalNavigation,
+    Viewing,
+    Editing,
 }

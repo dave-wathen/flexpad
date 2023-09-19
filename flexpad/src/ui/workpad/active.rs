@@ -482,10 +482,14 @@ where
                 let shift = modifiers.shift();
                 match key_code {
                     // Editing
-                    keyboard::KeyCode::F2 => editor.toggle_edit_mode(),
+                    keyboard::KeyCode::F2 => editor.start_edit(),
                     keyboard::KeyCode::Escape if state.is_focused() => editor.abandon_editing(),
                     keyboard::KeyCode::Backspace if jump => editor.jump_backspace(),
                     keyboard::KeyCode::Backspace => editor.backspace(),
+                    keyboard::KeyCode::Enter if shift => publish(editor.back_enter()),
+                    keyboard::KeyCode::Tab if shift => publish(editor.back_tab()),
+                    keyboard::KeyCode::Enter => publish(editor.enter()),
+                    keyboard::KeyCode::Tab => publish(editor.tab()),
                     // Selection
                     keyboard::KeyCode::Left if jump && shift => editor.select_left_by_words(),
                     keyboard::KeyCode::Right if jump && shift => editor.select_right_by_words(),
@@ -500,10 +504,6 @@ where
                     keyboard::KeyCode::Right => publish(editor.right()),
                     keyboard::KeyCode::Up => publish(editor.up()),
                     keyboard::KeyCode::Down => publish(editor.down()),
-                    keyboard::KeyCode::Enter if shift => publish(editor.back_enter()),
-                    keyboard::KeyCode::Tab if shift => publish(editor.back_tab()),
-                    keyboard::KeyCode::Enter => publish(editor.enter()),
-                    keyboard::KeyCode::Tab => publish(editor.tab()),
                     _ => {}
                 };
 
