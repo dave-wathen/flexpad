@@ -9,7 +9,7 @@ use iced::{
         layout::{Limits, Node},
         renderer::{Quad, Style},
         text,
-        widget::{tree, Tree},
+        widget::{self, tree, Operation, Tree},
         Clipboard, Layout, Shell, Text, Widget,
     },
     alignment,
@@ -26,13 +26,73 @@ pub use editor::Editor;
 
 use super::WorkpadMessage;
 
+/// The identifier of a [`ActiveCell`].
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Id(widget::Id);
+
+impl Id {
+    /// Creates a custom [`Id`].
+    pub fn new(id: impl Into<std::borrow::Cow<'static, str>>) -> Self {
+        Self(widget::Id::new(id))
+    }
+
+    /// Creates a unique [`Id`].
+    /// This function produces a different [`Id`] every time it is called.
+    pub fn unique() -> Self {
+        Self(widget::Id::unique())
+    }
+}
+
+impl From<Id> for widget::Id {
+    fn from(id: Id) -> Self {
+        id.0
+    }
+}
+
 pub struct ActiveCell {
+    id: Option<Id>,
+    focused: bool,
     editor: Rc<RefCell<Editor>>,
+    horizontal_alignment: alignment::Horizontal,
+    vertical_alignment: alignment::Vertical,
+    font_size: f32,
 }
 
 impl ActiveCell {
     pub fn new(editor: Rc<RefCell<Editor>>) -> Self {
-        Self { editor }
+        Self {
+            id: None,
+            focused: false,
+            editor,
+            horizontal_alignment: alignment::Horizontal::Center,
+            vertical_alignment: alignment::Vertical::Center,
+            font_size: 10.0,
+        }
+    }
+
+    pub fn id(mut self, id: Id) -> Self {
+        self.id = Some(id);
+        self
+    }
+
+    pub fn focused(mut self, is_focused: bool) -> Self {
+        self.focused = is_focused;
+        self
+    }
+
+    pub fn horizontal_alignment(mut self, alignment: alignment::Horizontal) -> Self {
+        self.horizontal_alignment = alignment;
+        self
+    }
+
+    pub fn vertical_alignment(mut self, alignment: alignment::Vertical) -> Self {
+        self.vertical_alignment = alignment;
+        self
+    }
+
+    pub fn font_size(mut self, size: f32) -> Self {
+        self.font_size = size;
+        self
     }
 }
 
@@ -46,7 +106,12 @@ where
     }
 
     fn state(&self) -> tree::State {
-        tree::State::new(State::new())
+        let state = if self.focused {
+            State::focused()
+        } else {
+            State::new()
+        };
+        tree::State::new(state)
     }
 
     fn width(&self) -> iced::Length {
@@ -83,7 +148,7 @@ where
         let text = editor.contents();
         // TODO Allow font & size config
         let font = renderer.default_font();
-        let size = 10.0; //renderer.default_size();
+        let size = self.font_size;
 
         let (cursor, offset) = if let Some(focus) = state
             .is_focused
@@ -180,41 +245,46 @@ where
             //     theme.value_color(style)
             // },
             let color = Color::BLACK;
-            let text = if state.is_focused() {
-                Text {
-                    content: &text,
-                    color,
-                    font,
-                    bounds: Rectangle {
-                        y: bounds.center_y(),
-                        width: f32::INFINITY,
-                        ..bounds
-                    },
-                    size,
-                    line_height: LineHeight::default(),
-                    horizontal_alignment: alignment::Horizontal::Left,
-                    vertical_alignment: alignment::Vertical::Center,
-                    shaping: text::Shaping::Advanced,
-                }
+            let (h_align, v_align, width) = if state.is_focused() {
+                (
+                    alignment::Horizontal::Left,
+                    alignment::Vertical::Center,
+                    f32::INFINITY,
+                )
             } else {
-                Text {
-                    content: &text,
-                    color,
-                    font,
-                    bounds: Rectangle {
-                        y: bounds.center_y(),
-                        x: bounds.center_x(),
-                        ..bounds
-                    },
-                    size,
-                    line_height: LineHeight::default(),
-                    // TODO Set from data when not focused
-                    horizontal_alignment: alignment::Horizontal::Center,
-                    vertical_alignment: alignment::Vertical::Center,
-                    shaping: text::Shaping::Advanced,
-                }
+                (
+                    self.horizontal_alignment,
+                    self.vertical_alignment,
+                    bounds.width,
+                )
             };
-            renderer.fill_text(text);
+            let x = match h_align {
+                alignment::Horizontal::Left => bounds.x,
+                alignment::Horizontal::Center => bounds.center_x(),
+                alignment::Horizontal::Right => bounds.x + bounds.width,
+            };
+            let y = match v_align {
+                alignment::Vertical::Top => bounds.y,
+                alignment::Vertical::Center => bounds.center_y(),
+                alignment::Vertical::Bottom => bounds.y + bounds.width,
+            };
+            let text_bounds = Rectangle {
+                x,
+                y,
+                width,
+                ..bounds
+            };
+            renderer.fill_text(Text {
+                content: &text,
+                color,
+                font,
+                bounds: text_bounds,
+                size,
+                line_height: LineHeight::default(),
+                horizontal_alignment: h_align,
+                vertical_alignment: v_align,
+                shaping: text::Shaping::Advanced,
+            });
         };
 
         if text_width > bounds.width {
@@ -227,6 +297,19 @@ where
     }
 
     fn diff(&self, _tree: &mut Tree) {}
+
+    fn operate(
+        &self,
+        _tree: &mut Tree,
+        _layout: Layout<'_>,
+        _renderer: &Renderer,
+        _operation: &mut dyn Operation<WorkpadMessage>,
+    ) {
+        // let state = tree.state.downcast_mut::<State>();
+
+        // operation.focusable(state, self.id.as_ref().map(|id| &id.0));
+        // operation.text_input(state, self.id.as_ref().map(|id| &id.0));
+    }
 
     fn on_event(
         &mut self,
@@ -245,18 +328,17 @@ where
             }
         };
 
+        let state = tree.state.downcast_mut::<State>();
+        let focused = state.is_focused();
+
         match event {
             Event::Window(window::Event::Unfocused) => {
-                let state = tree.state.downcast_mut::<State>();
-
                 if let Some(focus) = &mut state.is_focused {
                     focus.is_window_focused = false;
                 }
                 Status::Ignored
             }
             Event::Window(window::Event::Focused) => {
-                let state = tree.state.downcast_mut::<State>();
-
                 if let Some(focus) = &mut state.is_focused {
                     focus.is_window_focused = true;
                     focus.updated_at = Instant::now();
@@ -266,8 +348,6 @@ where
                 Status::Ignored
             }
             Event::Window(window::Event::RedrawRequested(now)) => {
-                let state = tree.state.downcast_mut::<State>();
-
                 if let Some(focus) = &mut state.is_focused {
                     if focus.is_window_focused {
                         focus.now = now;
@@ -283,21 +363,17 @@ where
                 Status::Ignored
             }
             Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
-                let state = tree.state.downcast_mut::<State>();
                 state.keyboard_modifiers = modifiers;
                 Status::Ignored
             }
-            Event::Keyboard(keyboard::Event::CharacterReceived(c)) if !c.is_control() => {
-                let state = tree.state.downcast_mut::<State>();
+            Event::Keyboard(keyboard::Event::CharacterReceived(c))
+                if focused && !c.is_control() =>
+            {
                 let mut editor = self.editor.borrow_mut();
                 editor.insert(c);
-                if !state.is_focused() && editor.is_editing() {
-                    state.focus();
-                }
                 Status::Captured
             }
-            Event::Keyboard(keyboard::Event::KeyPressed { key_code, .. }) => {
-                let state = tree.state.downcast_mut::<State>();
+            Event::Keyboard(keyboard::Event::KeyPressed { key_code, .. }) if focused => {
                 let modifiers = state.keyboard_modifiers;
 
                 let mut editor = self.editor.borrow_mut();
@@ -315,39 +391,27 @@ where
                     _ => {}
                 };
 
-                if !state.is_focused() && editor.is_editing() {
-                    state.focus();
-                } else if state.is_focused() && !editor.is_editing() {
-                    state.unfocus();
-                }
-
                 Status::Captured
             }
             Event::Keyboard(keyboard::Event::KeyReleased {
                 key_code: _key_code,
                 ..
-            }) => {
-                let state = tree.state.downcast_mut::<State>();
+            }) if focused => {
+                // match key_code {
+                //     // keyboard::KeyCode::V => {
+                //     //     state.is_pasting = None;
+                //     // }
+                //     // keyboard::KeyCode::Tab
+                //     // | keyboard::KeyCode::Up
+                //     // | keyboard::KeyCode::Down => {
+                //     //     return event::Status::Ignored;
+                //     // }
+                //     _ => {}
+                // }
 
-                if state.is_focused.is_some() {
-                    // match key_code {
-                    //     // keyboard::KeyCode::V => {
-                    //     //     state.is_pasting = None;
-                    //     // }
-                    //     // keyboard::KeyCode::Tab
-                    //     // | keyboard::KeyCode::Up
-                    //     // | keyboard::KeyCode::Down => {
-                    //     //     return event::Status::Ignored;
-                    //     // }
-                    //     _ => {}
-                    // }
-
-                    // //} else {
-                    // //state.is_pasting = None;
-                    Status::Captured
-                } else {
-                    Status::Ignored
-                }
+                // //} else {
+                // //state.is_pasting = None;
+                Status::Captured
             }
             _ => Status::Ignored,
         }
@@ -420,15 +484,16 @@ impl State {
         }
     }
 
+    pub fn focused() -> Self {
+        let mut result = Self::new();
+        result.focus();
+        result
+    }
+
     /// Returns whether the [`TextInput`] is currently focused or not.
     pub fn is_focused(&self) -> bool {
         self.is_focused.is_some()
     }
-
-    // /// Returns the [`Cursor`] of the [`TextInput`].
-    // pub fn cursor(&self) -> Cursor {
-    //     self.cursor
-    // }
 
     /// Focuses the [`ActiveCell`].
     pub fn focus(&mut self) {
@@ -439,13 +504,6 @@ impl State {
             now,
             is_window_focused: true,
         });
-
-        //        self.move_cursor_to_end();
-    }
-
-    /// Unfocuses the [`ActiveCell`].
-    pub fn unfocus(&mut self) {
-        self.is_focused = None;
     }
 
     // /// Moves the [`Cursor`] of the [`TextInput`] to the front of the input text.

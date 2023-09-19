@@ -10,8 +10,9 @@ use flexpad_grid::{
     GridCorner, GridScrollable, RowCol, RowHead, SumSeq, Viewport,
 };
 use iced::{
+    advanced::widget,
     alignment, theme,
-    widget::{self, button, column, horizontal_space, image, row, text, text_input, vertical_rule},
+    widget::{button, column, horizontal_space, image, row, text, text_input, vertical_rule},
     Alignment, Color, Command, Element, Length,
 };
 
@@ -22,6 +23,9 @@ use super::images;
 mod active;
 
 use once_cell::sync::Lazy;
+
+static FORMULA_BAR_ID: Lazy<active::Id> = Lazy::new(active::Id::unique);
+static ACTIVE_CELL_ID: Lazy<active::Id> = Lazy::new(active::Id::unique);
 
 static GRID_SCROLLABLE_ID: Lazy<flexpad_grid::scroll::Id> =
     Lazy::new(flexpad_grid::scroll::Id::unique);
@@ -66,6 +70,7 @@ pub struct WorkpadUI {
     visible_cells: CellRange,
     active_cell: RowCol,
     active_cell_editor: Rc<RefCell<active::Editor>>,
+    focus: widget::Id,
 }
 
 impl WorkpadUI {
@@ -85,6 +90,7 @@ impl WorkpadUI {
             visible_cells: CellRange::empty(),
             active_cell: (0, 0).into(),
             active_cell_editor: Rc::new(RefCell::new(active_cell_editor)),
+            focus: ACTIVE_CELL_ID.clone().into(),
         }
     }
 
@@ -108,7 +114,7 @@ impl WorkpadUI {
     // TODO Row sized increases when switching to edit
     fn name_view(&self) -> iced::Element<'_, WorkpadMessage> {
         let button = |img, msg| {
-            button(widget::image(img))
+            button(image(img))
                 .on_press(msg)
                 .width(Length::Shrink)
                 .height(25)
@@ -137,7 +143,7 @@ impl WorkpadUI {
 
     fn toolbar_view(&self) -> iced::Element<'_, WorkpadMessage> {
         let button = |img, _msg| {
-            button(widget::image(img))
+            button(image(img))
                 .width(Length::Shrink)
                 .height(20)
                 .padding(2)
@@ -159,7 +165,7 @@ impl WorkpadUI {
     // TODO Cannot see text properly when editing
     fn sheet_and_formula_row_view(&self) -> iced::Element<'_, WorkpadMessage> {
         let button = |img, msg| {
-            button(widget::image(img))
+            button(image(img))
                 .on_press(msg)
                 .width(Length::Shrink)
                 .height(20)
@@ -199,11 +205,14 @@ impl WorkpadUI {
             .horizontal_alignment(alignment::Horizontal::Center)
             .into();
 
-        let formula: iced::Element<'_, WorkpadMessage> = text("formula")
-            .size(18)
-            .width(Length::Fill)
-            .horizontal_alignment(alignment::Horizontal::Left)
-            .into();
+        let formula: iced::Element<'_, WorkpadMessage> =
+            ActiveCell::new(self.active_cell_editor.clone())
+                .id(FORMULA_BAR_ID.clone())
+                .focused(self.focus == FORMULA_BAR_ID.clone().into())
+                .horizontal_alignment(alignment::Horizontal::Left)
+                .vertical_alignment(alignment::Vertical::Center)
+                .font_size(14.0)
+                .into();
 
         row![
             sheet,
@@ -264,7 +273,13 @@ impl WorkpadUI {
         }
 
         // Always add the active cell even when not visible so keystrokes are handled
-        let ac = ActiveCell::new(self.active_cell_editor.clone());
+        let ac = ActiveCell::new(self.active_cell_editor.clone())
+            .id(ACTIVE_CELL_ID.clone())
+            .focused(self.focus == ACTIVE_CELL_ID.clone().into())
+            // TODO Set details from spreadsheet data
+            .horizontal_alignment(alignment::Horizontal::Center)
+            .vertical_alignment(alignment::Vertical::Center)
+            .font_size(10.0);
         let grid_cell = GridCell::new(self.active_cell, ac)
             // TODO Hardcoding
             .borders(Borders::new(Border::new(1.0, Color::from_rgb8(0, 0, 255))));
