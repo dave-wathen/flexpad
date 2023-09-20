@@ -10,7 +10,7 @@ use flexpad_grid::{
     GridCorner, GridScrollable, RowCol, RowHead, SumSeq, Viewport,
 };
 use iced::{
-    advanced::widget,
+    advanced::{mouse::click, widget},
     alignment, theme,
     widget::{button, column, horizontal_space, image, row, text, text_input, vertical_rule},
     Alignment, Color, Command, Element, Length,
@@ -281,6 +281,7 @@ impl WorkpadUI {
         let ac = ActiveCell::new(self.active_cell_editor.clone())
             .id(ACTIVE_CELL_ID.clone())
             .focused(self.focus == ACTIVE_CELL_ID.clone().into())
+            .edit_when_clicked(click::Kind::Double)
             // TODO Set details from spreadsheet data
             .horizontal_alignment(alignment::Horizontal::Center)
             .vertical_alignment(alignment::Vertical::Center)

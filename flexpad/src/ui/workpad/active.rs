@@ -61,6 +61,7 @@ where
     vertical_alignment: alignment::Vertical,
     font: Option<Renderer::Font>,
     font_size: f32,
+    edit_when_clicked: click::Kind,
 }
 
 impl<Renderer> ActiveCell<Renderer>
@@ -77,6 +78,7 @@ where
             vertical_alignment: alignment::Vertical::Center,
             font: None,
             font_size: 10.0,
+            edit_when_clicked: click::Kind::Single,
         }
     }
 
@@ -89,6 +91,11 @@ where
     /// Sets the focus state of the [`ActiveCell`].
     pub fn focused(mut self, is_focused: bool) -> Self {
         self.focused = is_focused;
+        self
+    }
+
+    pub fn edit_when_clicked(mut self, kind: click::Kind) -> Self {
+        self.edit_when_clicked = kind;
         self
     }
 
@@ -408,10 +415,38 @@ where
 
                     let font = self.font.unwrap_or_else(|| renderer.default_font());
                     let size = self.font_size;
-                    match click.kind() {
-                        click::Kind::Single => {
-                            let position = if target > 0.0 {
-                                find_cursor_position(
+                    if self.editor.borrow().is_editing() {
+                        match click.kind() {
+                            click::Kind::Single => {
+                                let position = if target > 0.0 {
+                                    find_cursor_position(
+                                        renderer,
+                                        layout.bounds(),
+                                        font,
+                                        size,
+                                        LineHeight::default(),
+                                        &self.editor.borrow(),
+                                        target,
+                                    )
+                                } else {
+                                    None
+                                }
+                                .unwrap_or(0);
+
+                                let mut editor = self.editor.borrow_mut();
+                                if editor.is_editing() {
+                                    if state.keyboard_modifiers.shift() {
+                                        editor.select_to(position);
+                                    } else {
+                                        editor.move_to(position);
+                                    }
+                                    state.is_dragging = true;
+                                } else {
+                                    editor.start_edit();
+                                }
+                            }
+                            click::Kind::Double => {
+                                let position = find_cursor_position(
                                     renderer,
                                     layout.bounds(),
                                     font,
@@ -420,39 +455,29 @@ where
                                     &self.editor.borrow(),
                                     target,
                                 )
-                            } else {
-                                None
-                            }
-                            .unwrap_or(0);
+                                .unwrap_or(0);
 
-                            let mut editor = self.editor.borrow_mut();
-                            if state.keyboard_modifiers.shift() {
-                                editor.select_to(position);
-                            } else {
-                                editor.move_to(position);
+                                let mut editor = self.editor.borrow_mut();
+                                editor.select_word_at(position);
+                                state.is_dragging = false;
                             }
-                            state.is_dragging = true;
+                            click::Kind::Triple => {
+                                let mut editor = self.editor.borrow_mut();
+                                editor.select_all();
+                                state.is_dragging = false;
+                            }
                         }
-                        click::Kind::Double => {
-                            let position = find_cursor_position(
-                                renderer,
-                                layout.bounds(),
-                                font,
-                                size,
-                                LineHeight::default(),
-                                &self.editor.borrow(),
-                                target,
-                            )
-                            .unwrap_or(0);
-
+                    } else {
+                        // Since Eq not implemented for click::Kind at the time of writing
+                        let start_edit = matches!(
+                            (click.kind(), self.edit_when_clicked),
+                            (click::Kind::Single, click::Kind::Single)
+                                | (click::Kind::Double, click::Kind::Double)
+                                | (click::Kind::Triple, click::Kind::Triple)
+                        );
+                        if start_edit {
                             let mut editor = self.editor.borrow_mut();
-                            editor.select_word_at(position);
-                            state.is_dragging = false;
-                        }
-                        click::Kind::Triple => {
-                            let mut editor = self.editor.borrow_mut();
-                            editor.select_all();
-                            state.is_dragging = false;
+                            editor.start_edit();
                         }
                     }
 
