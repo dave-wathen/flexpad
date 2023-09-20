@@ -1,35 +1,72 @@
-use std::collections::HashMap;
+use std::{
+    collections::{BTreeMap, HashMap},
+    fmt,
+};
 
 use compact_str::{CompactString, ToCompactString};
+use uuid::Uuid;
 
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct SheetId(u32);
+
+impl From<u32> for SheetId {
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
+}
+
+impl std::fmt::Debug for SheetId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "SheetId({})", self.0)
+    }
+}
+
+#[derive(Debug)]
 pub struct Workpad {
+    #[allow(dead_code)] // TODO Persistence
+    id: String,
+    next_part_id: u32,
     name: CompactString,
-    sheets: Vec<SheetData>,
+    sheets: Vec<SheetId>,
     current: usize,
+    sheets_data: BTreeMap<SheetId, SheetData>,
 }
 
 impl Default for Workpad {
     fn default() -> Self {
-        let sheet1 = SheetData::new("Sheet 1");
-        let sheet2 = SheetData::new("Sheet 2");
-        let sheet3 = SheetData::new("Sheet 3");
-        Self {
+        let mut result = Self {
+            id: Uuid::new_v4().simple().to_string(),
+            next_part_id: 0,
             name: "Unnamed".to_compact_string(),
-            sheets: vec![sheet1, sheet2, sheet3],
+            sheets: vec![],
             current: 0,
-        }
+            sheets_data: Default::default(),
+        };
+        result.add_sheet("Sheet 1");
+        result.add_sheet("Sheet 2");
+        result.add_sheet("Sheet 3");
+        result
     }
 }
 
 impl Workpad {
     pub fn active_sheet(&self) -> Sheet<'_> {
+        let id = self.sheets[self.current];
         Sheet {
-            data: &self.sheets[self.current],
+            data: &self.sheets_data[&id],
         }
     }
 
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    pub fn add_sheet(&mut self, name: impl ToCompactString) {
+        let id = self.next_part_id.into();
+        self.next_part_id += 1;
+        let sheet = SheetData::new(id, name);
+        self.sheets.push(sheet.id);
+        self.sheets_data.insert(sheet.id, sheet);
     }
 
     // TODO Think about MVCC
@@ -39,7 +76,8 @@ impl Workpad {
 
     // TODO better than this!
     pub fn set_cell_value(&mut self, row: usize, column: usize, s: String) {
-        let sheet_data = &mut self.sheets[self.current];
+        let id = self.sheets[self.current];
+        let sheet_data = self.sheets_data.get_mut(&id).expect("should be there!");
         let cell_data = sheet_data
             .cells
             .entry((row, column))
@@ -48,7 +86,9 @@ impl Workpad {
     }
 }
 
+#[derive(Debug)]
 pub struct SheetData {
+    id: SheetId,
     name: CompactString,
     column_header_height: f32,
     row_header_width: f32,
@@ -59,10 +99,11 @@ pub struct SheetData {
 }
 
 impl SheetData {
-    fn new(name: impl ToCompactString) -> Self {
+    fn new(id: SheetId, name: impl ToCompactString) -> Self {
         let columns = (0..99).map(ColumnData::new).collect();
         let rows = (0..999).map(RowData::new).collect();
         Self {
+            id,
             name: name.to_compact_string(),
             column_header_height: 20.0,
             row_header_width: 60.0,
@@ -73,6 +114,7 @@ impl SheetData {
     }
 }
 
+#[derive(Debug)]
 struct ColumnData {
     name: Name,
     width: f32,
@@ -87,6 +129,7 @@ impl ColumnData {
     }
 }
 
+#[derive(Debug)]
 struct RowData {
     name: Name,
     height: f32,
@@ -327,6 +370,7 @@ impl Cell<'_> {
 }
 
 #[allow(dead_code)]
+#[derive(Debug)]
 enum Name {
     Auto(CompactString),
     Custom(CompactString),
