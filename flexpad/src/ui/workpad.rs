@@ -16,11 +16,15 @@ use iced::{
     Alignment, Color, Command, Element, Length,
 };
 
-use self::active::{ActiveCell, Editor};
+use self::{
+    active::{ActiveCell, Editor},
+    inactive::InactiveCell,
+};
 
 use super::images;
 
 mod active;
+mod inactive;
 
 use once_cell::sync::Lazy;
 
@@ -65,6 +69,7 @@ pub enum Move {
     JumpRight,
     JumpUp,
     JumpDown,
+    To(RowCol),
 }
 
 pub struct WorkpadUI {
@@ -265,14 +270,20 @@ impl WorkpadUI {
             grid = grid.push_row_head(RowHead::new(rw, text(row.name()).size(10)))
         }
 
-        for RowCol {
-            row: rw,
-            column: cl,
-        } in self.visible_cells.cells()
-        {
+        for rc in self.visible_cells.cells() {
+            let RowCol {
+                row: rw,
+                column: cl,
+            } = rc;
             if self.active_cell.row != rw || self.active_cell.column != cl {
                 let cell = sheet.cell(rw as usize, cl as usize);
-                let grid_cell = GridCell::new((rw, cl), text(cell.value()).size(10));
+                let ic = InactiveCell::new(rc, cell.value())
+                    // TODO Set details from spreadsheet data
+                    .horizontal_alignment(alignment::Horizontal::Center)
+                    .vertical_alignment(alignment::Vertical::Center)
+                    .font_size(10.0);
+
+                let grid_cell = GridCell::new((rw, cl), ic);
                 grid = grid.push_cell(grid_cell);
             };
         }
@@ -390,6 +401,9 @@ impl WorkpadUI {
                                 self.active_cell = RowCol::new(max_index, self.active_cell.column);
                             }
                         }
+                        Move::To(rc) => {
+                            self.active_cell = rc;
+                        }
                     }
 
                     if prior_active_cell != self.active_cell {
@@ -397,8 +411,19 @@ impl WorkpadUI {
                         let cl = self.active_cell.column as usize;
                         let cell = sheet.cell(rw, cl);
                         let editor = Editor::new(cell.value());
-                        self.active_cell_editor = Rc::new(RefCell::new(editor));
+                        let prior_editor = self.active_cell_editor.replace(editor);
                         self.focus = ACTIVE_CELL_ID.clone().into();
+
+                        if prior_editor.is_editing() {
+                            // TODO Move this to model and perform updates (and recaclulations) on another thread
+                            drop(pad);
+                            let mut pad = self.pad.write().unwrap();
+                            pad.set_cell_value(
+                                prior_active_cell.row as usize,
+                                prior_active_cell.column as usize,
+                                prior_editor.contents(),
+                            );
+                        }
                     }
 
                     ensure_cell_visible(GRID_SCROLLABLE_ID.clone(), self.active_cell)

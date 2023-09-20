@@ -648,8 +648,8 @@ where
     Renderer: iced::advanced::Renderer + 'a,
     Renderer: text::Renderer,
 {
-    fn from(grid: ActiveCell<Renderer>) -> Self {
-        Self::new(grid)
+    fn from(cell: ActiveCell<Renderer>) -> Self {
+        Self::new(cell)
     }
 }
 
