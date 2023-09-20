@@ -188,15 +188,17 @@ where
         {
             let editor = self.editor.borrow();
             match editor.cursor_state() {
-                cursor::State::Index(position) => {
+                None => (None, 0.0),
+                Some(cursor::State::Index(position)) => {
                     let (text_value_width, offset) = measure_cursor_and_scroll_offset(
                         renderer, bounds, value, size, position, font,
                     );
 
-                    let is_cursor_visible = ((focus.now - focus.updated_at).as_millis()
-                        / CURSOR_BLINK_INTERVAL_MILLIS)
-                        % 2
-                        == 0;
+                    let is_cursor_visible = editor.is_editing()
+                        && ((focus.now - focus.updated_at).as_millis()
+                            / CURSOR_BLINK_INTERVAL_MILLIS)
+                            % 2
+                            == 0;
                     let cursor = if is_cursor_visible {
                         Some((
                             Quad {
@@ -218,7 +220,7 @@ where
 
                     (cursor, offset)
                 }
-                cursor::State::Selection { start, end } => {
+                Some(cursor::State::Selection { start, end }) => {
                     let left = start.min(end);
                     let right = end.max(start);
 
@@ -276,7 +278,7 @@ where
             //     theme.value_color(style)
             // },
             let color = Color::BLACK;
-            let (h_align, v_align, width) = if state.is_focused() {
+            let (h_align, v_align, width) = if state.is_focused() && editor.is_editing() {
                 (
                     alignment::Horizontal::Left,
                     alignment::Vertical::Center,

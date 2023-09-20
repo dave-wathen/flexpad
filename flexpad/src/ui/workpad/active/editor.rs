@@ -175,8 +175,11 @@ impl Editor {
         }
     }
 
-    pub fn cursor_state(&self) -> super::cursor::State {
-        self.cursor.state(&self.edit_value)
+    pub fn cursor_state(&self) -> Option<super::cursor::State> {
+        match self.mode {
+            Mode::Viewing => None,
+            Mode::Editing => Some(self.cursor.state(&self.edit_value)),
+        }
     }
 
     pub fn selection(&self) -> Option<(usize, usize)> {
