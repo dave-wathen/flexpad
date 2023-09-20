@@ -397,6 +397,7 @@ impl WorkpadUI {
                         let cell = sheet.cell(rw, cl);
                         let editor = Editor::new(cell.value());
                         self.active_cell_editor = Rc::new(RefCell::new(editor));
+                        self.focus = ACTIVE_CELL_ID.clone().into();
                     }
 
                     ensure_cell_visible(GRID_SCROLLABLE_ID.clone(), self.active_cell)
