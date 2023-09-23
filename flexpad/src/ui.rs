@@ -3,6 +3,7 @@ use iced::widget::{button, column, horizontal_rule, image, row, text};
 use iced::{alignment, theme, window, Alignment, Application, Command, Length, Settings, Theme};
 
 use self::workpad::{WorkpadMessage, WorkpadUI};
+use crate::model::workpad::WorkpadMaster;
 
 mod images;
 mod workpad;
@@ -57,7 +58,8 @@ impl Application for Flexpad {
         match self.state {
             State::FrontScreen => match message {
                 Message::OpenNewWokpad => {
-                    self.state = State::Workpad(WorkpadUI::new(Default::default()));
+                    let workpad = WorkpadMaster::new();
+                    self.state = State::Workpad(WorkpadUI::new(workpad));
                     Command::none()
                 }
                 _ => Command::none(),

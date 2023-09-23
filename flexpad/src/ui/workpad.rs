@@ -1,10 +1,6 @@
-use std::{
-    cell::RefCell,
-    rc::Rc,
-    sync::{Arc, RwLock},
-};
+use std::{cell::RefCell, rc::Rc};
 
-use crate::model::workpad::Workpad;
+use crate::model::workpad::{Workpad, WorkpadMaster, WorkpadUpdate};
 use flexpad_grid::{
     scroll::ensure_cell_visible, style, Border, Borders, CellRange, ColumnHead, Grid, GridCell,
     GridCorner, GridScrollable, RowCol, RowHead, SumSeq, Viewport,
@@ -73,7 +69,8 @@ pub enum Move {
 }
 
 pub struct WorkpadUI {
-    pad: Arc<RwLock<Workpad>>,
+    pad_master: WorkpadMaster,
+    pad: Workpad,
     state: State,
     name_edit_id: text_input::Id,
     sheet_edit_id: text_input::Id,
@@ -84,15 +81,16 @@ pub struct WorkpadUI {
 }
 
 impl WorkpadUI {
-    pub fn new(pad: Arc<RwLock<Workpad>>) -> Self {
+    pub fn new(pad_master: WorkpadMaster) -> Self {
+        let pad = pad_master.active_version();
         let active_cell_editor = {
-            let pad = pad.read().unwrap();
             let active_sheet = pad.active_sheet();
             let active_cell = active_sheet.cell(0, 0);
             Editor::new(active_cell.value())
         };
 
         Self {
+            pad_master,
             pad,
             state: Default::default(),
             name_edit_id: text_input::Id::unique(),
@@ -105,7 +103,7 @@ impl WorkpadUI {
     }
 
     pub fn title(&self) -> String {
-        self.pad.read().unwrap().name().to_owned()
+        self.pad.name().to_owned()
     }
 
     pub fn view(&self) -> iced::Element<'_, WorkpadMessage> {
@@ -140,7 +138,7 @@ impl WorkpadUI {
                 .on_submit(WorkpadMessage::PadNameEditEnd)
                 .into(),
             _ => row![
-                text(self.pad.read().unwrap().name()).size(25),
+                text(self.pad.name()).size(25),
                 horizontal_space(5),
                 button(images::edit(), WorkpadMessage::PadNameEditStart),
                 // TODO No actal delete (since no actual save) at present
@@ -191,7 +189,7 @@ impl WorkpadUI {
                 .on_submit(WorkpadMessage::SheetNameEditEnd)
                 .into(),
             _ => row![
-                text(self.pad.read().unwrap().active_sheet().name()).size(18),
+                text(self.pad.active_sheet().name()).size(18),
                 horizontal_space(5),
                 button(images::edit(), WorkpadMessage::SheetNameEditStart),
                 // TODO
@@ -203,8 +201,7 @@ impl WorkpadUI {
             .into(),
         };
 
-        let pad = self.pad.read().unwrap();
-        let active_sheet = pad.active_sheet();
+        let active_sheet = self.pad.active_sheet();
         let active_cell = active_sheet.cell(
             self.active_cell.row as usize,
             self.active_cell.column as usize,
@@ -238,8 +235,7 @@ impl WorkpadUI {
     }
 
     fn grid_view(&self) -> Element<'_, WorkpadMessage> {
-        let pad = self.pad.read().unwrap();
-        let sheet = pad.active_sheet();
+        let sheet = self.pad.active_sheet();
 
         // TODO Allow hetrogenious sizes
         let mut widths = SumSeq::new();
@@ -333,20 +329,19 @@ impl WorkpadUI {
                 }
                 WorkpadMessage::ActiveCellNewValue(s) => {
                     // TODO Move this to model and perform updates (and recaclulations) on another thread
-                    let mut pad = self.pad.write().unwrap();
                     let editor = Editor::new(&s);
-                    pad.set_cell_value(
+                    let update = self.pad.set_active_sheet_cell_value(
                         self.active_cell.row as usize,
                         self.active_cell.column as usize,
                         s,
                     );
+                    self.update_pad(update);
                     self.active_cell_editor = Rc::new(RefCell::new(editor));
 
                     Command::none()
                 }
                 WorkpadMessage::ActiveCellMove(mve) => {
-                    let pad = self.pad.read().unwrap();
-                    let sheet = pad.active_sheet();
+                    let sheet = self.pad.active_sheet();
                     let prior_active_cell = self.active_cell;
                     match mve {
                         Move::Left => {
@@ -416,13 +411,12 @@ impl WorkpadUI {
 
                         if prior_editor.is_editing() {
                             // TODO Move this to model and perform updates (and recaclulations) on another thread
-                            drop(pad);
-                            let mut pad = self.pad.write().unwrap();
-                            pad.set_cell_value(
+                            let update = self.pad.set_active_sheet_cell_value(
                                 prior_active_cell.row as usize,
                                 prior_active_cell.column as usize,
                                 prior_editor.contents(),
                             );
+                            self.update_pad(update);
                         }
                     }
 
@@ -430,16 +424,14 @@ impl WorkpadUI {
                         .map(WorkpadMessage::ViewportChanged)
                 }
                 WorkpadMessage::PadNameEditStart => {
-                    self.state = State::EditingPadName(self.pad.read().unwrap().name().to_owned());
+                    self.state = State::EditingPadName(self.pad.name().to_owned());
                     Command::batch(vec![
                         text_input::focus(self.name_edit_id.clone()),
                         text_input::select_all(self.name_edit_id.clone()),
                     ])
                 }
                 WorkpadMessage::SheetNameEditStart => {
-                    self.state = State::EditingSheetName(
-                        self.pad.read().unwrap().active_sheet().name().to_owned(),
-                    );
+                    self.state = State::EditingSheetName(self.pad.active_sheet().name().to_owned());
                     Command::batch(vec![
                         text_input::focus(self.sheet_edit_id.clone()),
                         text_input::select_all(self.sheet_edit_id.clone()),
@@ -454,8 +446,13 @@ impl WorkpadUI {
                 }
                 WorkpadMessage::PadNameEditEnd => {
                     if !new_name.is_empty() {
-                        self.pad.write().unwrap().set_name(new_name);
-                        self.state = State::Passive;
+                        let mut state = State::Passive;
+                        std::mem::swap(&mut state, &mut self.state);
+                        if let State::EditingPadName(s) = state {
+                            // Always true due to match above
+                            let update = self.pad.set_name(s);
+                            self.update_pad(update);
+                        }
                     }
                     Command::none()
                 }
@@ -468,13 +465,23 @@ impl WorkpadUI {
                 }
                 WorkpadMessage::SheetNameEditEnd => {
                     if !new_name.is_empty() {
-                        //TODO self.pad.write().unwrap().set_name(new_name);
-                        self.state = State::Passive;
+                        let mut state = State::Passive;
+                        std::mem::swap(&mut state, &mut self.state);
+                        if let State::EditingSheetName(s) = state {
+                            // Always true due to match above
+                            let update = self.pad.set_active_sheet_name(s);
+                            self.update_pad(update);
+                        }
                     }
                     Command::none()
                 }
                 _ => Command::none(),
             },
         }
+    }
+
+    pub fn update_pad(&mut self, update: WorkpadUpdate) {
+        self.pad_master.update(update);
+        self.pad = self.pad_master.active_version();
     }
 }
