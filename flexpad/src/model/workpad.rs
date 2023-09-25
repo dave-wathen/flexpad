@@ -74,42 +74,28 @@ impl WorkpadMaster {
     /// Create a new [`WorkpadMaster`] representing a new workpad with a single
     // initial version.
     pub fn new() -> Self {
-        let id = Uuid::new_v4().simple().to_string();
-        let next_part_id = AtomicU32::new(0);
-
-        let sheet1_data = SheetData::new("Sheet 1");
-        let sheet1_id = next_part_id.fetch_add(1, Ordering::SeqCst).into();
-
-        let sheet2_data = SheetData::new("Sheet 2");
-        let sheet2_id = next_part_id.fetch_add(1, Ordering::SeqCst).into();
-
-        let sheet3_data = SheetData::new("Sheet 3");
-        let sheet3_id = next_part_id.fetch_add(1, Ordering::SeqCst).into();
-
-        // TODO ::new?
-        let workpad_data = WorkpadData {
-            name: "Unnamed".to_compact_string(),
-            sheets: vec![sheet1_id, sheet2_id, sheet3_id],
-            active_sheet: sheet1_id,
-        };
-
-        let master_data = WorkpadMasterData {
-            id,
+        let mut master_data = WorkpadMasterData {
+            id: Uuid::new_v4().simple().to_string(),
             history: RwLock::new(vec![HistoryEntry {
                 prior_version: None,
                 update: WorkpadUpdate::NewWorkpad,
             }]),
             active_version: RwLock::new(0),
-            next_part_id,
+            next_part_id: AtomicU32::new(0),
             workpad_idx: Default::default(),
             sheets_idx: Default::default(),
         };
 
-        let workpad_data = Arc::new(workpad_data);
-        master_data.write_sheet(sheet1_id, Arc::new(sheet1_data), 0);
-        master_data.write_sheet(sheet2_id, Arc::new(sheet2_data), 0);
-        master_data.write_sheet(sheet3_id, Arc::new(sheet3_data), 0);
-        master_data.write_workpad(workpad_data, 0);
+        let sheet1_id = master_data.create_sheet(0, "Sheet 1");
+        let sheet2_id = master_data.create_sheet(0, "Sheet 2");
+        let sheet3_id = master_data.create_sheet(0, "Sheet 3");
+
+        let workpad_data = WorkpadData {
+            name: "Unnamed".to_compact_string(),
+            sheets: vec![sheet1_id, sheet2_id, sheet3_id],
+            active_sheet: sheet1_id,
+        };
+        master_data.write_workpad(Arc::new(workpad_data), 0);
 
         WorkpadMaster {
             data: Arc::new(master_data),
@@ -216,7 +202,6 @@ struct WorkpadMasterData {
     id: String,
     history: RwLock<Vec<HistoryEntry>>,
     active_version: RwLock<Version>,
-    #[allow(dead_code)] // TODO Growing the spreadsheet
     next_part_id: AtomicU32,
     workpad_idx: VersionIndex<(), WorkpadData>,
     sheets_idx: VersionIndex<SheetId, SheetData>,
@@ -247,6 +232,23 @@ impl WorkpadMasterData {
     /// Write sheet data for a specified version
     fn write_sheet(&self, id: SheetId, data: Arc<SheetData>, version: Version) {
         self.sheets_idx.write(id, data, version);
+    }
+
+    /// Create a new sheet and insert it into the master data
+    fn create_sheet(&mut self, version: Version, name: &str) -> SheetId {
+        let id = self.next_part_id.fetch_add(1, Ordering::SeqCst).into();
+        let columns = (0..99).map(ColumnData::new).collect();
+        let rows = (0..999).map(RowData::new).collect();
+        let data = SheetData {
+            name: name.to_compact_string(),
+            column_header_height: 20.0,
+            row_header_width: 60.0,
+            columns,
+            rows,
+            cells: HashMap::new(),
+        };
+        self.write_sheet(id, Arc::new(data), version);
+        id
     }
 }
 
@@ -346,22 +348,6 @@ pub struct SheetData {
     rows: Vec<RowData>,
     // TODO need something that allows insertions/deletion of rows/columns
     cells: HashMap<(usize, usize), CellData>,
-}
-
-impl SheetData {
-    /// Create data for a new sheet within a workpad
-    fn new(name: impl ToCompactString) -> Self {
-        let columns = (0..99).map(ColumnData::new).collect();
-        let rows = (0..999).map(RowData::new).collect();
-        Self {
-            name: name.to_compact_string(),
-            column_header_height: 20.0,
-            row_header_width: 60.0,
-            columns,
-            rows,
-            cells: HashMap::new(),
-        }
-    }
 }
 
 /// A sheet within a specific version of [`Workpad`].
