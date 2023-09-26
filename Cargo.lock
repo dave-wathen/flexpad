@@ -731,6 +731,7 @@ dependencies = [
  "compact_str",
  "flexpad-grid",
  "iced",
+ "internment",
  "once_cell",
  "unicode-segmentation",
  "uuid",
@@ -1951,6 +1952,16 @@ dependencies = [
  "js-sys",
  "wasm-bindgen",
  "web-sys",
+]
+
+[[package]]
+name = "internment"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "161079c3ad892faa215fcfcf3fd7a6a3c9288df2b06a2c2bad7fbfad4f01d69d"
+dependencies = [
+ "hashbrown 0.12.3",
+ "parking_lot 0.12.1",
 ]
 
 [[package]]

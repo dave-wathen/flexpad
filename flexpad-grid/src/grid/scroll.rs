@@ -500,7 +500,7 @@ where
                         state.scroll_x_to(
                             scrollbar.scroll_percentage_x(scroller_grabbed_at, cursor_position),
                             parts.cells_viewport.height,
-                            &grid_state.row_heights,
+                            &grid_state.column_widths,
                         );
                         state.notify_viewport_change(
                             &self.on_viewport_change,

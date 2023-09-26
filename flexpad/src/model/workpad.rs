@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::BTreeMap,
     fmt,
     ops::RangeBounds,
     sync::{
@@ -9,6 +9,7 @@ use std::{
 };
 
 use compact_str::{CompactString, ToCompactString};
+use internment::Intern;
 use uuid::Uuid;
 
 // Overview of the Workpad Model
@@ -48,15 +49,40 @@ use uuid::Uuid;
 //
 // ??? Factory methods for WorkpadUpdate ???
 
-// TODO Apply Id and version to Rows
-// TODO Apply Id and version to Columns
-// TODO Apply Id and version to Cells
 // TODO Update thread with message channel?
 // TODO Feed versions to UI as required to trigger redraws/updates?
+// TODO Review Internment vs CompactString
 //
 
 /// The version of a workpad
 type Version = u32;
+
+/// The type which underlies Id types
+type IdBase = u32;
+type IdBaseAtomic = AtomicU32;
+/// Macro for defining an Id type
+macro_rules! workpad_id_type {
+    ($(
+        #[$outer:meta])*
+        $type_name:ident
+    ) => {
+        $(#[$outer])*
+        #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+        pub struct $type_name(IdBase);
+
+        impl From<IdBase> for $type_name {
+            fn from(value: IdBase) -> Self {
+                Self(value)
+            }
+        }
+
+        impl std::fmt::Debug for $type_name {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "$type_name({})", self.0)
+            }
+        }
+    };
+}
 
 /// The type which collectively represents all versions of a workpad
 ///
@@ -81,9 +107,13 @@ impl WorkpadMaster {
                 update: WorkpadUpdate::NewWorkpad,
             }]),
             active_version: RwLock::new(0),
-            next_part_id: AtomicU32::new(0),
+            next_part_id: Default::default(),
             workpad_idx: Default::default(),
             sheets_idx: Default::default(),
+            columns_idx: Default::default(),
+            rows_idx: Default::default(),
+            cells_idx: Default::default(),
+            sheets_cells_idx: Default::default(),
         };
 
         let sheet1_id = master_data.create_sheet(0, "Sheet 1");
@@ -148,20 +178,40 @@ impl WorkpadMaster {
             }
             WorkpadUpdate::SetSheetCellValue {
                 sheet_id,
-                row,
-                column,
+                row_id,
+                column_id,
                 value,
             } => {
-                // TODO Temporary approach
-                let sheet_data = self.data.read_sheet(sheet_id, active_version);
-                let mut new_sheet_data = (*sheet_data).clone();
-                let cell_data = new_sheet_data
-                    .cells
-                    .entry((row, column))
-                    .or_insert_with(Default::default);
-                cell_data.value = Value::String(value.to_compact_string());
+                let active_cell_id =
+                    self.data
+                        .read_sheet_cell(sheet_id, row_id, column_id, active_version);
+                let base = match active_cell_id {
+                    Some(id) => (*self.data.read_cell(id, active_version)).clone(),
+                    None => Default::default(),
+                };
+                let cell_data = CellData {
+                    value: Value::String(value.into()),
+                    ..base
+                };
+
+                // If there is already a CellId that covers the new version we can use it and
+                // just write a new version for the CellData.  Otherwise allocate a new CellId.
+                let cell_id = self
+                    .data
+                    .read_sheet_cell(sheet_id, row_id, column_id, new_version)
+                    .unwrap_or_else(|| {
+                        let new_id = self.data.next_part_id.fetch_add(1, Ordering::SeqCst).into();
+                        self.data.write_sheet_cell(
+                            sheet_id,
+                            row_id,
+                            column_id,
+                            new_id,
+                            new_version,
+                        );
+                        new_id
+                    });
                 self.data
-                    .write_sheet(sheet_id, Arc::new(new_sheet_data), new_version);
+                    .write_cell(cell_id, Arc::new(cell_data), new_version);
             }
         }
 
@@ -183,8 +233,8 @@ pub enum WorkpadUpdate {
     /// specific sheet within a workpad.
     SetSheetCellValue {
         sheet_id: SheetId,
-        row: usize,
-        column: usize,
+        row_id: RowId,
+        column_id: ColumnId,
         value: String,
     },
 }
@@ -202,9 +252,13 @@ struct WorkpadMasterData {
     id: String,
     history: RwLock<Vec<HistoryEntry>>,
     active_version: RwLock<Version>,
-    next_part_id: AtomicU32,
-    workpad_idx: VersionIndex<(), WorkpadData>,
-    sheets_idx: VersionIndex<SheetId, SheetData>,
+    next_part_id: IdBaseAtomic,
+    workpad_idx: VersionIndex<(), Arc<WorkpadData>>,
+    sheets_idx: VersionIndex<SheetId, Arc<SheetData>>,
+    columns_idx: VersionIndex<ColumnId, Arc<ColumnData>>,
+    rows_idx: VersionIndex<RowId, Arc<RowData>>,
+    cells_idx: VersionIndex<CellId, Arc<CellData>>,
+    sheets_cells_idx: VersionIndex<(SheetId, RowId, ColumnId), CellId>,
 }
 
 const NO_VER: &str = "Version not found";
@@ -236,19 +290,96 @@ impl WorkpadMasterData {
 
     /// Create a new sheet and insert it into the master data
     fn create_sheet(&mut self, version: Version, name: &str) -> SheetId {
-        let id = self.next_part_id.fetch_add(1, Ordering::SeqCst).into();
-        let columns = (0..99).map(ColumnData::new).collect();
-        let rows = (0..999).map(RowData::new).collect();
+        let sheet_id = self.next_part_id.fetch_add(1, Ordering::SeqCst).into();
+
+        let column_data = Arc::new(ColumnData {
+            name: Name::Auto,
+            width: 100.0,
+        });
+        let columns = (0..99)
+            .map(|_| {
+                let column_id = self.next_part_id.fetch_add(1, Ordering::SeqCst).into();
+                self.write_column(column_id, column_data.clone(), version);
+                column_id
+            })
+            .collect();
+
+        let row_data = Arc::new(RowData {
+            name: Name::Auto,
+            height: 20.0,
+        });
+        let rows = (0..999)
+            .map(|_| {
+                let row_id = self.next_part_id.fetch_add(1, Ordering::SeqCst).into();
+                self.write_row(row_id, row_data.clone(), version);
+                row_id
+            })
+            .collect();
+
         let data = SheetData {
             name: name.to_compact_string(),
             column_header_height: 20.0,
             row_header_width: 60.0,
             columns,
             rows,
-            cells: HashMap::new(),
         };
-        self.write_sheet(id, Arc::new(data), version);
-        id
+        self.write_sheet(sheet_id, Arc::new(data), version);
+        sheet_id
+    }
+
+    /// Read column data for a specified version
+    fn read_column(&self, id: ColumnId, version: Version) -> Arc<ColumnData> {
+        self.columns_idx.read(id, version).expect(NO_VER)
+    }
+
+    /// Write column data for a specified version
+    fn write_column(&self, id: ColumnId, data: Arc<ColumnData>, version: Version) {
+        self.columns_idx.write(id, data, version);
+    }
+
+    /// Read row data for a specified version
+    fn read_row(&self, id: RowId, version: Version) -> Arc<RowData> {
+        self.rows_idx.read(id, version).expect(NO_VER)
+    }
+
+    /// Write row data for a specified version
+    fn write_row(&self, id: RowId, data: Arc<RowData>, version: Version) {
+        self.rows_idx.write(id, data, version);
+    }
+
+    /// Read cell data for a specified version
+    fn read_cell(&self, id: CellId, version: Version) -> Arc<CellData> {
+        self.cells_idx.read(id, version).expect(NO_VER)
+    }
+
+    /// Write cell data for a specified version
+    fn write_cell(&self, id: CellId, data: Arc<CellData>, version: Version) {
+        self.cells_idx.write(id, data, version);
+    }
+
+    /// Read cell data for a specified version
+    fn read_sheet_cell(
+        &self,
+        sheet_id: SheetId,
+        row_id: RowId,
+        column_id: ColumnId,
+        version: Version,
+    ) -> Option<CellId> {
+        self.sheets_cells_idx
+            .read((sheet_id, row_id, column_id), version)
+    }
+
+    /// Write cell data for a specified version
+    fn write_sheet_cell(
+        &self,
+        sheet_id: SheetId,
+        row_id: RowId,
+        column_id: ColumnId,
+        id: CellId,
+        version: Version,
+    ) {
+        self.sheets_cells_idx
+            .write((sheet_id, row_id, column_id), id, version);
     }
 }
 
@@ -281,6 +412,8 @@ impl Workpad {
     /// Returns a [`Sheet`] representing the active sheet in this [`Workpad`]
     pub fn active_sheet(&self) -> Sheet {
         Sheet {
+            master: self.master.clone(),
+            version: self.version,
             id: self.data.active_sheet,
             data: self.master.read_sheet(self.data.active_sheet, self.version),
         }
@@ -313,30 +446,14 @@ impl Workpad {
         column: usize,
         value: String,
     ) -> WorkpadUpdate {
-        WorkpadUpdate::SetSheetCellValue {
-            sheet_id: self.data.active_sheet,
-            row,
-            column,
-            value,
-        }
+        self.active_sheet().set_cell_value(row, column, value)
     }
 }
 
-/// The Id for a sheet in a workpad
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct SheetId(u32);
-
-impl From<u32> for SheetId {
-    fn from(value: u32) -> Self {
-        Self(value)
-    }
-}
-
-impl std::fmt::Debug for SheetId {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "SheetId({})", self.0)
-    }
-}
+workpad_id_type!(
+    #[doc = "The Id for a sheet in a workpad"]
+    SheetId
+);
 
 /// Data structure to store information related to a sheet within a workpad.
 #[derive(Debug, Clone)]
@@ -344,14 +461,15 @@ pub struct SheetData {
     name: CompactString,
     column_header_height: f32,
     row_header_width: f32,
-    columns: Vec<ColumnData>,
-    rows: Vec<RowData>,
-    // TODO need something that allows insertions/deletion of rows/columns
-    cells: HashMap<(usize, usize), CellData>,
+    columns: Vec<ColumnId>,
+    rows: Vec<RowId>,
 }
 
 /// A sheet within a specific version of [`Workpad`].
+#[derive(Clone)]
 pub struct Sheet {
+    master: Arc<WorkpadMasterData>,
+    version: Version,
     id: SheetId,
     data: Arc<SheetData>,
 }
@@ -369,33 +487,34 @@ impl Sheet {
     }
 
     /// Return an iterator to the [`Column`]s held by this [`Sheet`]
-    pub fn columns(&self) -> impl ExactSizeIterator<Item = Column<'_>> {
-        self.data
-            .columns
-            .iter()
-            .enumerate()
-            .map(|(index, data)| Column::new(data, index))
+    pub fn columns(&self) -> impl ExactSizeIterator<Item = Column> + '_ {
+        (0..(self.data.columns.len())).map(|idx| self.column(idx))
     }
 
     /// Return a [`Column`] held by this [`Sheet`] given its index
-    #[allow(dead_code)]
-    pub fn column(&self, index: usize) -> Column<'_> {
-        Column::new(&self.data.columns[index], index)
+    pub fn column(&self, index: usize) -> Column {
+        let column_id = self.data.columns[index];
+        let column_data = self.master.read_column(column_id, self.version);
+        Column {
+            data: column_data,
+            index,
+        }
     }
 
     /// Return an iterator to the [`Rows`]s held by this [`Sheet`]
-    pub fn rows(&self) -> impl ExactSizeIterator<Item = Row<'_>> {
-        self.data
-            .rows
-            .iter()
-            .enumerate()
-            .map(|(index, data)| Row::new(data, index))
+    pub fn rows(&self) -> impl ExactSizeIterator<Item = Row> + '_ {
+        (0..(self.data.rows.len())).map(|idx| self.row(idx))
     }
 
     /// Return a [`Row`] held by this [`Sheet`] given its index
     #[allow(dead_code)]
-    pub fn row(&self, index: usize) -> Row<'_> {
-        Row::new(&self.data.rows[index], index)
+    pub fn row(&self, index: usize) -> Row {
+        let row_id = self.data.rows[index];
+        let row_data = self.master.read_row(row_id, self.version);
+        Row {
+            data: row_data,
+            index,
+        }
     }
 
     /// Returns the height to be used for column headings when this
@@ -411,7 +530,7 @@ impl Sheet {
     }
 
     #[allow(dead_code)]
-    pub fn cells(&self) -> impl Iterator<Item = Cell<'_>> {
+    pub fn cells(&self) -> impl Iterator<Item = Cell> + '_ {
         // TODO use a range
         let rows = self.data.rows.len();
         let cols = self.data.columns.len();
@@ -433,22 +552,31 @@ impl Sheet {
     }
 
     /// Return a [`Row`] held by this [`Sheet`] given its row and column indices.
-    pub fn cell(&self, row: usize, column: usize) -> Cell<'_> {
-        let cell_data = self
-            .data
-            .cells
-            .get(&(row, column))
-            .cloned()
-            .unwrap_or_else(CellData::new);
-        Cell::new(
-            &self.data.rows[row],
-            row,
-            &self.data.columns[column],
-            column,
-            cell_data,
-        )
+    pub fn cell(&self, row: usize, column: usize) -> Cell {
+        let row_id = self.data.rows[row];
+        let column_id = self.data.columns[column];
+        let cell_id = self
+            .master
+            .read_sheet_cell(self.id, row_id, column_id, self.version);
+        let cell_data = cell_id.map(|id| self.master.read_cell(id, self.version));
+        Cell::new(self.row(row), self.column(column), cell_id, cell_data)
+    }
+
+    /// Generate a [`WorkpadUpdate`] representing a change of value for a cell in this sheet
+    pub fn set_cell_value(&mut self, row: usize, column: usize, value: String) -> WorkpadUpdate {
+        WorkpadUpdate::SetSheetCellValue {
+            sheet_id: self.id,
+            row_id: self.data.rows[row],
+            column_id: self.data.columns[column],
+            value,
+        }
     }
 }
+
+workpad_id_type!(
+    #[doc = "The Id for a column in a sheet of a workpad"]
+    ColumnId
+);
 
 /// Data structure to store information related to a column of a sheet within a workpad.
 #[derive(Debug, Clone)]
@@ -457,27 +585,17 @@ struct ColumnData {
     width: f32,
 }
 
-impl ColumnData {
-    // Create a new column data
-    fn new(index: usize) -> Self {
-        Self {
-            name: Name::Auto(create_column_name(index)),
-            width: 100.0,
-        }
-    }
-}
-
 /// A column within a specific version of a [`Sheet`] in a [`Workpad`].
-#[allow(dead_code)]
-pub struct Column<'pad> {
-    data: &'pad ColumnData,
+#[derive(Debug, Clone)]
+pub struct Column {
+    data: Arc<ColumnData>,
     index: usize,
 }
 
 #[allow(dead_code)]
-impl Column<'_> {
+impl Column {
     /// Create a new [`Column`]
-    fn new(data: &'_ ColumnData, index: usize) -> Column<'_> {
+    fn new(data: Arc<ColumnData>, index: usize) -> Column {
         Column { data, index }
     }
 
@@ -489,7 +607,7 @@ impl Column<'_> {
     /// Return the name of this [`Column`]
     pub fn name(&self) -> &str {
         match &self.data.name {
-            Name::Auto(n) => n,
+            Name::Auto => Intern::new(create_column_name(self.index()).to_string()).as_ref(),
             Name::Custom(n) => n,
         }
     }
@@ -500,6 +618,11 @@ impl Column<'_> {
     }
 }
 
+workpad_id_type!(
+    #[doc = "The Id for a row in a sheet of a workpad"]
+    RowId
+);
+
 /// Data structure to store information related to a row of a sheet within a workpad.
 #[derive(Debug, Clone)]
 struct RowData {
@@ -507,27 +630,18 @@ struct RowData {
     height: f32,
 }
 
-impl RowData {
-    // Create a new row data
-    fn new(index: usize) -> Self {
-        Self {
-            name: Name::Auto((index + 1).to_compact_string()),
-            height: 20.0,
-        }
-    }
-}
-
 /// A row within a specific version of a [`Sheet`] in a [`Workpad`].
 #[allow(dead_code)]
-pub struct Row<'pad> {
-    data: &'pad RowData,
+#[derive(Debug, Clone)]
+pub struct Row {
+    data: Arc<RowData>,
     index: usize,
 }
 
 #[allow(dead_code)]
-impl Row<'_> {
+impl Row {
     /// Create a new [`Row`]
-    fn new(data: &'_ RowData, index: usize) -> Row<'_> {
+    fn new(data: Arc<RowData>, index: usize) -> Row {
         Row { data, index }
     }
 
@@ -539,7 +653,8 @@ impl Row<'_> {
     /// Return the name of this [`Row`].
     pub fn name(&self) -> &str {
         match &self.data.name {
-            Name::Auto(n) => n,
+            // TODO Can we avoid the repeated to_string for this (and in Column, and Cell)?
+            Name::Auto => Intern::new((self.index + 1).to_string()).as_ref(),
             Name::Custom(n) => n,
         }
     }
@@ -550,95 +665,75 @@ impl Row<'_> {
     }
 }
 
+workpad_id_type!(
+    #[doc = "The Id for a cell in a workpad"]
+    CellId
+);
+
 /// Data structure to store information related to a cell within a workpad.
 // TODO value types, borders, alignment, etc.
 #[derive(Debug, Default, Clone)]
 struct CellData {
+    name: Name,
     value: Value,
 }
 
-impl CellData {
-    // Create a new cell data
-    fn new() -> Self {
-        Default::default()
-    }
-}
-
 /// A cell within a specific version of a [`Workpad`].
-pub struct Cell<'pad> {
-    row_data: &'pad RowData,
-    row_index: usize,
-    column_data: &'pad ColumnData,
-    column_index: usize,
-    cell_data: CellData,
-    name: Name,
+pub struct Cell {
+    row: Row,
+    column: Column,
+    #[allow(dead_code)]
+    id: Option<CellId>,
+    data: Option<Arc<CellData>>,
 }
 
 #[allow(dead_code)]
-impl Cell<'_> {
+impl Cell {
     /// Create a new [`Cell`]
-    fn new<'pad>(
-        row_data: &'pad RowData,
-        row_index: usize,
-        column_data: &'pad ColumnData,
-        column_index: usize,
-        cell_data: CellData,
-    ) -> Cell<'pad> {
-        let name = match (&row_data.name, &column_data.name) {
-            (Name::Auto(row_name), Name::Auto(column_name)) => {
-                Name::Auto(column_name.clone() + row_name)
-            }
-            (Name::Auto(_), Name::Custom(_)) => todo!(),
-            (Name::Custom(_), Name::Auto(_)) => todo!(),
-            (Name::Custom(_), Name::Custom(_)) => todo!(),
-        };
+    fn new(row: Row, column: Column, id: Option<CellId>, data: Option<Arc<CellData>>) -> Cell {
         Cell {
-            row_data,
-            row_index,
-            column_data,
-            column_index,
-            cell_data,
-            name,
+            row,
+            column,
+            id,
+            data,
         }
-    }
-
-    /// Returns the [`Row`] to which this cell belongs
-    // TODO Optional?
-    pub fn row(&self) -> Row<'_> {
-        Row::new(self.row_data, self.row_index)
-    }
-
-    /// Returns the [`Column`] to which this cell belongs
-    // TODO Optional?
-    pub fn column(&self) -> Column<'_> {
-        Column::new(self.column_data, self.column_index)
     }
 
     /// Returns the width of this [`Cell`]
     // TODO Optional?
     pub fn width(&self) -> f32 {
-        self.column_data.width
+        self.column.width()
     }
 
     /// Returns the height of this [`Cell`]
     pub fn height(&self) -> f32 {
-        self.row_data.height
+        self.row.height()
     }
 
     /// Returns the name of this [`Cell`]
     pub fn name(&self) -> &str {
-        match &self.name {
-            Name::Auto(n) => n,
-            Name::Custom(n) => n,
+        let custom = match &self.data {
+            Some(data) => match &data.name {
+                Name::Auto => None,
+                Name::Custom(n) => Some(n),
+            },
+            None => None,
+        };
+        match custom {
+            Some(n) => n,
+            None => Intern::new(format!("{}{}", self.column.name(), self.row.name())).as_ref(),
         }
     }
 
     /// Returns the value of this [`Cell`]
     // TODO How do we want to expose values?
     pub fn value(&self) -> &str {
-        match &self.cell_data.value {
-            Value::Empty => "",
-            Value::String(s) => s,
+        match &self.data {
+            Some(data) => match &data.value {
+                Value::Empty => "",
+                Value::String(s) => s,
+            },
+            None => "",
         }
     }
 }
@@ -653,10 +748,11 @@ pub enum Value {
 
 /// A name
 #[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 enum Name {
     /// The name is automatically derived
-    Auto(CompactString),
+    #[default]
+    Auto,
     /// The name is explicitly set
     Custom(CompactString),
 }
@@ -772,15 +868,17 @@ mod tests {
 struct VersionIndex<Id, Data>
 where
     Id: Copy + std::cmp::Ord,
+    Data: Clone,
 {
-    index: RwLock<BTreeMap<(Id, Version, Version), Arc<Data>>>,
+    index: RwLock<BTreeMap<(Id, Version, Version), Data>>,
 }
 
 impl<Id, Data> VersionIndex<Id, Data>
 where
     Id: Copy + std::cmp::Ord,
+    Data: Clone,
 {
-    fn read(&self, id: Id, version: Version) -> Option<Arc<Data>> {
+    fn read(&self, id: Id, version: Version) -> Option<Data> {
         let index = self.index.read().unwrap();
         index
             .range(Self::all_versions(id))
@@ -788,7 +886,7 @@ where
             .map(|(_, v)| (*v).clone())
     }
 
-    fn write(&self, id: Id, data: Arc<Data>, version: Version) {
+    fn write(&self, id: Id, data: Data, version: Version) {
         let mut index = self.index.write().unwrap();
         let existing = index
             .range(Self::all_versions(id))
@@ -832,6 +930,7 @@ where
 impl<Id, Data> Default for VersionIndex<Id, Data>
 where
     Id: Copy + std::cmp::Ord,
+    Data: Clone,
 {
     fn default() -> Self {
         Self {
