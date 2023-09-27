@@ -8,8 +8,8 @@ use std::{
     },
 };
 
-use compact_str::{CompactString, ToCompactString};
 use internment::Intern;
+use once_cell::sync::Lazy;
 use uuid::Uuid;
 
 // Overview of the Workpad Model
@@ -51,7 +51,6 @@ use uuid::Uuid;
 
 // TODO Update thread with message channel?
 // TODO Feed versions to UI as required to trigger redraws/updates?
-// TODO Review Internment vs CompactString
 //
 
 /// The version of a workpad
@@ -121,7 +120,7 @@ impl WorkpadMaster {
         let sheet3_id = master_data.create_sheet(0, "Sheet 3");
 
         let workpad_data = WorkpadData {
-            name: "Unnamed".to_compact_string(),
+            name: Intern::from("Unnamed"),
             sheets: vec![sheet1_id, sheet2_id, sheet3_id],
             active_sheet: sheet1_id,
         };
@@ -161,7 +160,7 @@ impl WorkpadMaster {
             WorkpadUpdate::SetWorkpadName { new_name } => {
                 let workpad_data = self.data.read_workpad(active_version);
                 let new_workpad_data = WorkpadData {
-                    name: new_name.to_compact_string(),
+                    name: Intern::from(new_name.as_str()),
                     ..(*workpad_data).clone()
                 };
                 self.data
@@ -170,7 +169,7 @@ impl WorkpadMaster {
             WorkpadUpdate::SetSheetName { sheet_id, new_name } => {
                 let sheet_data = self.data.read_sheet(sheet_id, active_version);
                 let new_sheet_data = SheetData {
-                    name: new_name.to_compact_string(),
+                    name: Intern::from(new_name.as_str()),
                     ..(*sheet_data).clone()
                 };
                 self.data
@@ -190,7 +189,7 @@ impl WorkpadMaster {
                     None => Default::default(),
                 };
                 let cell_data = CellData {
-                    value: Value::String(value.into()),
+                    value: Value::String(Intern::from(value.as_str())),
                     ..base
                 };
 
@@ -317,7 +316,7 @@ impl WorkpadMasterData {
             .collect();
 
         let data = SheetData {
-            name: name.to_compact_string(),
+            name: Intern::from(name),
             column_header_height: 20.0,
             row_header_width: 60.0,
             columns,
@@ -386,7 +385,7 @@ impl WorkpadMasterData {
 /// Data structure to store information related only to the workpad.
 #[derive(Debug, Clone)]
 struct WorkpadData {
-    name: CompactString,
+    name: Intern<str>,
     #[allow(dead_code)]
     sheets: Vec<SheetId>,
     active_sheet: SheetId,
@@ -458,7 +457,7 @@ workpad_id_type!(
 /// Data structure to store information related to a sheet within a workpad.
 #[derive(Debug, Clone)]
 pub struct SheetData {
-    name: CompactString,
+    name: Intern<str>,
     column_header_height: f32,
     row_header_width: f32,
     columns: Vec<ColumnId>,
@@ -607,7 +606,7 @@ impl Column {
     /// Return the name of this [`Column`]
     pub fn name(&self) -> &str {
         match &self.data.name {
-            Name::Auto => Intern::new(create_column_name(self.index()).to_string()).as_ref(),
+            Name::Auto => create_column_name(self.index()).as_ref(),
             Name::Custom(n) => n,
         }
     }
@@ -653,8 +652,7 @@ impl Row {
     /// Return the name of this [`Row`].
     pub fn name(&self) -> &str {
         match &self.data.name {
-            // TODO Can we avoid the repeated to_string for this (and in Column, and Cell)?
-            Name::Auto => Intern::new((self.index + 1).to_string()).as_ref(),
+            Name::Auto => intern_usize(self.index + 1).as_ref(),
             Name::Custom(n) => n,
         }
     }
@@ -743,7 +741,7 @@ impl Cell {
 pub enum Value {
     #[default]
     Empty,
-    String(CompactString),
+    String(Intern<str>),
 }
 
 /// A name
@@ -754,10 +752,10 @@ enum Name {
     #[default]
     Auto,
     /// The name is explicitly set
-    Custom(CompactString),
+    Custom(Intern<str>),
 }
 
-fn create_column_name(column: usize) -> CompactString {
+fn create_column_name(column: usize) -> Intern<str> {
     // The column names are a series of base 26 (A=0, B=1, ... Z=25) number sequences
     // that are zero-(A-)padded to a length so one range is distinguished from
     // others.  That is:
@@ -777,51 +775,57 @@ fn create_column_name(column: usize) -> CompactString {
     const HI_5: usize = HI_4 + 26_usize.pow(5);
 
     match column {
-        LO_1..=HI_1 => unsafe { CompactString::from_utf8_unchecked([b'A' + column as u8]) },
-        LO_2..=HI_2 => {
-            let cl = column - LO_2;
-            unsafe {
-                CompactString::from_utf8_unchecked([
-                    b'A' + ((cl / 26) % 26) as u8,
-                    b'A' + (cl % 26) as u8,
-                ])
-            }
-        }
-        LO_3..=HI_3 => {
-            let cl = column - LO_3;
-            unsafe {
-                CompactString::from_utf8_unchecked([
-                    b'A' + ((cl / 26 / 26) % 26) as u8,
-                    b'A' + ((cl / 26) % 26) as u8,
-                    b'A' + (cl % 26) as u8,
-                ])
-            }
-        }
-        LO_4..=HI_4 => {
-            let cl = column - LO_4;
-            unsafe {
-                CompactString::from_utf8_unchecked([
-                    b'A' + ((cl / 26 / 26 / 26) % 26) as u8,
-                    b'A' + ((cl / 26 / 26) % 26) as u8,
-                    b'A' + ((cl / 26) % 26) as u8,
-                    b'A' + (cl % 26) as u8,
-                ])
-            }
-        }
-        LO_5..=HI_5 => {
-            let cl = column - LO_5;
-            unsafe {
-                CompactString::from_utf8_unchecked([
-                    b'A' + ((cl / 26 / 26 / 26 / 26) % 26) as u8,
-                    b'A' + ((cl / 26 / 26 / 26) % 26) as u8,
-                    b'A' + ((cl / 26 / 26) % 26) as u8,
-                    b'A' + ((cl / 26) % 26) as u8,
-                    b'A' + (cl % 26) as u8,
-                ])
-            }
-        }
+        LO_1..=HI_1 => intern_base_26(column, 1),
+        LO_2..=HI_2 => intern_base_26(column - LO_2, 2),
+        LO_3..=HI_3 => intern_base_26(column - LO_3, 3),
+        LO_4..=HI_4 => intern_base_26(column - LO_4, 4),
+        LO_5..=HI_5 => intern_base_26(column - LO_5, 5),
         _ => panic!("Column too large"),
     }
+}
+
+fn intern_base_26(i: usize, min_len: usize) -> Intern<str> {
+    let mut buffer = [b'A'; 20];
+    let mut rem = i;
+    let mut idx = 19;
+    loop {
+        buffer[idx] = b'A' + (rem % 26) as u8;
+        if rem < 26 {
+            break;
+        }
+        rem /= 26;
+        idx -= 1;
+    }
+    Intern::from(unsafe { std::str::from_utf8_unchecked(&buffer[(20 - min_len)..20]) })
+}
+
+static LOW_NUMBERS: Lazy<[Intern<str>; 1000]> = Lazy::new(|| {
+    let zero = Intern::from("0");
+    let mut result: [Intern<str>; 1000] = [zero; 1000];
+    (1..=999).for_each(|i| result[i] = intern_base_10(i));
+    result
+});
+
+fn intern_usize(i: usize) -> Intern<str> {
+    match i {
+        0..=999 => LOW_NUMBERS[i],
+        _ => intern_base_10(i),
+    }
+}
+
+fn intern_base_10(i: usize) -> Intern<str> {
+    let mut buffer = [b'0'; 20];
+    let mut rem = i;
+    let mut idx = 19;
+    loop {
+        buffer[idx] = b'0' + (rem % 10) as u8;
+        if rem < 10 {
+            break;
+        }
+        rem /= 10;
+        idx -= 1;
+    }
+    Intern::from(unsafe { std::str::from_utf8_unchecked(&buffer[idx..20]) })
 }
 
 #[cfg(test)]

@@ -17,5 +17,4 @@ uuid = { workspace = true }
 
 flexpad-grid = { path = "../flexpad-grid" }
 
-compact_str = "0.7.1"
 once_cell = "1.18.0"
