@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, path::Display, rc::Rc};
 
 use crate::model::workpad::{Workpad, WorkpadMaster, WorkpadUpdate};
 use flexpad_grid::{
@@ -49,10 +49,17 @@ pub enum WorkpadMessage {
     SheetNameEditStart,
     SheetNameEdited(String),
     SheetNameEditEnd,
+    SheetShowDetails,
     Focus(widget::Id),
     ViewportChanged(Viewport),
     ActiveCellMove(Move),
     ActiveCellNewValue(String),
+}
+
+impl std::fmt::Display for WorkpadMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -195,7 +202,7 @@ impl WorkpadUI {
                 // TODO
                 button(images::delete(), WorkpadMessage::NoOp),
                 // TODO
-                button(images::expand_more(), WorkpadMessage::NoOp),
+                button(images::expand_more(), WorkpadMessage::SheetShowDetails),
             ]
             .width(200)
             .into(),
@@ -436,6 +443,10 @@ impl WorkpadUI {
                         text_input::focus(self.sheet_edit_id.clone()),
                         text_input::select_all(self.sheet_edit_id.clone()),
                     ])
+                }
+                WorkpadMessage::SheetShowDetails => {
+                    dbg!("Show sheet details");
+                    Command::none()
                 }
                 _ => Command::none(),
             },

@@ -10,10 +10,12 @@ build = "build.rs"
 vergen = { version = "8.2.1", features = [ "build", "git", "gitoxide" ] }
 
 [dependencies]
-iced = { workspace = true }
-internment =  { workspace = true }
-unicode-segmentation = { workspace = true }
-uuid = { workspace = true }
+iced.workspace = true
+internment.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+unicode-segmentation.workspace = true
+uuid.workspace = true
 
 flexpad-grid = { path = "../flexpad-grid" }
 

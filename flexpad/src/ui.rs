@@ -1,6 +1,9 @@
+use std::path::Display;
+
 use crate::version::Version;
 use iced::widget::{button, column, horizontal_rule, image, row, text};
 use iced::{alignment, theme, window, Alignment, Application, Command, Length, Settings, Theme};
+use tracing::info;
 
 use self::workpad::{WorkpadMessage, WorkpadUI};
 use crate::model::workpad::WorkpadMaster;
@@ -31,6 +34,15 @@ pub enum Message {
     WorkpadMessage(WorkpadMessage),
 }
 
+impl std::fmt::Display for Message {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Message::OpenNewWokpad => write!(f, "Message::OpenNewWokpad"),
+            Message::WorkpadMessage(msg) => write!(f, "Message::WorkpadMessage({msg})"),
+        }
+    }
+}
+
 impl Application for Flexpad {
     type Message = Message;
     type Theme = Theme;
@@ -55,6 +67,10 @@ impl Application for Flexpad {
     }
 
     fn update(&mut self, message: Self::Message) -> Command<Message> {
+        info!(
+            %message,
+            "Flexpad update"
+        );
         match self.state {
             State::FrontScreen => match message {
                 Message::OpenNewWokpad => {
