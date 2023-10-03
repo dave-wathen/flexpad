@@ -1,4 +1,4 @@
-use std::{cell::RefCell, path::Display, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
 use crate::model::workpad::{Workpad, WorkpadMaster, WorkpadUpdate};
 use flexpad_grid::{

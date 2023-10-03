@@ -1,5 +1,3 @@
-use std::path::Display;
-
 use crate::version::Version;
 use iced::widget::{button, column, horizontal_rule, image, row, text};
 use iced::{alignment, theme, window, Alignment, Application, Command, Length, Settings, Theme};
