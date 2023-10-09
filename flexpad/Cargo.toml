@@ -11,9 +11,11 @@ vergen = { version = "8.2.1", features = [ "build", "git", "gitoxide" ] }
 
 [dependencies]
 iced.workspace = true
+iced_aw.workspace = true
 internment.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+whoami.workspace = true
 unicode-segmentation.workspace = true
 uuid.workspace = true
 

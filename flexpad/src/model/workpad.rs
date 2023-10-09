@@ -121,6 +121,7 @@ impl WorkpadMaster {
 
         let workpad_data = WorkpadData {
             name: Intern::from("Unnamed"),
+            author: Intern::from(whoami::realname().as_ref()),
             sheets: vec![sheet1_id, sheet2_id, sheet3_id],
             active_sheet: sheet1_id,
         };
@@ -157,10 +158,14 @@ impl WorkpadMaster {
 
         match update {
             WorkpadUpdate::NewWorkpad => panic!("NewWorkpad not allowed for exisiting Workpad"),
-            WorkpadUpdate::SetWorkpadName { new_name } => {
+            WorkpadUpdate::SetWorkpadProperties {
+                new_name,
+                new_author,
+            } => {
                 let workpad_data = self.data.read_workpad(active_version);
                 let new_workpad_data = WorkpadData {
                     name: Intern::from(new_name.as_str()),
+                    author: Intern::from(new_author.as_str()),
                     ..(*workpad_data).clone()
                 };
                 self.data
@@ -225,7 +230,10 @@ pub enum WorkpadUpdate {
     /// Used to represent the creation of a workpad.  See [`WorkpadMaster::new`].
     NewWorkpad,
     /// Instruction to change the name of the workpad
-    SetWorkpadName { new_name: String },
+    SetWorkpadProperties {
+        new_name: String,
+        new_author: String,
+    },
     /// Instruction to change the name of a specific sheet within a workpad.
     SetSheetName { sheet_id: SheetId, new_name: String },
     /// Instruction to change the value of a cell at a row/column reference of a
@@ -386,12 +394,14 @@ impl WorkpadMasterData {
 #[derive(Debug, Clone)]
 struct WorkpadData {
     name: Intern<str>,
+    author: Intern<str>,
     #[allow(dead_code)]
     sheets: Vec<SheetId>,
     active_sheet: SheetId,
 }
 
 /// A version of a workpad.  See [`WorkpadMaster::active_version()`].
+#[derive(Clone)]
 pub struct Workpad {
     master: Arc<WorkpadMasterData>,
     version: Version,
@@ -423,9 +433,9 @@ impl Workpad {
         &self.data.name
     }
 
-    /// Generate a [`WorkpadUpdate`] representing a change of name for this workpad.
-    pub fn set_name(&mut self, new_name: String) -> WorkpadUpdate {
-        WorkpadUpdate::SetWorkpadName { new_name }
+    /// Returns the name of the workpad
+    pub fn author(&self) -> &str {
+        &self.data.author
     }
 
     /// Generate a [`WorkpadUpdate`] representing a change of name for the active

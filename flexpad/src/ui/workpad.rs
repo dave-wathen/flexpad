@@ -11,16 +11,19 @@ use iced::{
     widget::{button, column, horizontal_space, image, row, text, text_input, vertical_rule},
     Alignment, Color, Command, Element, Length,
 };
+use iced_aw::{helpers::menu_bar, helpers::menu_tree, modal, ItemHeight, ItemWidth, MenuTree};
 
 use self::{
     active::{ActiveCell, Editor},
     inactive::InactiveCell,
+    pad_properties::{PadPropertiesMessage, PadPropertiesUi},
 };
 
-use super::images;
+use super::{images, SPACE_S};
 
 mod active;
 mod inactive;
+mod pad_properties;
 
 use once_cell::sync::Lazy;
 
@@ -34,8 +37,14 @@ static GRID_SCROLLABLE_ID: Lazy<flexpad_grid::scroll::Id> =
 enum State {
     #[default]
     Passive,
-    EditingPadName(String),
     EditingSheetName(String),
+}
+
+#[derive(Debug, Default)]
+enum ShowModal {
+    #[default]
+    None,
+    PadProperties(PadPropertiesUi),
 }
 
 #[derive(Debug, Clone)]
@@ -43,9 +52,8 @@ pub enum WorkpadMessage {
     NoOp, // TODO Temporary
     Multi(Vec<WorkpadMessage>),
     PadClose,
-    PadNameEditStart,
-    PadNameEdited(String),
-    PadNameEditEnd,
+    PadShowProperties,
+    PadPropertiesMsg(PadPropertiesMessage),
     SheetNameEditStart,
     SheetNameEdited(String),
     SheetNameEditEnd,
@@ -79,12 +87,12 @@ pub struct WorkpadUI {
     pad_master: WorkpadMaster,
     pad: Workpad,
     state: State,
-    name_edit_id: text_input::Id,
     sheet_edit_id: text_input::Id,
     visible_cells: CellRange,
     active_cell: RowCol,
     active_cell_editor: Rc<RefCell<active::Editor>>,
     focus: widget::Id,
+    modal: ShowModal,
 }
 
 impl WorkpadUI {
@@ -100,12 +108,12 @@ impl WorkpadUI {
             pad_master,
             pad,
             state: Default::default(),
-            name_edit_id: text_input::Id::unique(),
             sheet_edit_id: text_input::Id::unique(),
             visible_cells: CellRange::empty(),
             active_cell: (0, 0).into(),
             active_cell_editor: Rc::new(RefCell::new(active_cell_editor)),
             focus: ACTIVE_CELL_ID.clone().into(),
+            modal: Default::default(),
         }
     }
 
@@ -114,46 +122,47 @@ impl WorkpadUI {
     }
 
     pub fn view(&self) -> iced::Element<'_, WorkpadMessage> {
-        column![
-            self.name_view(),
+        let screen = column![
+            self.menu_bar(),
             self.toolbar_view(),
             self.sheet_and_formula_row_view(),
             self.grid_view(),
         ]
         .padding(10)
-        .spacing(5)
+        .spacing(SPACE_S)
         .align_items(Alignment::Start)
-        .into()
-    }
+        .into();
 
-    // TODO Row sized increases when switching to edit
-    fn name_view(&self) -> iced::Element<'_, WorkpadMessage> {
-        let button = |img, msg| {
-            button(image(img))
-                .on_press(msg)
-                .width(Length::Shrink)
-                .height(25)
-                .padding(2)
-                .style(theme::Button::Text)
-        };
-
-        match &self.state {
-            State::EditingPadName(name) => text_input("Workpad Name", name)
-                .id(self.name_edit_id.clone())
-                .size(25)
-                .on_input(WorkpadMessage::PadNameEdited)
-                .on_submit(WorkpadMessage::PadNameEditEnd)
-                .into(),
-            _ => row![
-                text(self.pad.name()).size(25),
-                horizontal_space(5),
-                button(images::edit(), WorkpadMessage::PadNameEditStart),
-                // TODO No actal delete (since no actual save) at present
-                button(images::delete(), WorkpadMessage::PadClose),
-                button(images::close(), WorkpadMessage::PadClose),
-            ]
+        match &self.modal {
+            ShowModal::None => screen,
+            ShowModal::PadProperties(ui) => modal(
+                screen,
+                Some(ui.view().map(WorkpadMessage::PadPropertiesMsg)),
+            )
+            .on_esc(WorkpadMessage::PadPropertiesMsg(
+                PadPropertiesMessage::Cancel,
+            ))
+            .align_y(alignment::Vertical::Center)
+            .align_x(alignment::Horizontal::Center)
             .into(),
         }
+    }
+
+    // TODO Switch to system menus once available
+    fn menu_bar(&self) -> iced::Element<'_, WorkpadMessage> {
+        menu_bar(vec![menu_parent(
+            "Workpad",
+            vec![
+                // TODO Modal for properties
+                menu_leaf("Properties...", WorkpadMessage::PadShowProperties),
+                // TODO No actual delete (since no actual save) at present
+                menu_leaf("Delete Workpad", WorkpadMessage::PadClose),
+                menu_leaf("Close Workpad", WorkpadMessage::PadClose),
+            ],
+        )])
+        .item_width(ItemWidth::Uniform(180))
+        .item_height(ItemHeight::Uniform(27))
+        .into()
     }
 
     fn toolbar_view(&self) -> iced::Element<'_, WorkpadMessage> {
@@ -173,7 +182,7 @@ impl WorkpadUI {
             button(images::settings(), WorkpadMessage::NoOp),
         ]
         .height(20)
-        .spacing(3)
+        .spacing(SPACE_S)
         .into()
     }
 
@@ -237,7 +246,7 @@ impl WorkpadUI {
             formula
         ]
         .height(20)
-        .spacing(5)
+        .spacing(SPACE_S)
         .into()
     }
 
@@ -430,12 +439,30 @@ impl WorkpadUI {
                     ensure_cell_visible(GRID_SCROLLABLE_ID.clone(), self.active_cell)
                         .map(WorkpadMessage::ViewportChanged)
                 }
-                WorkpadMessage::PadNameEditStart => {
-                    self.state = State::EditingPadName(self.pad.name().to_owned());
-                    Command::batch(vec![
-                        text_input::focus(self.name_edit_id.clone()),
-                        text_input::select_all(self.name_edit_id.clone()),
-                    ])
+                WorkpadMessage::PadShowProperties => {
+                    self.modal = ShowModal::PadProperties(PadPropertiesUi::new(self.pad.clone()));
+                    Command::none()
+                }
+                WorkpadMessage::PadPropertiesMsg(PadPropertiesMessage::Cancel) => {
+                    self.modal = ShowModal::None;
+                    Command::none()
+                }
+                WorkpadMessage::PadPropertiesMsg(PadPropertiesMessage::Submit) => {
+                    let mut modal = ShowModal::None;
+                    std::mem::swap(&mut modal, &mut self.modal);
+                    if let ShowModal::PadProperties(props) = modal {
+                        self.update_pad(props.into_update())
+                    } else {
+                        panic!("PadPropertiesMsg not expected for this modal")
+                    }
+                    Command::none()
+                }
+                WorkpadMessage::PadPropertiesMsg(msg) => {
+                    if let ShowModal::PadProperties(ref mut props) = self.modal {
+                        props.update(msg).map(WorkpadMessage::PadPropertiesMsg)
+                    } else {
+                        panic!("PadPropertiesMsg not expected for this modal")
+                    }
                 }
                 WorkpadMessage::SheetNameEditStart => {
                     self.state = State::EditingSheetName(self.pad.active_sheet().name().to_owned());
@@ -446,25 +473,6 @@ impl WorkpadUI {
                 }
                 WorkpadMessage::SheetShowDetails => {
                     dbg!("Show sheet details");
-                    Command::none()
-                }
-                _ => Command::none(),
-            },
-            State::EditingPadName(new_name) => match message {
-                WorkpadMessage::PadNameEdited(new_name) => {
-                    self.state = State::EditingPadName(new_name);
-                    Command::none()
-                }
-                WorkpadMessage::PadNameEditEnd => {
-                    if !new_name.is_empty() {
-                        let mut state = State::Passive;
-                        std::mem::swap(&mut state, &mut self.state);
-                        if let State::EditingPadName(s) = state {
-                            // Always true due to match above
-                            let update = self.pad.set_name(s);
-                            self.update_pad(update);
-                        }
-                    }
                     Command::none()
                 }
                 _ => Command::none(),
@@ -494,5 +502,67 @@ impl WorkpadUI {
     pub fn update_pad(&mut self, update: WorkpadUpdate) {
         self.pad_master.update(update);
         self.pad = self.pad_master.active_version();
+    }
+}
+
+fn menu_parent<'a>(
+    label: &str,
+    children: Vec<MenuTree<'a, WorkpadMessage, iced::Renderer>>,
+) -> MenuTree<'a, WorkpadMessage, iced::Renderer> {
+    menu_tree(
+        button(
+            text(label)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .vertical_alignment(alignment::Vertical::Center),
+        )
+        .padding([4, 8])
+        .style(iced::theme::Button::Custom(Box::new(
+            MenuLeafButtonStyle {},
+        )))
+        // op_press to stop item appearing disabled
+        .on_press(WorkpadMessage::NoOp),
+        children,
+    )
+}
+
+fn menu_leaf(label: &str, msg: WorkpadMessage) -> MenuTree<'_, WorkpadMessage, iced::Renderer> {
+    let none: Vec<iced_aw::menu::menu_tree::MenuTree<'_, WorkpadMessage>> = vec![];
+    menu_tree(
+        button(
+            text(label)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .vertical_alignment(alignment::Vertical::Center),
+        )
+        .padding([4, 8])
+        .style(iced::theme::Button::Custom(Box::new(
+            MenuLeafButtonStyle {},
+        )))
+        .on_press(msg),
+        none,
+    )
+}
+
+struct MenuLeafButtonStyle;
+impl button::StyleSheet for MenuLeafButtonStyle {
+    type Style = iced::Theme;
+
+    fn active(&self, style: &Self::Style) -> button::Appearance {
+        button::Appearance {
+            text_color: style.extended_palette().background.base.text,
+            border_radius: [4.0; 4].into(),
+            background: Some(Color::TRANSPARENT.into()),
+            ..Default::default()
+        }
+    }
+
+    fn hovered(&self, style: &Self::Style) -> button::Appearance {
+        let plt = style.extended_palette();
+        button::Appearance {
+            background: Some(plt.primary.weak.color.into()),
+            text_color: plt.primary.weak.text,
+            ..self.active(style)
+        }
     }
 }

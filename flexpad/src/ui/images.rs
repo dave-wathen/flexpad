@@ -9,6 +9,7 @@ pub fn cancel() -> Handle {
     Handle::from_memory(include_bytes!("./images/cancel.png"))
 }
 
+#[allow(dead_code)]
 pub fn close() -> Handle {
     Handle::from_memory(include_bytes!("./images/close.png"))
 }

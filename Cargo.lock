@@ -705,6 +705,7 @@ version = "0.0.2"
 dependencies = [
  "flexpad-grid",
  "iced",
+ "iced_aw",
  "internment",
  "once_cell",
  "tracing",
@@ -712,6 +713,7 @@ dependencies = [
  "unicode-segmentation",
  "uuid",
  "vergen",
+ "whoami",
 ]
 
 [[package]]
@@ -1566,6 +1568,13 @@ dependencies = [
  "iced_winit",
  "image",
  "thiserror",
+]
+
+[[package]]
+name = "iced_aw"
+version = "0.7.0"
+dependencies = [
+ "iced_widget",
 ]
 
 [[package]]
@@ -3741,6 +3750,16 @@ checksum = "d0c153280bb108c2979eb5c7391cb18c56642dd3c072e55f52065e13e2a1252a"
 dependencies = [
  "bitflags 2.4.0",
  "js-sys",
+ "web-sys",
+]
+
+[[package]]
+name = "whoami"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22fc3756b8a9133049b26c7f61ab35416c130e8c09b660f5b3958b446f52cc50"
+dependencies = [
+ "wasm-bindgen",
  "web-sys",
 ]
 
