@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::model::workpad::{Workpad, WorkpadMaster, WorkpadUpdate};
+use crate::model::workpad::{Cell, Sheet, Workpad, WorkpadMaster, WorkpadUpdate};
 use flexpad_grid::{
     scroll::ensure_cell_visible, style, Border, Borders, CellRange, ColumnHead, Grid, GridCell,
     GridCorner, GridScrollable, RowCol, RowHead, SumSeq, Viewport,
@@ -213,7 +213,7 @@ impl WorkpadUI {
         };
 
         let sheet: iced::Element<'_, WorkpadMessage> = row![
-            text(self.pad.active_sheet().name()).size(14),
+            text(self.active_sheet().name()).size(14),
             horizontal_space(5),
             // TODO
             button(images::expand_more(), WorkpadMessage::SheetShowDetails),
@@ -221,11 +221,7 @@ impl WorkpadUI {
         .width(200)
         .into();
 
-        let active_sheet = self.pad.active_sheet();
-        let active_cell = active_sheet.cell(
-            self.active_cell.row as usize,
-            self.active_cell.column as usize,
-        );
+        let active_cell = self.active_cell();
         let cell_name: iced::Element<'_, WorkpadMessage> = text(active_cell.name())
             .size(14)
             .width(100)
@@ -255,7 +251,7 @@ impl WorkpadUI {
     }
 
     fn grid_view(&self) -> Element<'_, WorkpadMessage> {
-        let sheet = self.pad.active_sheet();
+        let sheet = self.active_sheet();
 
         // TODO Allow hetrogenious sizes
         let mut widths = SumSeq::new();
@@ -361,11 +357,14 @@ impl WorkpadUI {
             WorkpadMessage::ActiveCellNewValue(s) => {
                 // TODO Move this to model and perform updates (and recaclulations) on another thread
                 let editor = Editor::new(&s);
-                let update = self.pad.set_active_sheet_cell_value(
-                    self.active_cell.row as usize,
-                    self.active_cell.column as usize,
-                    s,
-                );
+                let cell = self.active_cell();
+                let update = WorkpadUpdate::SetSheetCellValue {
+                    sheet_id: cell.sheet().id(),
+                    row_id: cell.row().id(),
+                    column_id: cell.column().id(),
+                    value: s,
+                };
+
                 self.update_pad(update);
                 self.active_cell_editor = Rc::new(RefCell::new(editor));
 
@@ -441,12 +440,13 @@ impl WorkpadUI {
                     self.focus = ACTIVE_CELL_ID.clone().into();
 
                     if prior_editor.is_editing() {
-                        // TODO Move this to model and perform updates (and recaclulations) on another thread
-                        let update = self.pad.set_active_sheet_cell_value(
-                            prior_active_cell.row as usize,
-                            prior_active_cell.column as usize,
-                            prior_editor.contents(),
-                        );
+                        let cell = self.active_cell();
+                        let update = WorkpadUpdate::SetSheetCellValue {
+                            sheet_id: cell.sheet().id(),
+                            row_id: cell.row().id(),
+                            column_id: cell.column().id(),
+                            value: prior_editor.contents(),
+                        };
                         self.update_pad(update);
                     }
                 }
@@ -501,6 +501,17 @@ impl WorkpadUI {
             WorkpadMessage::Multi(_) => Command::none(),
             WorkpadMessage::NoOp => Command::none(),
         }
+    }
+
+    fn active_sheet(&self) -> Sheet {
+        self.pad.active_sheet()
+    }
+
+    fn active_cell(&self) -> Cell {
+        self.active_sheet().cell(
+            self.active_cell.row as usize,
+            self.active_cell.column as usize,
+        )
     }
 
     pub fn update_pad(&mut self, update: WorkpadUpdate) {

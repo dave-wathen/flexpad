@@ -46,8 +46,6 @@ use uuid::Uuid;
 // A further set of types provide access to a version of the Workpad.  The entry point for
 // these is a Workpad (see WorkpadMaster::active_version).  From Workpad types for the
 // various parts (Sheet, Row, Column, Cell, ...) give the detailed view of the version.
-//
-// ??? Factory methods for WorkpadUpdate ???
 
 // TODO Update thread with message channel?
 // TODO Feed versions to UI as required to trigger redraws/updates?
@@ -437,17 +435,6 @@ impl Workpad {
     pub fn author(&self) -> &str {
         &self.data.author
     }
-
-    /// Generate a [`WorkpadUpdate`] representing a change of value for a cell in
-    /// the active sheet of this workpad.
-    pub fn set_active_sheet_cell_value(
-        &mut self,
-        row: usize,
-        column: usize,
-        value: String,
-    ) -> WorkpadUpdate {
-        self.active_sheet().set_cell_value(row, column, value)
-    }
 }
 
 workpad_id_type!(
@@ -493,12 +480,9 @@ impl Sheet {
 
     /// Return a [`Column`] held by this [`Sheet`] given its index
     pub fn column(&self, index: usize) -> Column {
-        let column_id = self.data.columns[index];
-        let column_data = self.master.read_column(column_id, self.version);
-        Column {
-            data: column_data,
-            index,
-        }
+        let id = self.data.columns[index];
+        let data = self.master.read_column(id, self.version);
+        Column { data, id, index }
     }
 
     /// Return an iterator to the [`Rows`]s held by this [`Sheet`]
@@ -509,12 +493,9 @@ impl Sheet {
     /// Return a [`Row`] held by this [`Sheet`] given its index
     #[allow(dead_code)]
     pub fn row(&self, index: usize) -> Row {
-        let row_id = self.data.rows[index];
-        let row_data = self.master.read_row(row_id, self.version);
-        Row {
-            data: row_data,
-            index,
-        }
+        let id = self.data.rows[index];
+        let data = self.master.read_row(id, self.version);
+        Row { data, id, index }
     }
 
     /// Returns the height to be used for column headings when this
@@ -555,20 +536,16 @@ impl Sheet {
     pub fn cell(&self, row: usize, column: usize) -> Cell {
         let row_id = self.data.rows[row];
         let column_id = self.data.columns[column];
-        let cell_id = self
+        let id = self
             .master
             .read_sheet_cell(self.id, row_id, column_id, self.version);
-        let cell_data = cell_id.map(|id| self.master.read_cell(id, self.version));
-        Cell::new(self.row(row), self.column(column), cell_id, cell_data)
-    }
-
-    /// Generate a [`WorkpadUpdate`] representing a change of value for a cell in this sheet
-    pub fn set_cell_value(&mut self, row: usize, column: usize, value: String) -> WorkpadUpdate {
-        WorkpadUpdate::SetSheetCellValue {
-            sheet_id: self.id,
-            row_id: self.data.rows[row],
-            column_id: self.data.columns[column],
-            value,
+        let data = id.map(|id| self.master.read_cell(id, self.version));
+        Cell {
+            sheet: self.clone(),
+            row: self.row(row),
+            column: self.column(column),
+            id,
+            data,
         }
     }
 }
@@ -589,14 +566,15 @@ struct ColumnData {
 #[derive(Debug, Clone)]
 pub struct Column {
     data: Arc<ColumnData>,
+    id: ColumnId,
     index: usize,
 }
 
 #[allow(dead_code)]
 impl Column {
-    /// Create a new [`Column`]
-    fn new(data: Arc<ColumnData>, index: usize) -> Column {
-        Column { data, index }
+    /// Returns the Id of the column.  The id remains constant across all versions of the workpad.
+    pub fn id(&self) -> ColumnId {
+        self.id
     }
 
     /// Return the index of this [`Column`]
@@ -635,14 +613,15 @@ struct RowData {
 #[derive(Debug, Clone)]
 pub struct Row {
     data: Arc<RowData>,
+    id: RowId,
     index: usize,
 }
 
 #[allow(dead_code)]
 impl Row {
-    /// Create a new [`Row`]
-    fn new(data: Arc<RowData>, index: usize) -> Row {
-        Row { data, index }
+    /// Returns the Id of the row.  The id remains constant across all versions of the workpad.
+    pub fn id(&self) -> RowId {
+        self.id
     }
 
     /// Return the index of this [`Row`] within its [`Sheet`].
@@ -679,6 +658,7 @@ struct CellData {
 
 /// A cell within a specific version of a [`Workpad`].
 pub struct Cell {
+    sheet: Sheet,
     row: Row,
     column: Column,
     #[allow(dead_code)]
@@ -688,14 +668,19 @@ pub struct Cell {
 
 #[allow(dead_code)]
 impl Cell {
-    /// Create a new [`Cell`]
-    fn new(row: Row, column: Column, id: Option<CellId>, data: Option<Arc<CellData>>) -> Cell {
-        Cell {
-            row,
-            column,
-            id,
-            data,
-        }
+    // Returns the [`Sheet`] of this [`Cell`]
+    pub fn sheet(&self) -> Sheet {
+        self.sheet.clone()
+    }
+
+    /// Returns the [`Row`] of this [`Cell`]
+    pub fn row(&self) -> Row {
+        self.row.clone()
+    }
+
+    /// Returns the [`Column`] of this [`Cell`]
+    pub fn column(&self) -> Column {
+        self.column.clone()
     }
 
     /// Returns the width of this [`Cell`]
