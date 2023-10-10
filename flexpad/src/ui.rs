@@ -1,7 +1,8 @@
 use crate::version::Version;
 use iced::widget::{button, column, container, horizontal_rule, image, row, text};
 use iced::{
-    alignment, font, theme, window, Alignment, Application, Command, Length, Settings, Theme,
+    alignment, font, theme, window, Alignment, Application, Command, Length, Settings,
+    Subscription, Theme,
 };
 use tracing::info;
 
@@ -9,6 +10,7 @@ use self::workpad::{WorkpadMessage, WorkpadUI};
 use crate::model::workpad::WorkpadMaster;
 
 mod images;
+mod ok_cancel;
 mod workpad;
 
 pub(crate) fn run() -> iced::Result {
@@ -128,6 +130,14 @@ impl Application for Flexpad {
             .into(),
             State::FrontScreen => self.front_screen_view(),
             State::Workpad(ref pad) => pad.view().map(Message::WorkpadMsg),
+        }
+    }
+
+    fn subscription(&self) -> iced::Subscription<Self::Message> {
+        match self.state {
+            State::Loading => Subscription::none(),
+            State::FrontScreen => Subscription::none(),
+            State::Workpad(ref pad) => pad.subscription().map(Message::WorkpadMsg),
         }
     }
 }

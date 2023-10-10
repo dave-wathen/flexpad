@@ -14,10 +14,12 @@ pub fn close() -> Handle {
     Handle::from_memory(include_bytes!("./images/close.png"))
 }
 
+#[allow(dead_code)]
 pub fn delete() -> Handle {
     Handle::from_memory(include_bytes!("./images/delete.png"))
 }
 
+#[allow(dead_code)]
 pub fn edit() -> Handle {
     Handle::from_memory(include_bytes!("./images/edit.png"))
 }

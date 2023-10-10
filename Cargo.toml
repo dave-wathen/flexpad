@@ -2,7 +2,7 @@
 resolver = "2"
 members = [
     "flexpad",
-    "flexpad-grid"
+    "flexpad-grid",
 ]
 
 [workspace.package]

@@ -171,7 +171,7 @@ impl WorkpadMaster {
                 self.data
                     .write_workpad(Arc::new(new_workpad_data), new_version);
             }
-            WorkpadUpdate::SetSheetName { sheet_id, new_name } => {
+            WorkpadUpdate::SetSheetProperties { sheet_id, new_name } => {
                 let sheet_data = self.data.read_sheet(sheet_id, active_version);
                 let new_sheet_data = SheetData {
                     name: Intern::from(new_name.as_str()),
@@ -235,7 +235,7 @@ pub enum WorkpadUpdate {
         new_author: String,
     },
     /// Instruction to change the name of a specific sheet within a workpad.
-    SetSheetName { sheet_id: SheetId, new_name: String },
+    SetSheetProperties { sheet_id: SheetId, new_name: String },
     /// Instruction to change the value of a cell at a row/column reference of a
     /// specific sheet within a workpad.
     SetSheetCellValue {
@@ -436,15 +436,6 @@ impl Workpad {
     /// Returns the name of the workpad
     pub fn author(&self) -> &str {
         &self.data.author
-    }
-
-    /// Generate a [`WorkpadUpdate`] representing a change of name for the active
-    /// sheet of this workpad.
-    pub fn set_active_sheet_name(&mut self, new_name: String) -> WorkpadUpdate {
-        WorkpadUpdate::SetSheetName {
-            sheet_id: self.data.active_sheet,
-            new_name,
-        }
     }
 
     /// Generate a [`WorkpadUpdate`] representing a change of value for a cell in
