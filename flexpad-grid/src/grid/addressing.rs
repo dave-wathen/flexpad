@@ -45,6 +45,12 @@ impl std::fmt::Debug for RowCol {
     }
 }
 
+impl std::fmt::Display for RowCol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "(r:{}, c:{})", self.row, self.column)
+    }
+}
+
 impl From<(u32, u32)> for RowCol {
     fn from(value: (u32, u32)) -> Self {
         Self {
@@ -171,6 +177,16 @@ impl CellRange {
                 None
             }
         })
+    }
+}
+
+impl std::fmt::Display for CellRange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.kind {
+            RangeKind::Empty => write!(f, "()"),
+            RangeKind::Single(rc) => write!(f, "{rc}"),
+            RangeKind::FromTo(from, to) => write!(f, "{from}-{to}"),
+        }
     }
 }
 

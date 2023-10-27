@@ -14,7 +14,6 @@ use crate::{CellRange, Grid, RowCol};
 mod operation;
 mod state;
 
-use super::GridState;
 use state::{Granularity, GridScrollableState};
 
 /// A widget that can display a large [`Grid`] with scrollbars
@@ -220,6 +219,13 @@ where
         operation: &mut dyn Operation<Message>,
     ) {
         let state = tree.state.downcast_mut::<GridScrollableState>();
+        state.calculate_parts_and_update(
+            layout.bounds(),
+            self.horizontal,
+            self.vertical,
+            &tree.children[0],
+            layout.children().next().expect("Grid layout missing"),
+        );
 
         operation.custom(state, self.id.as_ref().map(|id| &id.0));
 
@@ -304,7 +310,6 @@ where
 
         match event {
             Event::Window(window::Event::Resized { width, height }) => {
-                let grid_state = tree.children[0].state.downcast_ref::<GridState>();
                 let new_bounds = Rectangle::new(
                     layout.bounds().position(),
                     Size::new(width as f32, height as f32),
@@ -319,19 +324,14 @@ where
                 state.notify_viewport_change(
                     &self.on_viewport_change,
                     parts.cells_viewport.size(),
-                    &grid_state.column_widths,
-                    &grid_state.row_heights,
                     shell,
                 );
                 return event::Status::Ignored;
             }
             Event::Window(window::Event::RedrawRequested(_)) if !state.is_viewport_notified() => {
-                let grid_state = tree.children[0].state.downcast_ref::<GridState>();
                 state.notify_viewport_change(
                     &self.on_viewport_change,
                     parts.cells_viewport.size(),
-                    &grid_state.column_widths,
-                    &grid_state.row_heights,
                     shell,
                 );
                 return event::Status::Ignored;
@@ -355,14 +355,11 @@ where
                     mouse::ScrollDelta::Pixels { x, y } => Vector::new(x, y),
                 };
 
-                let grid_state = tree.children[0].state.downcast_ref::<GridState>();
-                state.scroll(delta, parts.full_bounds(), grid_state);
+                state.scroll(delta, parts.full_bounds());
 
                 state.notify_viewport_change(
                     &self.on_viewport_change,
                     parts.cells_viewport.size(),
-                    &grid_state.column_widths,
-                    &grid_state.row_heights,
                     shell,
                 );
                 return event::Status::Captured;
@@ -390,14 +387,11 @@ where
                                 cursor_position.y - scroll_box_touched_at.y,
                             );
 
-                            let grid_state = tree.children[0].state.downcast_ref::<GridState>();
-                            state.scroll(delta, parts.cells_viewport, grid_state);
+                            state.scroll(delta, parts.cells_viewport);
                             state.scroll_area_touched_at = Some(cursor_position);
                             state.notify_viewport_change(
                                 &self.on_viewport_change,
                                 parts.cells_viewport.size(),
-                                &grid_state.column_widths,
-                                &grid_state.row_heights,
                                 shell,
                             );
                         }
@@ -428,17 +422,13 @@ where
                             return event::Status::Ignored;
                         };
 
-                        let grid_state = tree.children[0].state.downcast_ref::<GridState>();
                         state.scroll_y_to(
                             scrollbar.scroll_percentage_y(scroller_grabbed_at, cursor_position),
                             parts.cells_viewport.height,
-                            &grid_state.row_heights,
                         );
                         state.notify_viewport_change(
                             &self.on_viewport_change,
                             parts.cells_viewport.size(),
-                            &grid_state.column_widths,
-                            &grid_state.row_heights,
                             shell,
                         );
 
@@ -458,18 +448,14 @@ where
                     if let (Some(scroller_grabbed_at), Some(scrollbar)) =
                         (parts.grab_y_scroller(cursor_position), parts.y_scrollbar)
                     {
-                        let grid_state = tree.children[0].state.downcast_ref::<GridState>();
                         state.scroll_y_to(
                             scrollbar.scroll_percentage_y(scroller_grabbed_at, cursor_position),
                             parts.cells_viewport.height,
-                            &grid_state.row_heights,
                         );
                         state.y_scroller_grabbed_at = Some(scroller_grabbed_at);
                         state.notify_viewport_change(
                             &self.on_viewport_change,
                             parts.cells_viewport.size(),
-                            &grid_state.column_widths,
-                            &grid_state.row_heights,
                             shell,
                         );
                     }
@@ -496,17 +482,13 @@ where
                     };
 
                     if let Some(scrollbar) = parts.x_scrollbar {
-                        let grid_state = tree.children[0].state.downcast_ref::<GridState>();
                         state.scroll_x_to(
                             scrollbar.scroll_percentage_x(scroller_grabbed_at, cursor_position),
                             parts.cells_viewport.height,
-                            &grid_state.column_widths,
                         );
                         state.notify_viewport_change(
                             &self.on_viewport_change,
                             parts.cells_viewport.size(),
-                            &grid_state.column_widths,
-                            &grid_state.row_heights,
                             shell,
                         );
                     }
@@ -526,18 +508,14 @@ where
                     if let (Some(scroller_grabbed_at), Some(scrollbar)) =
                         (parts.grab_x_scroller(cursor_position), parts.x_scrollbar)
                     {
-                        let grid_state = tree.children[0].state.downcast_ref::<GridState>();
                         state.scroll_x_to(
                             scrollbar.scroll_percentage_x(scroller_grabbed_at, cursor_position),
                             parts.cells_viewport.width,
-                            &grid_state.column_widths,
                         );
                         state.x_scroller_grabbed_at = Some(scroller_grabbed_at);
                         state.notify_viewport_change(
                             &self.on_viewport_change,
                             parts.cells_viewport.size(),
-                            &grid_state.column_widths,
-                            &grid_state.row_heights,
                             shell,
                         );
 
@@ -808,6 +786,11 @@ pub fn ensure_cell_visible(id: Id, cell: RowCol) -> Command<Viewport> {
     Command::widget(operation::ensure_cell_visible(id.0, cell))
 }
 
+/// Produces a [`Command`] that returns the viewport of the  [`GridScrollable`] with the given [`Id`].
+pub fn get_viewport(id: Id) -> Command<Viewport> {
+    Command::widget(operation::get_viewport(id.0))
+}
+
 impl<'a, Message, Renderer> From<GridScrollable<'a, Message, Renderer>>
     for Element<'a, Message, Renderer>
 where
@@ -879,6 +862,16 @@ impl Viewport {
     /// Returns the [`CellRange`] of the current [`Viewport`].
     pub fn cell_range(&self) -> CellRange {
         self.range
+    }
+}
+
+impl std::fmt::Display for Viewport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Viewport{{abs:({},{}), rel:({},{}), range:{}",
+            self.absolute.x, self.absolute.y, self.relative.x, self.relative.y, self.range
+        )
     }
 }
 

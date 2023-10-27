@@ -172,7 +172,7 @@ pub enum Rounding {
     Up,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 #[allow(dead_code)]
 enum Representation {
     Compact(CompactArray),
@@ -218,6 +218,23 @@ impl CompactIter {
         } else {
             self.emitted += 1;
             Some(self.values[self.index].1)
+        }
+    }
+}
+
+impl std::fmt::Debug for Representation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Representation::Compact(array) => {
+                write!(f, "Compact")?;
+                for (repeat, value) in array {
+                    if *repeat > 0 {
+                        write!(f, " {}x{}", repeat, value)?;
+                    }
+                }
+                Ok(())
+            }
+            Representation::Tree => todo!(),
         }
     }
 }

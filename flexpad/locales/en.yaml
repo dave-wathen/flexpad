@@ -1,0 +1,47 @@
+_version: 1
+ActiveSheet:
+  Corner: "*"
+AddSheet:
+  Type: "Sheet Type To Add ..."
+Common:
+  Add: Add
+  Cancel: Cancel
+  Delete: Delete
+  Loading: Loading ...
+  Ok: OK
+  Save: Save
+Menus:
+  Workpad:
+    Title: Workpad
+    PadShowProperties: Properties ...
+    PadDelete: Delete Workpad
+    PadClose: Close Workpad
+  Sheet:
+    Title: Sheet
+    SheetShowProperties: Properties ...
+    SheetNew: New Sheet
+    SheetDelete: Delete Sheet
+PadAuthor:
+  Label: Author
+  Placeholder: Who is the author of the workpad
+PadName:
+  Label: Workpad Name
+  Placeholder: Enter a name for the workpad
+PadProperties:
+  Title: Workpad Properties
+Product: Flexpad
+SheetKind:
+  Worksheet: Worksheet
+  Textsheet: Textsheet
+SheetName:
+  Label: Sheet Name
+  Placeholder: Enter a name for the sheet
+  AlreadyUsedError: Please enter a name that is not already used
+  EmptyError: Please enter a name
+SheetProperties:
+  Title: Sheet Properties
+Workpads:
+  Create: Create New ...
+  Reopen: Reopen ...
+  Blank: Blank
+  Starter: Starter

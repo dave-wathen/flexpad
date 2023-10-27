@@ -52,6 +52,10 @@ impl GridScrollableState {
         grid_tree: &Tree,
         grid_layout: Layout<'_>,
     ) -> ScrollableParts {
+        let grid_state = grid_tree.state.downcast_ref::<GridState>();
+        self.column_widths = grid_state.column_widths.clone();
+        self.row_heights = grid_state.row_heights.clone();
+
         let result =
             self.calculate_parts(bounds, x_properties, y_properties, grid_tree, grid_layout);
         if self.cells_bounds.size() != result.cells_viewport.size() {
@@ -237,12 +241,11 @@ impl GridScrollableState {
         self.is_x_scroller_grabbed() || self.is_y_scroller_grabbed()
     }
 
-    fn set_x_offset(&mut self, x: f32, viewport_width: f32, column_widths: &Rc<SumSeq>) -> bool {
-        self.column_widths = Rc::clone(column_widths);
+    fn set_x_offset(&mut self, x: f32, viewport_width: f32) -> bool {
         let quantized = quantize(
             x,
             viewport_width,
-            column_widths.clone(),
+            &self.column_widths,
             self.horizontal_granularity,
         );
         if quantized != self.cells_bounds.x {
@@ -254,12 +257,11 @@ impl GridScrollableState {
         }
     }
 
-    fn set_y_offset(&mut self, y: f32, viewport_height: f32, row_heights: &Rc<SumSeq>) -> bool {
-        self.row_heights = Rc::clone(row_heights);
+    fn set_y_offset(&mut self, y: f32, viewport_height: f32) -> bool {
         let quantized = quantize(
             y,
             viewport_height,
-            row_heights.clone(),
+            &self.row_heights,
             self.vertical_granularity,
         );
         if quantized != self.cells_bounds.y {
@@ -272,10 +274,20 @@ impl GridScrollableState {
     }
 
     pub fn visible_range(&self) -> CellRange {
-        let x = self.cells_bounds.x;
-        let y = self.cells_bounds.y;
-        let width = self.cells_bounds.width;
-        let height = self.cells_bounds.height;
+        let Rectangle {
+            x,
+            y,
+            width,
+            height,
+        } = self.cells_bounds;
+
+        if self.column_widths.len() == 0
+            || self.row_heights.len() == 0
+            || width == 0.0
+            || height == 0.0
+        {
+            return CellRange::empty();
+        }
 
         let start_column = self
             .column_widths
@@ -324,25 +336,25 @@ impl GridScrollableState {
         Viewport::new(absolute, relative, range)
     }
 
-    pub fn scroll(&mut self, delta: Vector<f32>, viewport: Rectangle, grid_state: &GridState) {
+    pub fn scroll(&mut self, delta: Vector<f32>, viewport: Rectangle) {
         if self.unused_delta_last_updated.elapsed().as_millis() > 1000 {
             self.unused_x_delta = 0.0;
             self.unused_y_delta = 0.0;
         }
 
-        let can_scroll_x = grid_state.column_widths.sum() > viewport.width;
-        let can_scroll_y = grid_state.row_heights.sum() > viewport.height;
+        let can_scroll_x = self.column_widths.sum() > viewport.width;
+        let can_scroll_y = self.row_heights.sum() > viewport.height;
 
         let mut x_changed = false;
         let mut y_changed = false;
 
         if can_scroll_x {
             let new_x = self.cells_bounds.x - (delta.x + self.unused_x_delta);
-            x_changed = self.set_x_offset(new_x, viewport.width, &grid_state.column_widths);
+            x_changed = self.set_x_offset(new_x, viewport.width);
         };
         if can_scroll_y {
             let new_y = self.cells_bounds.y - (delta.y + self.unused_y_delta);
-            y_changed = self.set_y_offset(new_y, viewport.height, &grid_state.row_heights);
+            y_changed = self.set_y_offset(new_y, viewport.height);
         };
 
         if x_changed {
@@ -363,25 +375,20 @@ impl GridScrollableState {
     ///
     /// `0` represents scrollbar at the beginning, while `1` represents scrollbar at
     /// the end.
-    pub fn scroll_y_to(&mut self, percentage: f32, viewport_height: f32, row_heights: &Rc<SumSeq>) {
-        let scrollable_height = (row_heights.sum() - viewport_height).max(0.0);
+    pub fn scroll_y_to(&mut self, percentage: f32, viewport_height: f32) {
+        let scrollable_height = (self.row_heights.sum() - viewport_height).max(0.0);
         let offset = scrollable_height * percentage;
-        self.set_y_offset(offset, viewport_height, row_heights);
+        self.set_y_offset(offset, viewport_height);
     }
 
     /// Scrolls the [`GridScrollable`] to a relative amount along the x axis.
     ///
     /// `0` represents scrollbar at the beginning, while `1` represents scrollbar at
     /// the end.
-    pub fn scroll_x_to(
-        &mut self,
-        percentage: f32,
-        viewport_width: f32,
-        column_widths: &Rc<SumSeq>,
-    ) {
-        let scrollable_width = (column_widths.sum() - viewport_width).max(0.0);
+    pub fn scroll_x_to(&mut self, percentage: f32, viewport_width: f32) {
+        let scrollable_width = (self.column_widths.sum() - viewport_width).max(0.0);
         let offset = scrollable_width * percentage;
-        self.set_x_offset(offset, viewport_width, column_widths);
+        self.set_x_offset(offset, viewport_width);
     }
 
     pub fn ensure_column_visible(&mut self, column: u32) {
@@ -390,8 +397,7 @@ impl GridScrollableState {
 
         if self.cells_bounds.x > *required.start() {
             let new_x = self.column_widths.sum_to(column as usize);
-            let column_widths = self.column_widths.clone();
-            self.set_x_offset(new_x, self.cells_bounds.width, &column_widths);
+            self.set_x_offset(new_x, self.cells_bounds.width);
         } else if self.cells_bounds.x + self.cells_bounds.width < *required.end() {
             let first_column = self
                 .column_widths
@@ -399,8 +405,7 @@ impl GridScrollableState {
                 .map(|i| i + 1)
                 .unwrap_or(column as usize);
             let new_x = self.column_widths.sum_to(first_column);
-            let column_widths = self.column_widths.clone();
-            self.set_x_offset(new_x, self.cells_bounds.width, &column_widths);
+            self.set_x_offset(new_x, self.cells_bounds.width);
         }
     }
 
@@ -410,8 +415,7 @@ impl GridScrollableState {
 
         if self.cells_bounds.y > *required.start() {
             let new_y = self.row_heights.sum_to(row as usize);
-            let row_heights = self.row_heights.clone();
-            self.set_y_offset(new_y, self.cells_bounds.height, &row_heights);
+            self.set_y_offset(new_y, self.cells_bounds.height);
         } else if self.cells_bounds.y + self.cells_bounds.height < *required.end() {
             let first_row = self
                 .row_heights
@@ -419,46 +423,30 @@ impl GridScrollableState {
                 .map(|i| i + 1)
                 .unwrap_or(row as usize);
             let new_y = self.row_heights.sum_to(first_row);
-            let row_heights = self.row_heights.clone();
-            self.set_y_offset(new_y, self.cells_bounds.height, &row_heights);
+            self.set_y_offset(new_y, self.cells_bounds.height);
         }
     }
 
     /// Snaps the scroll position to a [`RelativeOffset`].
     fn snap_to(&mut self, offset: RelativeOffset) {
-        let column_widths = self.column_widths.clone();
-        let row_heights = self.row_heights.clone();
-
-        self.scroll_x_to(
-            offset.x.clamp(0.0, 1.0),
-            self.cells_bounds.width,
-            &column_widths,
-        );
-        self.scroll_y_to(
-            offset.y.clamp(0.0, 1.0),
-            self.cells_bounds.height,
-            &row_heights,
-        );
+        self.scroll_x_to(offset.x.clamp(0.0, 1.0), self.cells_bounds.width);
+        self.scroll_y_to(offset.y.clamp(0.0, 1.0), self.cells_bounds.height);
     }
 
     /// Scroll to the provided [`AbsoluteOffset`].
     fn scroll_to(&mut self, offset: AbsoluteOffset) {
-        let column_widths = self.column_widths.clone();
-        let row_heights = self.row_heights.clone();
-
-        self.set_x_offset(offset.x.max(0.0), self.cells_bounds.width, &column_widths);
-        self.set_y_offset(offset.y.max(0.0), self.cells_bounds.height, &row_heights);
+        self.set_x_offset(offset.x.max(0.0), self.cells_bounds.width);
+        self.set_y_offset(offset.y.max(0.0), self.cells_bounds.height);
     }
-
-    // /// Unsnaps the current scroll position, if snapped, given the context.
-    // fn unsnap(&mut self, scales: ScrollScales) {
-    //     self.offset_x = Offset::Absolute(self.offset_x.absolute(&scales.x()));
-    //     self.offset_y = Offset::Absolute(self.offset_y.absolute(&scales.y()));
-    // }
 
     /// Returns the scrolling offset of the [`GridScrollableState`], given the context.
     pub fn absolute_offset(&self) -> Vector {
         Vector::new(self.cells_bounds.x, self.cells_bounds.y)
+    }
+
+    #[allow(dead_code)]
+    pub fn clear_viewport_notified(&mut self) {
+        self.last_notified = None;
     }
 
     pub fn is_viewport_notified(&self) -> bool {
@@ -469,18 +457,16 @@ impl GridScrollableState {
         &mut self,
         on_change: &Option<Box<dyn Fn(Viewport) -> Message + '_>>,
         viewport_size: Size,
-        column_widths: &Rc<SumSeq>,
-        row_heights: &Rc<SumSeq>,
         shell: &mut Shell<'_, Message>,
     ) {
         if self.last_notified.is_none() {
-            self.set_x_offset(0.0, viewport_size.width, column_widths);
-            self.set_y_offset(0.0, viewport_size.height, row_heights);
+            self.set_x_offset(0.0, viewport_size.width);
+            self.set_y_offset(0.0, viewport_size.height);
         }
 
         if let Some(on_change) = on_change {
-            let cells_width = column_widths.sum();
-            let cells_height = row_heights.sum();
+            let cells_width = self.column_widths.sum();
+            let cells_height = self.row_heights.sum();
             let can_scroll_x = cells_width > viewport_size.width;
             let can_scroll_y = cells_height > viewport_size.height;
 
@@ -525,7 +511,7 @@ impl Default for GridScrollableState {
             unused_y_delta: 0.0,
             unused_delta_last_updated: Instant::now(),
 
-            cells_bounds: Rectangle::new(Point::new(-1.0, -1.0), Size::ZERO),
+            cells_bounds: Rectangle::new(Point::ORIGIN, Size::ZERO),
             column_widths: Rc::new(SumSeq::new()),
             row_heights: Rc::new(SumSeq::new()),
             last_notified: None,
@@ -553,7 +539,7 @@ pub enum Granularity {
 fn quantize(
     value: f32,
     viewport_size: f32,
-    discretes: Rc<SumSeq>,
+    discretes: &Rc<SumSeq>,
     granularity: Granularity,
 ) -> f32 {
     let value = value.clamp(0.0, (discretes.sum() - viewport_size).max(0.0));

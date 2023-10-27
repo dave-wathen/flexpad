@@ -12,5 +12,3 @@ pub use grid::scroll::{self, GridScrollable, Viewport};
 pub use grid::style::{self, Appearance, StyleSheet};
 pub use grid::Grid;
 pub use sequence::SumSeq;
-
-// TODO scrollable

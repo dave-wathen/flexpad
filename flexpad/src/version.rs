@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub struct Version {
     pub version: &'static str,
     pub git_branch: &'static str,

@@ -1,18 +1,46 @@
 use crate::{
     model::workpad::{Workpad, WorkpadUpdate},
-    ui::{ok_cancel::OkCancel, SPACE_M, SPACE_S},
+    ui::{
+        action::{Action, ActionSet},
+        labeled_element, SPACE_M,
+    },
 };
 use iced::{
     widget::{column, text, text_input},
     Command, Subscription,
 };
 use iced_aw::Card;
+use rust_i18n::t;
+
+use super::WorkpadMessage;
 
 #[derive(Debug, Clone)]
 pub enum PadPropertiesMessage {
     Name(String),
     Author(String),
-    Finish(OkCancel),
+    Finish(Action),
+}
+
+impl PadPropertiesMessage {
+    pub fn map_to_workpad(msg: PadPropertiesMessage) -> WorkpadMessage {
+        match msg {
+            Self::Finish(Action::Ok) => WorkpadMessage::ModalSubmit,
+            Self::Finish(Action::Cancel) => WorkpadMessage::ModalCancel,
+            m => WorkpadMessage::PadPropertiesMsg(m),
+        }
+    }
+}
+
+impl std::fmt::Display for PadPropertiesMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "PadPropertiesMessage::")?;
+        match self {
+            Self::Name(name) => write!(f, "Name({name})"),
+            Self::Author(author) => write!(f, "Author({author})"),
+            Self::Finish(Action::Ok) => write!(f, "Finish(Submit)"),
+            Self::Finish(Action::Cancel) => write!(f, "Finish(Cancel)"),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -32,32 +60,34 @@ impl PadPropertiesUi {
 
     pub fn view(&self) -> iced::Element<'_, PadPropertiesMessage> {
         Card::new(
-            text("Workpad Properties"),
+            text(t!("PadProperties.Title")),
             column![
-                column![
-                    text("Name").size(12),
-                    text_input("Workpad Name", &self.name,)
+                labeled_element(
+                    t!("PadName.Label"),
+                    text_input(&t!("Forms.PadName.Placeholder"), &self.name)
                         .on_input(PadPropertiesMessage::Name)
-                        .padding(5),
-                ]
-                .spacing(SPACE_S),
-                column![
-                    text("Author").size(12),
-                    text_input("", &self.author)
+                ),
+                labeled_element(
+                    t!("PadAuthor.Label"),
+                    text_input(&t!("Forms.PadAuthor.Placeholder"), &self.author)
                         .on_input(PadPropertiesMessage::Author)
-                        .padding(5),
-                ]
-                .spacing(SPACE_S)
+                ),
             ]
             .spacing(SPACE_M),
         )
-        .foot(OkCancel::buttons_view().map(PadPropertiesMessage::Finish))
+        .foot(
+            ActionSet::cancel_ok()
+                .to_element()
+                .map(PadPropertiesMessage::Finish),
+        )
         .max_width(400.0)
         .into()
     }
 
     pub fn subscription(&self) -> Subscription<PadPropertiesMessage> {
-        OkCancel::subscription().map(PadPropertiesMessage::Finish)
+        ActionSet::cancel_ok()
+            .to_subscription()
+            .map(PadPropertiesMessage::Finish)
     }
 
     pub fn update(&mut self, message: PadPropertiesMessage) -> Command<PadPropertiesMessage> {
@@ -70,7 +100,7 @@ impl PadPropertiesUi {
     }
 
     pub fn into_update(self) -> WorkpadUpdate {
-        WorkpadUpdate::SetWorkpadProperties {
+        WorkpadUpdate::WorkpadSetProperties {
             new_name: self.name,
             new_author: self.author,
         }

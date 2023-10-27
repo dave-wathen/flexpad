@@ -54,8 +54,20 @@ pub fn settings() -> Handle {
     Handle::from_memory(include_bytes!("./images/settings.png"))
 }
 
-pub fn workpad() -> Handle {
-    Handle::from_memory(include_bytes!("./images/workpad.png"))
+pub fn workpad_no_sheets() -> Handle {
+    Handle::from_memory(include_bytes!("./images/workpad_no_sheets.png"))
+}
+
+pub fn workpad_and_sheets() -> Handle {
+    Handle::from_memory(include_bytes!("./images/workpad_and_sheets.png"))
+}
+
+pub fn worksheet() -> Handle {
+    Handle::from_memory(include_bytes!("./images/worksheet.png"))
+}
+
+pub fn textsheet() -> Handle {
+    Handle::from_memory(include_bytes!("./images/textsheet.png"))
 }
 
 pub fn undo() -> Handle {

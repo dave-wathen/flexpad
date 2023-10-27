@@ -25,7 +25,7 @@ mod editor;
 mod platform;
 pub use editor::Editor;
 
-use super::WorkpadMessage;
+use super::active_sheet::ActiveSheetMessage;
 
 /// The identifier of a [`ActiveCell`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -124,7 +124,7 @@ where
     }
 }
 
-impl<Renderer> Widget<WorkpadMessage, Renderer> for ActiveCell<Renderer>
+impl<Renderer> Widget<ActiveSheetMessage, Renderer> for ActiveCell<Renderer>
 where
     Renderer: iced::advanced::Renderer,
     Renderer: text::Renderer,
@@ -341,7 +341,7 @@ where
         _tree: &mut Tree,
         _layout: Layout<'_>,
         _renderer: &Renderer,
-        _operation: &mut dyn Operation<WorkpadMessage>,
+        _operation: &mut dyn Operation<ActiveSheetMessage>,
     ) {
         // let state = tree.state.downcast_mut::<State>();
 
@@ -357,10 +357,10 @@ where
         cursor: mouse::Cursor,
         renderer: &Renderer,
         _clipboard: &mut dyn Clipboard,
-        shell: &mut Shell<'_, WorkpadMessage>,
+        shell: &mut Shell<'_, ActiveSheetMessage>,
         _viewport: &Rectangle,
     ) -> Status {
-        let mut publish = |msg: Option<WorkpadMessage>| {
+        let mut publish = |msg: Option<ActiveSheetMessage>| {
             if let Some(m) = msg {
                 shell.publish(m);
             }
@@ -406,7 +406,7 @@ where
                 if let Some(cursor_position) = click_position {
                     if !focused {
                         if let Some(ref id) = self.id {
-                            shell.publish(WorkpadMessage::Focus(id.0.clone()))
+                            shell.publish(ActiveSheetMessage::Focus(id.0.clone()))
                         }
                     }
 
@@ -509,7 +509,10 @@ where
                 let shift = modifiers.shift();
                 match key_code {
                     // Editing
-                    keyboard::KeyCode::F2 => editor.start_edit(),
+                    keyboard::KeyCode::F2 => {
+                        dbg!(backtrace::Backtrace::new());
+                        editor.start_edit()
+                    }
                     keyboard::KeyCode::Escape if state.is_focused() => editor.abandon_editing(),
                     keyboard::KeyCode::Backspace if jump => editor.jump_backspace(),
                     keyboard::KeyCode::Backspace => editor.backspace(),
@@ -643,7 +646,7 @@ where
 
 const CURSOR_BLINK_INTERVAL_MILLIS: u128 = 500;
 
-impl<'a, Renderer> From<ActiveCell<Renderer>> for Element<'a, WorkpadMessage, Renderer>
+impl<'a, Renderer> From<ActiveCell<Renderer>> for Element<'a, ActiveSheetMessage, Renderer>
 where
     Renderer: iced::advanced::Renderer + 'a,
     Renderer: text::Renderer,

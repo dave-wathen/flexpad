@@ -1,9 +1,10 @@
 use iced::widget::text_input::Value;
 
-use crate::ui::workpad::{Move, WorkpadMessage};
+use super::super::active_sheet::{ActiveSheetMessage, Move};
 
 use super::cursor::Cursor;
 
+#[derive(Debug)]
 pub struct Editor {
     value: Value,
     mode: Mode,
@@ -67,9 +68,9 @@ impl Editor {
         self.value().to_string()
     }
 
-    pub fn left(&mut self) -> Option<WorkpadMessage> {
+    pub fn left(&mut self) -> Option<ActiveSheetMessage> {
         match self.mode {
-            Mode::Viewing => Some(WorkpadMessage::ActiveCellMove(Move::Left)),
+            Mode::Viewing => Some(ActiveSheetMessage::ActiveCellMove(Move::Left)),
             Mode::Editing => {
                 self.cursor.move_left(&self.edit_value);
                 None
@@ -77,9 +78,9 @@ impl Editor {
         }
     }
 
-    pub fn right(&mut self) -> Option<WorkpadMessage> {
+    pub fn right(&mut self) -> Option<ActiveSheetMessage> {
         match self.mode {
-            Mode::Viewing => Some(WorkpadMessage::ActiveCellMove(Move::Right)),
+            Mode::Viewing => Some(ActiveSheetMessage::ActiveCellMove(Move::Right)),
             Mode::Editing => {
                 self.cursor.move_right(&self.edit_value);
                 None
@@ -87,23 +88,23 @@ impl Editor {
         }
     }
 
-    pub fn up(&mut self) -> Option<WorkpadMessage> {
+    pub fn up(&mut self) -> Option<ActiveSheetMessage> {
         match self.mode {
-            Mode::Viewing => Some(WorkpadMessage::ActiveCellMove(Move::Up)),
+            Mode::Viewing => Some(ActiveSheetMessage::ActiveCellMove(Move::Up)),
             Mode::Editing => None,
         }
     }
 
-    pub fn down(&mut self) -> Option<WorkpadMessage> {
+    pub fn down(&mut self) -> Option<ActiveSheetMessage> {
         match self.mode {
-            Mode::Viewing => Some(WorkpadMessage::ActiveCellMove(Move::Down)),
+            Mode::Viewing => Some(ActiveSheetMessage::ActiveCellMove(Move::Down)),
             Mode::Editing => None,
         }
     }
 
-    pub fn jump_left(&mut self) -> Option<WorkpadMessage> {
+    pub fn jump_left(&mut self) -> Option<ActiveSheetMessage> {
         match self.mode {
-            Mode::Viewing => Some(WorkpadMessage::ActiveCellMove(Move::JumpLeft)),
+            Mode::Viewing => Some(ActiveSheetMessage::ActiveCellMove(Move::JumpLeft)),
             Mode::Editing => {
                 self.cursor.move_left_by_words(&self.edit_value);
                 None
@@ -111,9 +112,9 @@ impl Editor {
         }
     }
 
-    pub fn jump_right(&mut self) -> Option<WorkpadMessage> {
+    pub fn jump_right(&mut self) -> Option<ActiveSheetMessage> {
         match self.mode {
-            Mode::Viewing => Some(WorkpadMessage::ActiveCellMove(Move::JumpRight)),
+            Mode::Viewing => Some(ActiveSheetMessage::ActiveCellMove(Move::JumpRight)),
             Mode::Editing => {
                 self.cursor.move_right_by_words(&self.edit_value);
                 None
@@ -121,56 +122,56 @@ impl Editor {
         }
     }
 
-    pub fn jump_up(&mut self) -> Option<WorkpadMessage> {
+    pub fn jump_up(&mut self) -> Option<ActiveSheetMessage> {
         match self.mode {
-            Mode::Viewing => Some(WorkpadMessage::ActiveCellMove(Move::JumpUp)),
+            Mode::Viewing => Some(ActiveSheetMessage::ActiveCellMove(Move::JumpUp)),
             Mode::Editing => None,
         }
     }
 
-    pub fn jump_down(&mut self) -> Option<WorkpadMessage> {
+    pub fn jump_down(&mut self) -> Option<ActiveSheetMessage> {
         match self.mode {
-            Mode::Viewing => Some(WorkpadMessage::ActiveCellMove(Move::JumpDown)),
+            Mode::Viewing => Some(ActiveSheetMessage::ActiveCellMove(Move::JumpDown)),
             Mode::Editing => None,
         }
     }
 
-    pub fn enter(&mut self) -> Option<WorkpadMessage> {
+    pub fn enter(&mut self) -> Option<ActiveSheetMessage> {
         match self.mode {
-            Mode::Viewing => Some(WorkpadMessage::ActiveCellMove(Move::Down)),
-            Mode::Editing => Some(WorkpadMessage::Multi(vec![
-                WorkpadMessage::ActiveCellNewValue(self.end_editing()),
-                WorkpadMessage::ActiveCellMove(Move::Down),
+            Mode::Viewing => Some(ActiveSheetMessage::ActiveCellMove(Move::Down)),
+            Mode::Editing => Some(ActiveSheetMessage::Multi(vec![
+                ActiveSheetMessage::ActiveCellNewValue(self.end_editing()),
+                ActiveSheetMessage::ActiveCellMove(Move::Down),
             ])),
         }
     }
 
-    pub fn back_enter(&mut self) -> Option<WorkpadMessage> {
+    pub fn back_enter(&mut self) -> Option<ActiveSheetMessage> {
         match self.mode {
-            Mode::Viewing => Some(WorkpadMessage::ActiveCellMove(Move::Up)),
-            Mode::Editing => Some(WorkpadMessage::Multi(vec![
-                WorkpadMessage::ActiveCellNewValue(self.end_editing()),
-                WorkpadMessage::ActiveCellMove(Move::Up),
+            Mode::Viewing => Some(ActiveSheetMessage::ActiveCellMove(Move::Up)),
+            Mode::Editing => Some(ActiveSheetMessage::Multi(vec![
+                ActiveSheetMessage::ActiveCellNewValue(self.end_editing()),
+                ActiveSheetMessage::ActiveCellMove(Move::Up),
             ])),
         }
     }
 
-    pub fn tab(&mut self) -> Option<WorkpadMessage> {
+    pub fn tab(&mut self) -> Option<ActiveSheetMessage> {
         match self.mode {
-            Mode::Viewing => Some(WorkpadMessage::ActiveCellMove(Move::Right)),
-            Mode::Editing => Some(WorkpadMessage::Multi(vec![
-                WorkpadMessage::ActiveCellNewValue(self.end_editing()),
-                WorkpadMessage::ActiveCellMove(Move::Right),
+            Mode::Viewing => Some(ActiveSheetMessage::ActiveCellMove(Move::Right)),
+            Mode::Editing => Some(ActiveSheetMessage::Multi(vec![
+                ActiveSheetMessage::ActiveCellNewValue(self.end_editing()),
+                ActiveSheetMessage::ActiveCellMove(Move::Right),
             ])),
         }
     }
 
-    pub fn back_tab(&mut self) -> Option<WorkpadMessage> {
+    pub fn back_tab(&mut self) -> Option<ActiveSheetMessage> {
         match self.mode {
-            Mode::Viewing => Some(WorkpadMessage::ActiveCellMove(Move::Left)),
-            Mode::Editing => Some(WorkpadMessage::Multi(vec![
-                WorkpadMessage::ActiveCellNewValue(self.end_editing()),
-                WorkpadMessage::ActiveCellMove(Move::Left),
+            Mode::Viewing => Some(ActiveSheetMessage::ActiveCellMove(Move::Left)),
+            Mode::Editing => Some(ActiveSheetMessage::Multi(vec![
+                ActiveSheetMessage::ActiveCellNewValue(self.end_editing()),
+                ActiveSheetMessage::ActiveCellMove(Move::Left),
             ])),
         }
     }
