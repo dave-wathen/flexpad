@@ -1,5 +1,3 @@
-#![feature(iter_intersperse)]
-
 use rust_i18n::i18n;
 use tracing::info;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
