@@ -1,8 +1,10 @@
+use std::collections::HashMap;
+
 use crate::{
     display_iter,
     model::workpad::{Sheet, SheetId, UpdateError, Workpad, WorkpadMaster, WorkpadUpdate},
 };
-use flexpad_grid::scroll::get_viewport;
+use flexpad_grid::{scroll::get_viewport, Viewport};
 use iced::{
     alignment,
     widget::{button, column, text},
@@ -35,12 +37,12 @@ enum State {
 }
 
 impl State {
-    fn new(pad: &Workpad) -> Self {
-        match pad.active_sheet() {
-            Some(active_sheet) => State::ActiveSheet(ActiveSheetUi::new(active_sheet)),
-            None => State::AddSheet(AddSheetUi::new(pad.clone())),
-        }
-    }
+    // fn new(pad: &Workpad) -> Self {
+    //     match pad.active_sheet() {
+    //         Some(active_sheet) => State::ActiveSheet(ActiveSheetUi::new(active_sheet)),
+    //         None => State::AddSheet(AddSheetUi::new(pad.clone())),
+    //     }
+    // }
 
     fn update_active_sheet(&mut self, msg: ActiveSheetMessage) -> Command<WorkpadMessage> {
         match self {
@@ -162,18 +164,23 @@ pub struct WorkpadUI {
     pad: Workpad,
     state: State,
     modal: ShowModal,
+    sheet_viewports: HashMap<SheetId, Viewport>,
 }
 
 impl WorkpadUI {
     pub fn new(pad_master: WorkpadMaster) -> Self {
         let pad = pad_master.active_version();
-        let state = State::new(&pad);
+        let state = match pad.active_sheet() {
+            Some(sheet) => State::ActiveSheet(ActiveSheetUi::new(sheet, None)),
+            None => State::AddSheet(AddSheetUi::new(pad.clone())),
+        };
 
         Self {
             pad_master,
             pad,
             state,
             modal: Default::default(),
+            sheet_viewports: Default::default(),
         }
     }
 
@@ -287,10 +294,19 @@ impl WorkpadUI {
             WorkpadMessage::PadPropertiesMsg(msg) => self.modal.update_pad_properties(msg),
             WorkpadMessage::SheetPropertiesMsg(msg) => self.modal.update_sheet_properties(msg),
             // Sub views
-            WorkpadMessage::ActiveSheetMsg(msg) => self.state.update_active_sheet(msg),
+            WorkpadMessage::ActiveSheetMsg(msg) => {
+                if let ActiveSheetMessage::ViewportChanged(viewport) = msg {
+                    let sheet = self.pad.active_sheet().unwrap();
+                    self.sheet_viewports.insert(sheet.id(), viewport);
+                }
+                self.state.update_active_sheet(msg)
+            }
             WorkpadMessage::AddSheetMsg(msg) => self.state.update_add_sheet(msg),
             WorkpadMessage::AddSheetCancel => {
-                self.state = State::new(&self.pad);
+                // Can only cancel if there are sheets present
+                let sheet = self.pad.active_sheet().unwrap();
+                let viewport = self.sheet_viewports.get(&sheet.id()).copied();
+                self.state = State::ActiveSheet(ActiveSheetUi::new(sheet, viewport));
                 Command::none()
             }
             // Pad actions
@@ -298,7 +314,14 @@ impl WorkpadUI {
                 Ok(pad) => {
                     debug!(target: "flexpad", %message);
                     self.pad = pad.clone();
-                    self.state = State::new(pad);
+                    self.state = match pad.active_sheet() {
+                        Some(_) => {
+                            let sheet = self.pad.active_sheet().unwrap();
+                            let viewport = self.sheet_viewports.get(&sheet.id()).copied();
+                            State::ActiveSheet(ActiveSheetUi::new(sheet, viewport))
+                        }
+                        None => State::AddSheet(AddSheetUi::new(pad.clone())),
+                    };
                     get_viewport(active_sheet::GRID_SCROLLABLE_ID.clone())
                         .map(ActiveSheetMessage::ViewportChanged)
                         .map(ActiveSheetMessage::map_to_workpad)

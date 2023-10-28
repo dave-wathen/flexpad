@@ -115,7 +115,7 @@ pub struct ActiveSheetUi {
 }
 
 impl ActiveSheetUi {
-    pub fn new(active_sheet: Sheet) -> Self {
+    pub fn new(active_sheet: Sheet, viewport: Option<Viewport>) -> Self {
         let active_cell = active_sheet.active_cell().map(|active_cell_indices| {
             let (row_idx, column_idx) = active_cell_indices;
             let cell = active_sheet.cell(row_idx, column_idx);
@@ -124,9 +124,14 @@ impl ActiveSheetUi {
             (active_cell, active_cell_editor)
         });
 
+        let visible_cells = match viewport {
+            Some(viewport) => viewport.cell_range(),
+            None => CellRange::empty(),
+        };
+
         Self {
             active_sheet,
-            visible_cells: CellRange::empty(),
+            visible_cells,
             active_cell,
             focus: ACTIVE_CELL_ID.clone().into(),
         }

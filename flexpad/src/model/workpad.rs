@@ -63,7 +63,7 @@ macro_rules! workpad_id_type {
         $type_name:ident
     ) => {
         $(#[$outer])*
-        #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+        #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub struct $type_name(IdBase);
 
         impl From<IdBase> for $type_name {
