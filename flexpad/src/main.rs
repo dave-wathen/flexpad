@@ -10,7 +10,7 @@ i18n!("locales", fallback = "en");
 
 fn main() -> Result<(), FlexpadError> {
     tracing_subscriber::registry()
-        .with(fmt::layer().pretty())
+        .with(fmt::layer().with_thread_ids(true).pretty())
         .with(EnvFilter::from_default_env())
         .init();
     info!(target: "flexpad", "Flexpad started");
