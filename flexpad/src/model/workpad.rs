@@ -617,7 +617,7 @@ impl WorkpadMasterData {
 
     /// Commit the current transaction.
     fn tx_rollback(&self, tx: &Transaction) {
-        let self_tx = self.transaction.write().unwrap();
+        let mut self_tx = self.transaction.write().unwrap();
         match self_tx.as_ref() {
             Some(inner) => assert!(inner == tx, "Transaction is not in progress"),
             None => panic!("No transaction is in progress"),
@@ -630,6 +630,8 @@ impl WorkpadMasterData {
         self.rows_idx.tx_rollback();
         self.cells_idx.tx_rollback();
         self.sheets_cells_idx.tx_rollback();
+
+        self_tx.take();
     }
 
     /// Return the currently active version

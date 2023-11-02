@@ -19,6 +19,7 @@ use tracing::{debug, error, info};
 use self::{
     active_sheet::{ActiveSheetMessage, ActiveSheetUi},
     add_sheet::{AddSheetMessage, AddSheetUi},
+    error::ErrorUi,
     pad_properties::{PadPropertiesMessage, PadPropertiesUi},
     sheet_properties::{SheetPropertiesMessage, SheetPropertiesUi},
 };
@@ -28,6 +29,7 @@ use super::SPACE_S;
 mod active_cell;
 mod active_sheet;
 mod add_sheet;
+mod error;
 mod inactive_cell;
 mod pad_properties;
 mod sheet_properties;
@@ -78,6 +80,7 @@ enum ShowModal {
     None,
     PadProperties(PadPropertiesUi),
     SheetProperties(SheetPropertiesUi),
+    Error(ErrorUi),
 }
 
 impl ShowModal {
@@ -103,6 +106,7 @@ impl ShowModal {
         match self {
             Self::SheetProperties(props) => props.into_update(),
             Self::PadProperties(props) => props.into_update(),
+            Self::Error(_) => unreachable!(),
             Self::None => unreachable!(),
         }
     }
@@ -222,6 +226,7 @@ impl WorkpadUI {
                 Some(ui.view().map(SheetPropertiesMessage::map_to_workpad)),
             )
             .into(),
+            ShowModal::Error(ui) => modal(screen, Some(ui.view())).into(),
         }
     }
 
@@ -264,6 +269,7 @@ impl WorkpadUI {
             ShowModal::SheetProperties(props) => props
                 .subscription()
                 .map(SheetPropertiesMessage::map_to_workpad),
+            ShowModal::Error(ui) => ui.subscription(),
         }
     }
 
@@ -329,9 +335,9 @@ impl WorkpadUI {
                         .map(ActiveSheetMessage::map_to_workpad)
                 }
                 Err(err) => {
-                    // TODO User-friendly error reporting
-                    error!(msg=%message, %err, "Update");
-                    panic!("{err}")
+                    error!(target: "flexpad", msg=%message, "Update");
+                    self.modal = ShowModal::Error(ErrorUi::new(err.to_string()));
+                    Command::none()
                 }
             },
             WorkpadMessage::PadClose => unreachable!(),

@@ -10,6 +10,8 @@ Common:
   Loading: Loading ...
   Ok: OK
   Save: Save
+Error:
+  Title: Unexpected Error
 Menus:
   Workpad:
     Title: Workpad

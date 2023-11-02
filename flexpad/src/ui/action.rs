@@ -81,6 +81,7 @@ fn check_event(
 pub struct ActionSet {
     actions: Vec<Action>,
     names: Vec<String>,
+    button_styles: Vec<theme::Button>,
 }
 
 impl ActionSet {
@@ -89,6 +90,7 @@ impl ActionSet {
         ActionSet {
             actions: vec![Action::Cancel, Action::Ok],
             names: vec![t!("Common.Cancel"), t!("Common.Ok")],
+            button_styles: vec![Action::Cancel.style(), Action::Ok.style()],
         }
     }
 
@@ -97,6 +99,7 @@ impl ActionSet {
         ActionSet {
             actions: vec![Action::Ok],
             names: vec![t!("Common.Ok")],
+            button_styles: vec![Action::Ok.style()],
         }
     }
 
@@ -106,6 +109,7 @@ impl ActionSet {
         ActionSet {
             actions: vec![Action::Cancel],
             names: vec![t!("Common.Cancel")],
+            button_styles: vec![Action::Cancel.style()],
         }
     }
 
@@ -128,6 +132,25 @@ impl ActionSet {
         self
     }
 
+    /// Change the text on the OK button
+    #[allow(dead_code)]
+    pub fn ok_button_style(mut self, style: theme::Button) -> Self {
+        match self.actions.iter().position(|a| *a == Action::Ok) {
+            Some(idx) => self.button_styles[idx] = style,
+            None => warn!("Trying to set button style for OK when not included in the set"),
+        }
+        self
+    }
+
+    /// Change the text on the Cancel button
+    #[allow(dead_code)]
+    pub fn cancel_button_style(mut self, style: theme::Button) -> Self {
+        match self.actions.iter().position(|a| *a == Action::Cancel) {
+            Some(idx) => self.button_styles[idx] = style,
+            None => warn!("Trying to set text for Cancel when not included in the set"),
+        }
+        self
+    }
     /// Return a subscription to handle keystrokes for this [`ActionSet`]
     pub fn to_subscription(&self) -> Subscription<Action> {
         Subscription::batch(self.actions.iter().map(Action::key_subscription))
@@ -137,11 +160,25 @@ impl ActionSet {
     pub fn to_element<'a>(&self) -> iced::Element<'a, Action> {
         let mut buttons = row![];
 
-        for (action, txt) in self.actions.iter().zip(self.names.iter()) {
+        for ((action, txt), style) in self
+            .actions
+            .iter()
+            .zip(self.names.iter())
+            .zip(self.button_styles.iter())
+        {
+            // theme::Button is neither copy nor clone
+            let style = match style {
+                theme::Button::Primary => theme::Button::Primary,
+                theme::Button::Secondary => theme::Button::Secondary,
+                theme::Button::Positive => theme::Button::Positive,
+                theme::Button::Destructive => theme::Button::Destructive,
+                theme::Button::Text => theme::Button::Text,
+                theme::Button::Custom(_) => panic!("Custom is not supported"),
+            };
             buttons = buttons.push(
                 button(text(txt).horizontal_alignment(Horizontal::Center))
                     .width(DIALOG_BUTTON_WIDTH)
-                    .style(action.style())
+                    .style(style)
                     .on_press(*action),
             );
         }
