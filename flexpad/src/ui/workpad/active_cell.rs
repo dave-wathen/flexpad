@@ -509,10 +509,7 @@ where
                 let shift = modifiers.shift();
                 match key_code {
                     // Editing
-                    keyboard::KeyCode::F2 => {
-                        dbg!(backtrace::Backtrace::new());
-                        editor.start_edit()
-                    }
+                    keyboard::KeyCode::F2 => editor.start_edit(),
                     keyboard::KeyCode::Escape if state.is_focused() => editor.abandon_editing(),
                     keyboard::KeyCode::Backspace if jump => editor.jump_backspace(),
                     keyboard::KeyCode::Backspace => editor.backspace(),

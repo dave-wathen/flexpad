@@ -1518,7 +1518,7 @@ where
             .range(Self::all_versions(id))
             .find(|(&(_, from, to), _)| from <= version && version <= to)
             .map(|(k, v)| (k, (*v).clone()));
-        //        dbg!(&existing, &data);
+
         match existing {
             Some((&(_, from, to), existing)) if from < version => {
                 index.insert((id, from, version - 1), existing);

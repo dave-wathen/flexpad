@@ -340,10 +340,10 @@ where
         if let Self::Error = self {
             let palette = theme.extended_palette();
 
-            dbg!(widget::text_input::Appearance {
+            widget::text_input::Appearance {
                 border_color: palette.danger.strong.color,
                 ..dflt
-            })
+            }
         } else {
             dflt
         }
@@ -355,10 +355,10 @@ where
         if let Self::Error = self {
             let palette = theme.extended_palette();
 
-            dbg!(widget::text_input::Appearance {
+            widget::text_input::Appearance {
                 border_color: palette.danger.strong.color,
                 ..dflt
-            })
+            }
         } else {
             dflt
         }
@@ -370,11 +370,11 @@ where
         if let Self::Error = self {
             let palette = theme.extended_palette();
 
-            dbg!(widget::text_input::Appearance {
+            widget::text_input::Appearance {
                 border_color: palette.danger.weak.color,
                 //icon_color: palette.background.weak.text,
                 ..dflt
-            })
+            }
         } else {
             dflt
         }

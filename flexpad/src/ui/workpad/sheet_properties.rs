@@ -2,13 +2,10 @@ use crate::{
     model::workpad::{Sheet, SheetId, WorkpadUpdate},
     ui::{
         action::{Action, ActionSet},
-        labeled_element,
+        text_input,
     },
 };
-use iced::{
-    widget::{text, text_input},
-    Command, Subscription,
-};
+use iced::{widget::text, Command, Subscription};
 
 use iced_aw::Card;
 use rust_i18n::t;
@@ -45,7 +42,9 @@ impl std::fmt::Display for SheetPropertiesMessage {
 #[derive(Debug)]
 pub struct SheetPropertiesUi {
     sheet_id: SheetId,
+    other_names: Vec<String>,
     name: String,
+    name_error: Option<String>,
 }
 
 // TODO Focus management
@@ -53,17 +52,26 @@ impl SheetPropertiesUi {
     pub fn new(sheet: Sheet) -> Self {
         Self {
             sheet_id: sheet.id(),
+            other_names: sheet
+                .workpad()
+                .sheets()
+                .filter(|s| *s != sheet)
+                .map(|s| s.name().to_owned())
+                .collect(),
             name: sheet.name().to_owned(),
+            name_error: None,
         }
     }
 
     pub fn view(&self) -> iced::Element<'_, SheetPropertiesMessage> {
         Card::new(
             text(t!("SheetProperties.Title")),
-            labeled_element(
+            text_input(
                 t!("SheetName.Label"),
-                text_input(&t!("SheetName.Placeholder"), &self.name)
-                    .on_input(SheetPropertiesMessage::Name),
+                t!("SheetName.Placeholder"),
+                &self.name,
+                SheetPropertiesMessage::Name,
+                self.name_error.as_ref(),
             ),
         )
         .foot(
@@ -83,7 +91,16 @@ impl SheetPropertiesUi {
 
     pub fn update(&mut self, message: SheetPropertiesMessage) -> Command<SheetPropertiesMessage> {
         match message {
-            SheetPropertiesMessage::Name(name) => self.name = name,
+            SheetPropertiesMessage::Name(name) => {
+                if self.other_names.contains(&name) {
+                    self.name_error = Some(t!("SheetName.AlreadyUsedError"))
+                } else if name.is_empty() {
+                    self.name_error = Some(t!("SheetName.EmptyError"))
+                } else {
+                    self.name_error = None
+                }
+                self.name = name
+            }
             SheetPropertiesMessage::Finish(_) => unreachable!(),
         }
         Command::none()
