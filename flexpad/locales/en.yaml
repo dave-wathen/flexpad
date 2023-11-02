@@ -40,8 +40,22 @@ SheetName:
   EmptyError: Please enter a name
 SheetProperties:
   Title: Sheet Properties
+UpdateError:
+  Display: "{kind} (during update: {update})"
+  DuplicateName: The name "{name}" is already used
+  InvalidName: The name "{name}" is not allowed
+  MissingId: "{id} not found"
 Workpads:
   Create: Create New ...
   Reopen: Reopen ...
   Blank: Blank
   Starter: Starter
+WorkpadUpdate:
+  Join: " & "
+  NewWorkpad: New Workpad
+  SheetAdd: Add Sheet
+  SheetDelete: Delete Sheet
+  SheetSetActiveCell: Set Sheet Active Cell
+  SheetSetCellValue: Set Sheet Cell Value
+  SheetSetProperties: Set Sheet Properties
+  WorkpadSetProperties: Set Workpad Properties

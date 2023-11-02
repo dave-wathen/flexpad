@@ -2,7 +2,9 @@ use std::collections::HashMap;
 
 use crate::{
     display_iter,
-    model::workpad::{Sheet, SheetId, UpdateError, Workpad, WorkpadMaster, WorkpadUpdate},
+    model::workpad::{
+        Sheet, SheetId, UpdateError, UpdateResult, Workpad, WorkpadMaster, WorkpadUpdate,
+    },
 };
 use flexpad_grid::{scroll::get_viewport, Viewport};
 use iced::{
@@ -369,13 +371,9 @@ impl WorkpadUI {
     }
 }
 
-pub async fn update_pad(
-    mut master: WorkpadMaster,
-    update: WorkpadUpdate,
-) -> Result<Workpad, UpdateError> {
+pub async fn update_pad(mut master: WorkpadMaster, update: WorkpadUpdate) -> UpdateResult {
     info!(target: "flexpad", %update, "Model update");
-    master.update(update);
-    Ok(master.active_version())
+    master.update(update)
 }
 
 fn workpad_menu() -> iced_aw::menu::menu_tree::MenuTree<'static, WorkpadMessage> {

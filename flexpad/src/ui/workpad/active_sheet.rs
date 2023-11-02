@@ -116,11 +116,9 @@ pub struct ActiveSheetUi {
 
 impl ActiveSheetUi {
     pub fn new(active_sheet: Sheet, viewport: Option<Viewport>) -> Self {
-        let active_cell = active_sheet.active_cell().map(|active_cell_indices| {
-            let (row_idx, column_idx) = active_cell_indices;
-            let cell = active_sheet.cell(row_idx, column_idx);
+        let active_cell = active_sheet.active_cell().map(|cell| {
             let active_cell_editor = Rc::new(RefCell::new(Editor::new(cell.value())));
-            let active_cell = RowCol::new(row_idx as u32, column_idx as u32);
+            let active_cell = RowCol::new(cell.row().index() as u32, cell.column().index() as u32);
             (active_cell, active_cell_editor)
         });
 

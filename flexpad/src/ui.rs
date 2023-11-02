@@ -119,7 +119,7 @@ impl Application for Flexpad {
             State::FrontScreen => match message {
                 Message::OpenBlankWorkpad => {
                     debug!(target: "flexpad", %message);
-                    let workpad = WorkpadMaster::new();
+                    let workpad = WorkpadMaster::new_blank();
                     self.state = State::Workpad(WorkpadUI::new(workpad));
                     Command::none()
                 }

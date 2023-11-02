@@ -1,5 +1,6 @@
 use std::{
-    collections::BTreeMap,
+    borrow::Borrow,
+    collections::{btree_map::Range, BTreeMap},
     error::Error,
     fmt,
     ops::RangeBounds,
@@ -11,6 +12,7 @@ use std::{
 
 use internment::Intern;
 use once_cell::sync::Lazy;
+use rust_i18n::t;
 use uuid::Uuid;
 
 use crate::display_iter;
@@ -49,6 +51,10 @@ use crate::display_iter;
 // A further set of types provide access to a version of the Workpad.  The entry point for
 // these is a Workpad (see WorkpadMaster::active_version).  From Workpad types for the
 // various parts (Sheet, Row, Column, Cell, ...) give the detailed view of the version.
+
+/// The [`Result`] type returned when a workpad is updated.  On Sucsess the
+/// Workpad represents the newly created version.
+pub type UpdateResult = Result<Workpad, UpdateError>;
 
 /// The version of a workpad
 type Version = u32;
@@ -101,7 +107,7 @@ pub struct WorkpadMaster {
 impl WorkpadMaster {
     /// Create a new [`WorkpadMaster`] representing a new workpad with a single
     // initial version.
-    pub fn new() -> Self {
+    pub fn new_blank() -> Self {
         Self::internal_new(false)
     }
 
@@ -112,12 +118,16 @@ impl WorkpadMaster {
     }
 
     fn internal_new(starter: bool) -> Self {
+        let update = WorkpadUpdate::NewWorkpad;
+
         let master_data = WorkpadMasterData {
             id: Uuid::new_v4().simple().to_string(),
-            history: RwLock::new(vec![HistoryEntry {
-                prior_version: None,
-                update: WorkpadUpdate::NewWorkpad,
-            }]),
+            transaction: RwLock::new(None),
+            // history: RwLock::new(vec![HistoryEntry {
+            //     prior_version: None,
+            //     update: WorkpadUpdate::NewWorkpad,
+            // }]),
+            history: Default::default(),
             active_version: RwLock::new(0),
             next_part_id: Default::default(),
             workpad_idx: Default::default(),
@@ -127,6 +137,8 @@ impl WorkpadMaster {
             cells_idx: Default::default(),
             sheets_cells_idx: Default::default(),
         };
+
+        let tx = master_data.tx_begin();
 
         let (sheets, active_sheet) = if starter {
             let sheet1_id = master_data.create_sheet(0, SheetKind::Worksheet, "Sheet 1");
@@ -144,6 +156,7 @@ impl WorkpadMaster {
             active_sheet,
         };
         master_data.write_workpad(Arc::new(workpad_data), 0);
+        master_data.tx_commit(&tx, update);
 
         WorkpadMaster {
             data: Arc::new(master_data),
@@ -166,39 +179,55 @@ impl WorkpadMaster {
     /// Update the workpad by creating a new version with the supplied
     /// [`WorkpadUpdate`] applied.  The generated version becomes the
     /// active version of the workpad.
-    pub fn update(&mut self, update: WorkpadUpdate) {
-        let active_version = self.data.active_version();
-        let new_version = {
-            let mut history = self.data.history.write().unwrap();
-            let new_version = history.len();
-            history.push(HistoryEntry {
-                prior_version: Some(active_version),
-                update: update.clone(),
-            });
-            new_version as Version
-        };
+    pub fn update(&mut self, update: WorkpadUpdate) -> UpdateResult {
+        let tx = self.data.tx_begin();
 
-        self.apply_update(update, active_version, new_version);
-        *self.data.active_version.write().unwrap() = new_version;
+        match self.apply_update(&update, &tx) {
+            Ok(_) => {
+                self.data.tx_commit(&tx, update);
+                Ok(self.active_version())
+            }
+            Err(err) => {
+                self.data.tx_rollback(&tx);
+                Err(err)
+            }
+        }
     }
 
-    pub fn apply_update(
+    fn apply_update(
         &mut self,
-        update: WorkpadUpdate,
-        active_version: Version,
-        new_version: Version,
-    ) {
+        update: &WorkpadUpdate,
+        tx: &Transaction,
+    ) -> Result<(), UpdateError> {
+        let new_err = |kind| {
+            Err(UpdateError {
+                kind,
+                update: update.clone(),
+                workpad_id: self.data.id.clone(),
+                workpad_version: tx.active_version,
+            })
+        };
+
+        let Transaction {
+            id: _,
+            active_version,
+            new_version,
+        } = *tx;
+
         match update {
             WorkpadUpdate::Multi(updates) => {
                 for update in updates {
-                    self.apply_update(update, active_version, new_version)
+                    self.apply_update(update, tx)?;
                 }
             }
-            WorkpadUpdate::NewWorkpad => panic!("NewWorkpad not allowed for exisiting Workpad"),
+            WorkpadUpdate::NewWorkpad => panic!("NewWorkpad not allowed for existing Workpad"),
             WorkpadUpdate::WorkpadSetProperties {
-                new_name,
-                new_author,
+                ref new_name,
+                ref new_author,
             } => {
+                if new_name.is_empty() {
+                    return new_err(ErrorKind::InvalidName(new_name.clone()));
+                }
                 let workpad_data = self.data.read_workpad(active_version);
                 let new_workpad_data = WorkpadData {
                     name: Intern::from(new_name.as_str()),
@@ -208,9 +237,21 @@ impl WorkpadMaster {
                 self.data
                     .write_workpad(Arc::new(new_workpad_data), new_version);
             }
-            WorkpadUpdate::SheetAdd { kind, name } => {
+            WorkpadUpdate::SheetAdd { kind, ref name } => {
+                if name.is_empty() {
+                    return new_err(ErrorKind::InvalidName(name.clone()));
+                }
+
                 let workpad_data = self.data.read_workpad(active_version);
-                let sheet_id = self.data.create_sheet(new_version, kind, &name);
+                for sheet_id in workpad_data.sheets.iter() {
+                    let sheet_data = self.data.read_sheet(*sheet_id, active_version);
+                    let sheet_name: &str = &sheet_data.name;
+                    if sheet_name == name {
+                        return new_err(ErrorKind::DuplicateName(name.clone()));
+                    }
+                }
+
+                let sheet_id = self.data.create_sheet(new_version, *kind, name);
                 let mut new_sheets = workpad_data.sheets.clone();
                 new_sheets.push(sheet_id);
                 let new_workpad_data = WorkpadData {
@@ -227,13 +268,18 @@ impl WorkpadMaster {
                     .sheets
                     .iter()
                     .copied()
-                    .filter(|id| *id != sheet_id)
+                    .filter(|id| *id != *sheet_id)
                     .collect();
-                let new_active_sheet = if workpad_data.active_sheet == Some(sheet_id) {
+
+                if new_sheets.len() == workpad_data.sheets.len() {
+                    return new_err(ErrorKind::MissingSheet(*sheet_id));
+                }
+
+                let new_active_sheet = if workpad_data.active_sheet == Some(*sheet_id) {
                     let index = workpad_data
                         .sheets
                         .iter()
-                        .position(|id| *id == sheet_id)
+                        .position(|id| id == sheet_id)
                         .unwrap();
                     if new_sheets.is_empty() {
                         None
@@ -245,34 +291,64 @@ impl WorkpadMaster {
                 } else {
                     workpad_data.active_sheet
                 };
+
                 let new_workpad_data = WorkpadData {
                     sheets: new_sheets,
                     active_sheet: new_active_sheet,
                     ..(*workpad_data).clone()
                 };
-                self.data.delete_sheet(sheet_id, new_version);
+                self.data.delete_sheet(*sheet_id, new_version);
                 self.data
                     .write_workpad(Arc::new(new_workpad_data), new_version);
             }
-            WorkpadUpdate::SheetSetProperties { sheet_id, new_name } => {
-                let sheet_data = self.data.read_sheet(sheet_id, active_version);
+            WorkpadUpdate::SheetSetProperties {
+                sheet_id,
+                ref new_name,
+            } => {
+                if new_name.is_empty() {
+                    return new_err(ErrorKind::InvalidName(new_name.clone()));
+                }
+
+                let workpad_data = self.data.read_workpad(active_version);
+                for s_id in workpad_data.sheets.iter() {
+                    let sheet_data = self.data.read_sheet(*s_id, active_version);
+                    let sheet_name: &str = &sheet_data.name;
+                    if s_id != sheet_id && sheet_name == new_name {
+                        return new_err(ErrorKind::DuplicateName(new_name.clone()));
+                    }
+                }
+
+                let sheet_data = self.data.read_sheet(*sheet_id, active_version);
                 let new_sheet_data = SheetData {
                     name: Intern::from(new_name.as_str()),
                     ..(*sheet_data).clone()
                 };
                 self.data
-                    .write_sheet(sheet_id, Arc::new(new_sheet_data), new_version);
+                    .write_sheet(*sheet_id, Arc::new(new_sheet_data), new_version);
             }
             WorkpadUpdate::SheetSetCellValue {
                 sheet_id,
                 row_id,
                 column_id,
-                value,
+                ref value,
             } => {
-                let active_cell_id =
+                let workpad_data = self.data.read_workpad(active_version);
+                if !workpad_data.sheets.contains(sheet_id) {
+                    return new_err(ErrorKind::MissingSheet(*sheet_id));
+                }
+
+                let sheet_data = self.data.read_sheet(*sheet_id, active_version);
+                if !sheet_data.rows.contains(row_id) {
+                    return new_err(ErrorKind::MissingRow(*row_id));
+                }
+                if !sheet_data.columns.contains(column_id) {
+                    return new_err(ErrorKind::MissingColumn(*column_id));
+                }
+
+                let cell_id =
                     self.data
-                        .read_sheet_cell(sheet_id, row_id, column_id, active_version);
-                let base = match active_cell_id {
+                        .read_sheet_cell(*sheet_id, *row_id, *column_id, active_version);
+                let base = match cell_id {
                     Some(id) => (*self.data.read_cell(id, active_version)).clone(),
                     None => Default::default(),
                 };
@@ -285,13 +361,13 @@ impl WorkpadMaster {
                 // just write a new version for the CellData.  Otherwise allocate a new CellId.
                 let cell_id = self
                     .data
-                    .read_sheet_cell(sheet_id, row_id, column_id, new_version)
+                    .read_sheet_cell(*sheet_id, *row_id, *column_id, new_version)
                     .unwrap_or_else(|| {
                         let new_id = self.data.next_part_id.fetch_add(1, Ordering::SeqCst).into();
                         self.data.write_sheet_cell(
-                            sheet_id,
-                            row_id,
-                            column_id,
+                            *sheet_id,
+                            *row_id,
+                            *column_id,
                             new_id,
                             new_version,
                         );
@@ -305,21 +381,34 @@ impl WorkpadMaster {
                 row_id,
                 column_id,
             } => {
-                let sheet_data = self.data.read_sheet(sheet_id, active_version);
+                let workpad_data = self.data.read_workpad(active_version);
+                if !workpad_data.sheets.contains(sheet_id) {
+                    return new_err(ErrorKind::MissingSheet(*sheet_id));
+                }
+
+                let sheet_data = self.data.read_sheet(*sheet_id, active_version);
+                if !sheet_data.rows.contains(row_id) {
+                    return new_err(ErrorKind::MissingRow(*row_id));
+                }
+                if !sheet_data.columns.contains(column_id) {
+                    return new_err(ErrorKind::MissingColumn(*column_id));
+                }
+
                 let new_sheet_data = SheetData {
-                    active_cell: Some((row_id, column_id)),
+                    active_cell: Some((*row_id, *column_id)),
                     ..(*sheet_data).clone()
                 };
                 self.data
-                    .write_sheet(sheet_id, Arc::new(new_sheet_data), new_version);
+                    .write_sheet(*sheet_id, Arc::new(new_sheet_data), new_version);
             }
         }
+        Ok(())
     }
 }
 
 impl Default for WorkpadMaster {
     fn default() -> Self {
-        Self::new()
+        Self::new_blank()
     }
 }
 
@@ -362,22 +451,24 @@ pub enum WorkpadUpdate {
 impl std::fmt::Display for WorkpadUpdate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let WorkpadUpdate::Multi(updates) = self {
-            let mut join = "";
+            let mut join = String::new();
             for update in updates {
                 write!(f, "{}{}", join, update)?;
-                join = " & ";
+                join = t!("WorkpadUpdate.Join");
             }
             Ok(())
         } else {
             let name = match self {
                 WorkpadUpdate::Multi(_) => unreachable!(),
-                WorkpadUpdate::NewWorkpad => "New Workpad",
-                WorkpadUpdate::WorkpadSetProperties { .. } => "Set Workpad Properties",
-                WorkpadUpdate::SheetAdd { .. } => "Add Sheet",
-                WorkpadUpdate::SheetDelete { .. } => "Delete Sheet",
-                WorkpadUpdate::SheetSetProperties { .. } => "Set Sheet Properties",
-                WorkpadUpdate::SheetSetCellValue { .. } => "Set Sheet Cell Value",
-                WorkpadUpdate::SheetSetActiveCell { .. } => "Set Sheet Active Cell",
+                WorkpadUpdate::NewWorkpad => t!("WorkpadUpdate.NewWorkpad"),
+                WorkpadUpdate::WorkpadSetProperties { .. } => {
+                    t!("WorkpadUpdate.WorkpadSetProperties")
+                }
+                WorkpadUpdate::SheetAdd { .. } => t!("WorkpadUpdate.SheetAdd"),
+                WorkpadUpdate::SheetDelete { .. } => t!("WorkpadUpdate.SheetDelete"),
+                WorkpadUpdate::SheetSetProperties { .. } => t!("WorkpadUpdate.SheetSetProperties"),
+                WorkpadUpdate::SheetSetCellValue { .. } => t!("WorkpadUpdate.SheetSetCellValue"),
+                WorkpadUpdate::SheetSetActiveCell { .. } => t!("WorkpadUpdate.SheetSetActiveCell"),
             };
 
             write!(f, "{name}")
@@ -387,15 +478,57 @@ impl std::fmt::Display for WorkpadUpdate {
 
 // TODO Flesh out error
 #[derive(Debug, Clone)]
-pub struct UpdateError {}
+pub struct UpdateError {
+    kind: ErrorKind,
+    update: WorkpadUpdate,
+    workpad_id: String,
+    workpad_version: Version,
+}
 
 impl std::fmt::Display for UpdateError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "An Error occurred")
+        f.write_str(
+            &t!("UpdateError.Display")
+                .replace("{kind}", &self.kind.to_string())
+                .replace("{update}", &self.update.to_string())
+                .replace("{workpad_id}", &self.workpad_id)
+                .replace("{workpad_versiojn}", &self.workpad_version.to_string()),
+        )
     }
 }
 
 impl Error for UpdateError {}
+
+#[derive(Debug, Clone)]
+pub enum ErrorKind {
+    InvalidName(String),
+    MissingSheet(SheetId),
+    MissingRow(RowId),
+    MissingColumn(ColumnId),
+    DuplicateName(String),
+}
+
+impl std::fmt::Display for ErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ErrorKind::InvalidName(name) => {
+                f.write_str(&t!("UpdateError.InvalidName").replace("{name}", name))
+            }
+            ErrorKind::MissingSheet(id) => {
+                f.write_str(&t!("UpdateError.MissingId").replace("{id}", &id.to_string()))
+            }
+            ErrorKind::MissingRow(id) => {
+                f.write_str(&t!("UpdateError.MissingId").replace("{id}", &id.to_string()))
+            }
+            ErrorKind::MissingColumn(id) => {
+                f.write_str(&t!("UpdateError.MissingId").replace("{id}", &id.to_string()))
+            }
+            ErrorKind::DuplicateName(name) => {
+                f.write_str(&t!("UpdateError.DuplicateName").replace("{name}", name))
+            }
+        }
+    }
+}
 
 /// Type to record the event history of a workpad
 #[allow(dead_code)] // TODO Persistence
@@ -409,6 +542,7 @@ struct HistoryEntry {
 struct WorkpadMasterData {
     #[allow(dead_code)] // TODO Persistence
     id: String,
+    transaction: RwLock<Option<Transaction>>,
     history: RwLock<Vec<HistoryEntry>>,
     active_version: RwLock<Version>,
     next_part_id: IdBaseAtomic,
@@ -420,8 +554,84 @@ struct WorkpadMasterData {
     sheets_cells_idx: VersionIndex<(SheetId, RowId, ColumnId), CellId>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Transaction {
+    id: Version,
+    active_version: Version,
+    new_version: Version,
+}
+
 const NO_VER: &str = "Version not found";
 impl WorkpadMasterData {
+    /// Start a transaction.  Transactions cannot be concurrent so no existing transaction should exist.
+    fn tx_begin(&self) -> Transaction {
+        let mut tx = self.transaction.write().unwrap();
+        assert!(tx.is_none(), "Concurrent transactions not supported");
+
+        let new_tx = Transaction {
+            id: self.next_part_id.fetch_add(1, Ordering::SeqCst),
+            active_version: self.active_version(),
+            new_version: self.history.read().unwrap().len() as Version,
+        };
+        tx.replace(new_tx);
+
+        self.workpad_idx.tx_begin();
+        self.sheets_idx.tx_begin();
+        self.columns_idx.tx_begin();
+        self.rows_idx.tx_begin();
+        self.cells_idx.tx_begin();
+        self.sheets_cells_idx.tx_begin();
+
+        new_tx
+    }
+
+    /// Commit the current transaction.
+    fn tx_commit(&self, tx: &Transaction, update: WorkpadUpdate) {
+        let mut self_tx = self.transaction.write().unwrap();
+        match self_tx.as_ref() {
+            Some(inner) => assert!(inner == tx, "Transaction is not in progress"),
+            None => panic!("No transaction is in progress"),
+        }
+
+        self.workpad_idx.tx_commit();
+        self.sheets_idx.tx_commit();
+        self.columns_idx.tx_commit();
+        self.rows_idx.tx_commit();
+        self.cells_idx.tx_commit();
+        self.sheets_cells_idx.tx_commit();
+
+        let mut history = self.history.write().unwrap();
+        let prior_version = if let WorkpadUpdate::NewWorkpad = update {
+            None
+        } else {
+            Some(tx.active_version)
+        };
+
+        history.push(HistoryEntry {
+            prior_version,
+            update,
+        });
+        *self.active_version.write().unwrap() = tx.new_version;
+        self_tx.take();
+    }
+
+    /// Commit the current transaction.
+    fn tx_rollback(&self, tx: &Transaction) {
+        let self_tx = self.transaction.write().unwrap();
+        match self_tx.as_ref() {
+            Some(inner) => assert!(inner == tx, "Transaction is not in progress"),
+            None => panic!("No transaction is in progress"),
+        }
+
+        self.next_part_id.store(tx.id, Ordering::SeqCst);
+        self.workpad_idx.tx_rollback();
+        self.sheets_idx.tx_rollback();
+        self.columns_idx.tx_rollback();
+        self.rows_idx.tx_rollback();
+        self.cells_idx.tx_rollback();
+        self.sheets_cells_idx.tx_rollback();
+    }
+
     /// Return the currently active version
     fn active_version(&self) -> Version {
         *self.active_version.read().unwrap()
@@ -583,9 +793,53 @@ impl Workpad {
         &self.master.data.id
     }
 
-    // Returns the [`WorkpadMaster`] of this [`Workpad`]
+    /// Returns the [`WorkpadMaster`] of this [`Workpad`]
     pub fn master(&self) -> WorkpadMaster {
         self.master.clone()
+    }
+
+    /// Returns the id of this version and a description of the update that created it.
+    pub fn version(&self) -> (Version, String) {
+        let history = self.master.data.history.read().unwrap();
+        (
+            self.version,
+            history[self.version as usize].update.to_string(),
+        )
+    }
+
+    /// Returns the version information (see [`Workpad::version`]) for the versions which
+    /// preceed this version.  Versions are returned from the immediate predecessor of
+    /// this version backwards.
+    pub fn backward_versions(&self) -> impl Iterator<Item = (Version, String)> {
+        let history = self.master.data.history.read().unwrap();
+        let mut entry = &history[self.version as usize];
+
+        let mut versions = vec![];
+        while let Some(prior_version) = entry.prior_version {
+            entry = &history[prior_version as usize];
+            versions.push((prior_version, entry.update.to_string()))
+        }
+
+        versions.into_iter()
+    }
+
+    /// Returns the version information (see [`Workpad::version`]) for the versions which
+    /// succeed this version.  Versions are returned from the the immediate successor of
+    /// this version forwards.
+    pub fn forward_versions(&self) -> impl Iterator<Item = (Version, String)> {
+        let history = self.master.data.history.read().unwrap();
+        // history cannot be empty otherwise this version could not exist
+        let mut ver = (history.len() - 1) as Version;
+
+        let mut versions = vec![];
+        while ver != self.version {
+            let entry = &history[ver as usize];
+            versions.push((ver as Version, entry.update.to_string()));
+            // Prior version must exist until we reach this version
+            ver = entry.prior_version.unwrap();
+        }
+
+        versions.into_iter().rev()
     }
 
     /// Returns a [`Sheet`] representing the active sheet in this [`Workpad`]
@@ -760,18 +1014,16 @@ impl Sheet {
         self.data.row_header_width
     }
 
-    /// Returns the row and column indices or the active cell of this ['Sheet'].
+    /// Returns the active [`Cell`] of this ['Sheet'].
     /// If there are no cells in this sheet it will return `None`
-    pub fn active_cell(&self) -> Option<(usize, usize)> {
+    pub fn active_cell(&self) -> Option<Cell> {
         self.data.active_cell.map(|(row_id, column_id)| {
-            let row_idx = self.data.rows.iter().position(|id| *id == row_id).unwrap();
-            let column_idx = self
-                .data
-                .columns
-                .iter()
-                .position(|id| *id == column_id)
-                .unwrap();
-            (row_idx, column_idx)
+            self.internal_cell(
+                self.internal_row_index(row_id),
+                row_id,
+                self.internal_column_index(column_id),
+                column_id,
+            )
         })
     }
 
@@ -801,6 +1053,16 @@ impl Sheet {
     pub fn cell(&self, row: usize, column: usize) -> Cell {
         let row_id = self.data.rows[row];
         let column_id = self.data.columns[column];
+        self.internal_cell(row, row_id, column, column_id)
+    }
+
+    pub fn internal_cell(
+        &self,
+        row: usize,
+        row_id: RowId,
+        column: usize,
+        column_id: ColumnId,
+    ) -> Cell {
         let master_data = &self.workpad.master.data;
         let id = master_data.read_sheet_cell(self.id, row_id, column_id, self.version);
         let data = id.map(|id| master_data.read_cell(id, self.version));
@@ -812,7 +1074,27 @@ impl Sheet {
             data,
         }
     }
+
+    fn internal_row_index(&self, row_id: RowId) -> usize {
+        self.data.rows.iter().position(|id| *id == row_id).unwrap()
+    }
+
+    fn internal_column_index(&self, column_id: ColumnId) -> usize {
+        self.data
+            .columns
+            .iter()
+            .position(|id| *id == column_id)
+            .unwrap()
+    }
 }
+
+impl PartialEq for Sheet {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id && self.version == other.version
+    }
+}
+
+impl Eq for Sheet {}
 
 impl std::fmt::Display for Sheet {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -1107,60 +1389,107 @@ fn intern_base_10(i: usize) -> Intern<str> {
     Intern::from(unsafe { std::str::from_utf8_unchecked(&buffer[idx..20]) })
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+#[derive(Debug, Clone)]
+enum UndoAction<Key, Data> {
+    Insert(Key, Data),
+    Delete(Key),
+}
 
-    #[test]
-    fn column_name() {
-        const A: usize = 0;
-        const AA: usize = 26;
-        const AAA: usize = 26_usize.pow(2) + 26;
-        const AAAA: usize = 26_usize.pow(3) + 26_usize.pow(2) + 26;
-        const AAAAA: usize = 26_usize.pow(4) + 26_usize.pow(3) + 26_usize.pow(2) + 26;
-        const AAAAAA: usize =
-            26_usize.pow(5) + 26_usize.pow(4) + 26_usize.pow(3) + 26_usize.pow(2) + 26;
+#[derive(Debug)]
+struct UndoableIndex<Key, Value>
+where
+    Key: Copy + std::cmp::Ord,
+    Value: Clone,
+{
+    index: BTreeMap<Key, Value>,
+    undos: Vec<UndoAction<Key, Value>>,
+}
 
-        assert_eq!("A", &create_column_name(A) as &str);
-        assert_eq!("B", &create_column_name(A + 1) as &str);
-        assert_eq!("Z", &create_column_name(AA - 1) as &str);
-        assert_eq!("AA", &create_column_name(AA) as &str);
-        assert_eq!("AB", &create_column_name(AA + 1) as &str);
-        assert_eq!("AZ", &create_column_name(AA + 25) as &str);
-        assert_eq!("BA", &create_column_name(AA + 26) as &str);
-        assert_eq!("ZZ", &create_column_name(AAA - 1) as &str);
-        assert_eq!("AAA", &create_column_name(AAA) as &str);
-        assert_eq!("ABC", &create_column_name(AAA + 26 + 2) as &str);
-        assert_eq!("ZZZ", &create_column_name(AAAA - 1) as &str);
-        assert_eq!("AAAA", &create_column_name(AAAA) as &str);
-        assert_eq!(
-            "ABCD",
-            &create_column_name(AAAA + 26_usize.pow(2) + (2 * 26) + 3) as &str
-        );
-        assert_eq!("ZZZZ", &create_column_name(AAAAA - 1) as &str);
-        assert_eq!("AAAAA", &create_column_name(AAAAA) as &str);
-        assert_eq!(
-            "ABCDE",
-            &create_column_name(AAAAA + 26_usize.pow(3) + (2 * 26_usize.pow(2)) + (3 * 26) + 4)
-                as &str
-        );
-        assert_eq!("ZZZZZ", &create_column_name(AAAAAA - 1) as &str);
+impl<Key, Value> UndoableIndex<Key, Value>
+where
+    Key: Copy + std::cmp::Ord,
+    Value: Clone,
+{
+    fn tx_begin(&self) {
+        assert!(self.undos.is_empty(), "Previous transaction incomplete");
+    }
+
+    fn tx_commit(&mut self) {
+        self.undos.clear();
+    }
+
+    fn tx_rollback(&mut self) {
+        let undos = std::mem::take(&mut self.undos);
+        for undo in undos {
+            match undo {
+                UndoAction::Insert(key, value) => self.index.insert(key, value),
+                UndoAction::Delete(key) => self.index.remove(&key),
+            };
+        }
+    }
+
+    fn range<T, R>(&self, range: R) -> Range<'_, Key, Value>
+    where
+        T: ?Sized + std::cmp::Ord,
+        Key: Borrow<T> + std::cmp::Ord,
+        R: RangeBounds<T>,
+    {
+        self.index.range(range)
+    }
+
+    fn insert(&mut self, key: Key, value: Value) {
+        match self.index.insert(key, value) {
+            Some(prior) => self.undos.push(UndoAction::Insert(key, prior)),
+            None => self.undos.push(UndoAction::Delete(key)),
+        };
+    }
+
+    fn remove(&mut self, key: &Key) {
+        if let Some(prior) = self.index.remove(key) {
+            self.undos.push(UndoAction::Insert(*key, prior))
+        };
     }
 }
 
+impl<Key, Value> Default for UndoableIndex<Key, Value>
+where
+    Key: Copy + Ord,
+    Value: Clone,
+{
+    fn default() -> Self {
+        Self {
+            index: Default::default(),
+            undos: Default::default(),
+        }
+    }
+}
+
+#[derive(Debug)]
 struct VersionIndex<Id, Data>
 where
     Id: Copy + std::cmp::Ord,
     Data: Clone,
 {
-    index: RwLock<BTreeMap<(Id, Version, Version), Data>>,
+    index: RwLock<UndoableIndex<(Id, Version, Version), Data>>,
 }
 
 impl<Id, Data> VersionIndex<Id, Data>
 where
-    Id: Copy + std::cmp::Ord,
-    Data: Clone,
+    Id: Copy + std::cmp::Ord + std::fmt::Debug,
+    Data: Clone + std::fmt::Debug,
 {
+    fn tx_begin(&self) {
+        self.index.read().unwrap().tx_begin();
+    }
+
+    fn tx_commit(&self) {
+        self.index.write().unwrap().tx_commit();
+    }
+
+    fn tx_rollback(&self) {
+        self.index.write().unwrap().tx_rollback();
+    }
+
     /// Reads data as at the given version:
     fn read(&self, id: Id, version: Version) -> Option<Data> {
         let index = self.index.read().unwrap();
@@ -1182,15 +1511,20 @@ where
     /// or if no existing_data, only the new data entry is made
     fn write(&self, id: Id, data: Data, version: Version) {
         let mut index = self.index.write().unwrap();
+
         let existing = index
             .range(Self::all_versions(id))
             .find(|(&(_, from, to), _)| from <= version && version <= to)
             .map(|(k, v)| (k, (*v).clone()));
+        //        dbg!(&existing, &data);
         match existing {
-            Some((&(_, from, to), existing)) => {
+            Some((&(_, from, to), existing)) if from < version => {
                 index.insert((id, from, version - 1), existing);
                 index.insert((id, version, to), data);
                 index.remove(&(id, from, to));
+            }
+            Some((&(_, from, to), _)) => {
+                index.insert((id, from, to), data);
             }
             None => {
                 index.insert((id, version, Version::MAX), data);
@@ -1207,6 +1541,7 @@ where
     /// * (from, version-1, Id) -> data
     fn delete(&self, id: Id, version: Version) {
         let mut index = self.index.write().unwrap();
+
         let existing = index
             .range(Self::all_versions(id))
             .find(|(&(_, from, to), _)| from <= version && version <= to)
@@ -1249,5 +1584,873 @@ where
         Self {
             index: Default::default(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn column_name() {
+        const A: usize = 0;
+        const AA: usize = 26;
+        const AAA: usize = 26_usize.pow(2) + 26;
+        const AAAA: usize = 26_usize.pow(3) + 26_usize.pow(2) + 26;
+        const AAAAA: usize = 26_usize.pow(4) + 26_usize.pow(3) + 26_usize.pow(2) + 26;
+        const AAAAAA: usize =
+            26_usize.pow(5) + 26_usize.pow(4) + 26_usize.pow(3) + 26_usize.pow(2) + 26;
+
+        assert_eq!("A", &create_column_name(A) as &str);
+        assert_eq!("B", &create_column_name(A + 1) as &str);
+        assert_eq!("Z", &create_column_name(AA - 1) as &str);
+        assert_eq!("AA", &create_column_name(AA) as &str);
+        assert_eq!("AB", &create_column_name(AA + 1) as &str);
+        assert_eq!("AZ", &create_column_name(AA + 25) as &str);
+        assert_eq!("BA", &create_column_name(AA + 26) as &str);
+        assert_eq!("ZZ", &create_column_name(AAA - 1) as &str);
+        assert_eq!("AAA", &create_column_name(AAA) as &str);
+        assert_eq!("ABC", &create_column_name(AAA + 26 + 2) as &str);
+        assert_eq!("ZZZ", &create_column_name(AAAA - 1) as &str);
+        assert_eq!("AAAA", &create_column_name(AAAA) as &str);
+        assert_eq!(
+            "ABCD",
+            &create_column_name(AAAA + 26_usize.pow(2) + (2 * 26) + 3) as &str
+        );
+        assert_eq!("ZZZZ", &create_column_name(AAAAA - 1) as &str);
+        assert_eq!("AAAAA", &create_column_name(AAAAA) as &str);
+        assert_eq!(
+            "ABCDE",
+            &create_column_name(AAAAA + 26_usize.pow(3) + (2 * 26_usize.pow(2)) + (3 * 26) + 4)
+                as &str
+        );
+        assert_eq!("ZZZZZ", &create_column_name(AAAAAA - 1) as &str);
+    }
+
+    #[test]
+    fn new_blank() {
+        let master = WorkpadMaster::new_blank();
+        let pad = master.active_version();
+
+        // Assert no sheets and no active sheet
+        assert!(pad.active_sheet().is_none());
+        assert!(pad.sheets().next().is_none());
+
+        // Assert now at version 0 created by "New Workpad""
+        assert!(ver_is(pad.version(), 0, "New Workpad"));
+
+        // Assert no backward_versions or forward_versions
+        assert!(pad.backward_versions().next().is_none());
+        assert!(pad.forward_versions().next().is_none());
+    }
+
+    #[test]
+    fn new_starter() {
+        let master = WorkpadMaster::new_starter();
+        let pad = master.active_version();
+
+        // Assert sheets is: ["Sheet 1", "Sheet 2", "Sheet 3"] and "Sheet 1" is the active sheet
+        let mut sheets = pad.sheets();
+        match sheets.next() {
+            Some(s) => {
+                assert_eq!("Sheet 1", s.name());
+                assert_eq!(pad.active_sheet().unwrap(), s);
+            }
+            None => panic!(r#"Expected: "Sheet 1""#),
+        };
+        match sheets.next() {
+            Some(s) => assert_eq!("Sheet 2", s.name()),
+            None => panic!(r#"Expected: "Sheet 2""#),
+        };
+        match sheets.next() {
+            Some(s) => assert_eq!("Sheet 3", s.name()),
+            None => panic!(r#"Expected: "Sheet 3""#),
+        };
+        assert!(sheets.next().is_none());
+
+        // Assert now at version 0 created by "New Workpad""
+        assert!(ver_is(pad.version(), 0, "New Workpad"));
+
+        // Assert no backward_versions or forward_versions
+        assert!(pad.backward_versions().next().is_none());
+        assert!(pad.forward_versions().next().is_none());
+    }
+
+    #[test]
+    fn set_workpad_properties() {
+        let mut master = WorkpadMaster::new_blank();
+
+        // Set pad properties
+        let pad = master
+            .update(WorkpadUpdate::WorkpadSetProperties {
+                new_name: String::from("Test Workpad"),
+                new_author: String::from("A Writer"),
+            })
+            .expect("Update should succeed");
+
+        assert_eq!("Test Workpad", pad.name());
+        assert_eq!("A Writer", pad.author());
+
+        // Assert now at version 1 created by "Set Workpad Properties""
+        assert!(ver_is(pad.version(), 1, "Set Workpad Properties"));
+
+        // Assert backward_versions is [(0, "New Workpad"]
+        let mut back_vers = pad.backward_versions();
+        match back_vers.next() {
+            Some(ver) => assert!(ver_is(ver, 0, "New Workpad")),
+            None => panic!(r#"Expected (0, "New Workpad")"#),
+        };
+        assert!(back_vers.next().is_none());
+
+        // Assert no forward_versions
+        assert!(pad.forward_versions().next().is_none());
+    }
+
+    #[test]
+    fn cannot_set_workpad_properties_with_blank_name() {
+        let mut master = WorkpadMaster::new_blank();
+
+        // Set pad properties
+        let result = master.update(WorkpadUpdate::WorkpadSetProperties {
+            new_name: String::from(""),
+            new_author: String::from("A Writer"),
+        });
+
+        assert!(result.is_err());
+        assert_eq!(
+            r#"The name "" is not allowed (during update: Set Workpad Properties)"#,
+            result.err().unwrap().to_string()
+        );
+    }
+
+    #[test]
+    fn delete_active_sheet() {
+        let mut master = WorkpadMaster::new_starter();
+
+        // Delete the active sheet
+        let sheet_id = master.active_version().active_sheet().unwrap().id();
+        let pad = master
+            .update(WorkpadUpdate::SheetDelete { sheet_id })
+            .expect("Update should succeed");
+
+        // Assert sheets is: ["Sheet 2", "Sheet 3"] and "Sheet 2" is now the active sheet
+        let mut sheets = pad.sheets();
+        match sheets.next() {
+            Some(s) => {
+                assert_eq!("Sheet 2", s.name());
+                assert_eq!(pad.active_sheet().unwrap(), s);
+            }
+            None => panic!(r#"Expected: "Sheet 2""#),
+        };
+        match sheets.next() {
+            Some(s) => assert_eq!("Sheet 3", s.name()),
+            None => panic!(r#"Expected: "Sheet 3""#),
+        };
+        assert!(sheets.next().is_none());
+
+        // Assert now at version 1 created by "Delete Sheet""
+        assert!(ver_is(pad.version(), 1, "Delete Sheet"));
+
+        // Assert backward_versions is [(0, "New Workpad"]
+        let mut back_vers = pad.backward_versions();
+        match back_vers.next() {
+            Some(ver) => assert!(ver_is(ver, 0, "New Workpad")),
+            None => panic!(r#"Expected (0, "New Workpad")"#),
+        };
+        assert!(back_vers.next().is_none());
+
+        // Assert no forward_versions
+        assert!(pad.forward_versions().next().is_none());
+    }
+
+    #[test]
+    fn delete_inactive_sheet() {
+        let mut master = WorkpadMaster::new_starter();
+
+        // Delete an inactive sheet
+        let sheet_id = master.active_version().sheets().nth(1).unwrap().id();
+        let pad = master
+            .update(WorkpadUpdate::SheetDelete { sheet_id })
+            .expect("Update should succeed");
+
+        // Assert sheets is: ["Sheet 1", "Sheet 3"] and "Sheet 1" is still the active sheet
+        let mut sheets = pad.sheets();
+        match sheets.next() {
+            Some(s) => {
+                assert_eq!("Sheet 1", s.name());
+                assert_eq!(pad.active_sheet().unwrap(), s);
+            }
+            None => panic!(r#"Expected: "Sheet 1""#),
+        };
+        match sheets.next() {
+            Some(s) => assert_eq!("Sheet 3", s.name()),
+            None => panic!(r#"Expected: "Sheet 3""#),
+        };
+        assert!(sheets.next().is_none());
+
+        // Assert now at version 1 created by "Delete Sheet""
+        assert!(ver_is(pad.version(), 1, "Delete Sheet"));
+
+        // Assert backward_versions is [(0, "New Workpad"]
+        let mut back_vers = pad.backward_versions();
+        match back_vers.next() {
+            Some(ver) => assert!(ver_is(ver, 0, "New Workpad")),
+            None => panic!(r#"Expected (0, "New Workpad")"#),
+        };
+        assert!(back_vers.next().is_none());
+
+        // Assert no forward_versions
+        assert!(pad.forward_versions().next().is_none());
+    }
+
+    #[test]
+    fn delete_sheet_invalid_id() {
+        let mut master = WorkpadMaster::new_starter();
+
+        // Delete the active sheet
+        let sheet_id = SheetId(Version::MAX);
+        let result = master.update(WorkpadUpdate::SheetDelete { sheet_id });
+
+        assert!(result.is_err());
+        assert_eq!(
+            "SheetId(4294967295) not found (during update: Delete Sheet)",
+            result.err().unwrap().to_string()
+        );
+    }
+
+    #[test]
+    fn add_sheets() {
+        let mut master = WorkpadMaster::new_blank();
+
+        // Add "New 1"
+        let pad = master
+            .update(WorkpadUpdate::SheetAdd {
+                kind: SheetKind::Worksheet,
+                name: String::from("New 1"),
+            })
+            .expect("Update should succeed");
+
+        // Assert sheets is: ["New 1"] and "New 1" is the active sheet
+        let mut sheets = pad.sheets();
+        match sheets.next() {
+            Some(s) => {
+                assert_eq!("New 1", s.name());
+                assert_eq!(pad.active_sheet().unwrap(), s);
+            }
+            None => panic!(r#"Expected: "New 1""#),
+        };
+        assert!(sheets.next().is_none());
+
+        // Add "New 2"
+        let pad = master
+            .update(WorkpadUpdate::SheetAdd {
+                kind: SheetKind::Worksheet,
+                name: String::from("New 2"),
+            })
+            .expect("Update should succeed");
+
+        // Assert sheets is: ["New 1", "New 2"] and "New 2" is now the active sheet
+        let mut sheets = pad.sheets();
+        match sheets.next() {
+            Some(s) => assert_eq!("New 1", s.name()),
+            None => panic!(r#"Expected: "New 1""#),
+        };
+        match sheets.next() {
+            Some(s) => {
+                assert_eq!("New 2", s.name());
+                assert_eq!(pad.active_sheet().unwrap(), s);
+            }
+            None => panic!(r#"Expected: "New 2""#),
+        };
+        assert!(sheets.next().is_none());
+
+        // Assert now at version 2 created by "Add Sheet""
+        assert!(ver_is(pad.version(), 2, "Add Sheet"));
+
+        // Assert backward_versions is [(1, "Add Sheet"), (0, "New Workpad"]
+        let mut back_vers = pad.backward_versions();
+        match back_vers.next() {
+            Some(ver) => assert!(ver_is(ver, 1, "Add Sheet")),
+            None => panic!(r#"Expected (1, "Add Sheet")"#),
+        };
+        match back_vers.next() {
+            Some(ver) => assert!(ver_is(ver, 0, "New Workpad")),
+            None => panic!(r#"Expected (0, "New Workpad")"#),
+        };
+        assert!(back_vers.next().is_none());
+
+        // Assert no forward_versions
+        assert!(pad.forward_versions().next().is_none());
+    }
+
+    #[test]
+    // TODO Should we be more restrictive than just not blank? (Valid names?)
+    fn cannot_add_sheet_with_blank_name() {
+        let mut master = WorkpadMaster::new_blank();
+        let result = master.update(WorkpadUpdate::SheetAdd {
+            kind: SheetKind::Worksheet,
+            name: String::new(),
+        });
+
+        assert!(result.is_err());
+        assert_eq!(
+            r#"The name "" is not allowed (during update: Add Sheet)"#,
+            result.err().unwrap().to_string()
+        );
+    }
+
+    #[test]
+    fn cannot_add_sheet_with_existing_name() {
+        let mut master = WorkpadMaster::new_blank();
+        master
+            .update(WorkpadUpdate::SheetAdd {
+                kind: SheetKind::Worksheet,
+                name: String::from("New 1"),
+            })
+            .expect("Update should succeed");
+
+        let result = master.update(WorkpadUpdate::SheetAdd {
+            kind: SheetKind::Worksheet,
+            name: String::from("New 1"),
+        });
+
+        assert!(result.is_err());
+        assert_eq!(
+            r#"The name "New 1" is already used (during update: Add Sheet)"#,
+            result.err().unwrap().to_string()
+        );
+    }
+
+    #[test]
+    fn set_sheet_properties() {
+        let mut master = WorkpadMaster::new_starter();
+
+        // Set the sheet properties
+        let sheet_id = master.active_version().active_sheet().unwrap().id();
+        let pad = master
+            .update(WorkpadUpdate::SheetSetProperties {
+                sheet_id,
+                new_name: String::from("Test Sheet"),
+            })
+            .expect("Update should succeed");
+
+        // Assert sheets is: ["Test Sheet", "Sheet 2", "Sheet 3"] and "Test Sheet" is still the (renamed) active sheet
+        let mut sheets = pad.sheets();
+        match sheets.next() {
+            Some(s) => {
+                assert_eq!("Test Sheet", s.name());
+                assert_eq!(pad.active_sheet().unwrap(), s);
+            }
+            None => panic!(r#"Expected: "Test Sheet""#),
+        };
+        match sheets.next() {
+            Some(s) => assert_eq!("Sheet 2", s.name()),
+            None => panic!(r#"Expected: "Sheet 2""#),
+        };
+        match sheets.next() {
+            Some(s) => assert_eq!("Sheet 3", s.name()),
+            None => panic!(r#"Expected: "Sheet 3""#),
+        };
+        assert!(sheets.next().is_none());
+
+        // Assert now at version 1 created by "Set Sheet Properties""
+        assert!(ver_is(pad.version(), 1, "Set Sheet Properties"));
+
+        // Assert backward_versions is [(0, "New Workpad"]
+        let mut back_vers = pad.backward_versions();
+        match back_vers.next() {
+            Some(ver) => assert!(ver_is(ver, 0, "New Workpad")),
+            None => panic!(r#"Expected (0, "New Workpad")"#),
+        };
+        assert!(back_vers.next().is_none());
+
+        // Assert no forward_versions
+        assert!(pad.forward_versions().next().is_none());
+    }
+
+    #[test]
+    // TODO Should we be more restrictive than just not blank? (Valid names?)
+    fn cannot_set_sheet_properties_with_blank_name() {
+        let mut master = WorkpadMaster::new_starter();
+
+        // Set the sheet properties
+        let sheet_id = master.active_version().active_sheet().unwrap().id();
+        let result = master.update(WorkpadUpdate::SheetSetProperties {
+            sheet_id,
+            new_name: String::new(),
+        });
+
+        assert!(result.is_err());
+        assert_eq!(
+            r#"The name "" is not allowed (during update: Set Sheet Properties)"#,
+            result.err().unwrap().to_string()
+        );
+    }
+
+    #[test]
+    // TODO Should we be more restrictive than just not blank? (Valid names?)
+    fn cannot_set_sheet_properties_with_existing_name() {
+        let mut master = WorkpadMaster::new_starter();
+
+        // Set the sheet properties
+        let sheet_id = master.active_version().active_sheet().unwrap().id();
+        let result = master.update(WorkpadUpdate::SheetSetProperties {
+            sheet_id,
+            new_name: String::from("Sheet 2"),
+        });
+
+        assert!(result.is_err());
+        assert_eq!(
+            r#"The name "Sheet 2" is already used (during update: Set Sheet Properties)"#,
+            result.err().unwrap().to_string()
+        );
+    }
+
+    #[test]
+    fn can_set_sheet_properties_to_its_current_name() {
+        let mut master = WorkpadMaster::new_starter();
+
+        // Set the sheet properties
+        let sheet_id = master.active_version().active_sheet().unwrap().id();
+        let pad = master
+            .update(WorkpadUpdate::SheetSetProperties {
+                sheet_id,
+                new_name: String::from("Sheet 1"),
+            })
+            .expect("Update should succeed");
+
+        // Assert sheets is: ["Sheet 1", "Sheet 2", "Sheet 3"] and "Sheet 1" is still the active sheet
+        let mut sheets = pad.sheets();
+        match sheets.next() {
+            Some(s) => {
+                assert_eq!("Sheet 1", s.name());
+                assert_eq!(pad.active_sheet().unwrap(), s);
+            }
+            None => panic!(r#"Expected: "Sheet 1""#),
+        };
+        match sheets.next() {
+            Some(s) => assert_eq!("Sheet 2", s.name()),
+            None => panic!(r#"Expected: "Sheet 2""#),
+        };
+        match sheets.next() {
+            Some(s) => assert_eq!("Sheet 3", s.name()),
+            None => panic!(r#"Expected: "Sheet 3""#),
+        };
+        assert!(sheets.next().is_none());
+    }
+
+    #[test]
+    fn set_sheet_active_cell() {
+        let mut master = WorkpadMaster::new_starter();
+
+        // Assert active cell is (0, 0) on all sheets
+        let pad = master.active_version();
+        let mut sheet_ids = vec![];
+        for sheet in pad.sheets() {
+            sheet_ids.push(sheet.id());
+            match sheet.active_cell() {
+                Some(cell) => {
+                    assert_eq!(0, cell.row().index());
+                    assert_eq!(0, cell.column().index());
+                }
+                None => panic!("Expected active cell"),
+            }
+        }
+
+        // Change the active cell to (1, 1) for "Sheet 1"
+        let sheet_id = sheet_ids[0];
+        let sheet = pad.sheet_by_id(sheet_id).unwrap();
+        let row_id = sheet.row(1).id();
+        let column_id = sheet.column(1).id();
+        master
+            .update(WorkpadUpdate::SheetSetActiveCell {
+                sheet_id,
+                row_id,
+                column_id,
+            })
+            .expect("Update should succeed");
+
+        // Change the active cell to (2, 2) for "Sheet 2"
+        let sheet_id = sheet_ids[1];
+        let sheet = pad.sheet_by_id(sheet_id).unwrap();
+        let row_id = sheet.row(2).id();
+        let column_id = sheet.column(2).id();
+        master
+            .update(WorkpadUpdate::SheetSetActiveCell {
+                sheet_id,
+                row_id,
+                column_id,
+            })
+            .expect("Update should succeed");
+
+        // Change the active cell to (3, 3) for "Sheet 3"
+        let sheet_id = sheet_ids[2];
+        let sheet = pad.sheet_by_id(sheet_id).unwrap();
+        let row_id = sheet.row(3).id();
+        let column_id = sheet.column(3).id();
+        master
+            .update(WorkpadUpdate::SheetSetActiveCell {
+                sheet_id,
+                row_id,
+                column_id,
+            })
+            .expect("Update should succeed");
+
+        // Assert active cell is [(1, 1), (2, 2), (3, 3) on sheets ["Sheet 1", "Sheet 2", "Sheet 3"] respectively
+        let pad = master.active_version();
+        for (sheet, expected) in pad.sheets().zip(vec![(1, 1), (2, 2), (3, 3)]) {
+            match sheet.active_cell() {
+                Some(cell) => {
+                    assert_eq!(expected.0, cell.row().index());
+                    assert_eq!(expected.0, cell.column().index());
+                }
+                None => panic!("Expected active cell"),
+            }
+        }
+
+        // Assert now at version 3 created by "Set Active Cell""
+        assert!(ver_is(pad.version(), 3, "Set Sheet Active Cell"),);
+
+        // Assert backward_versions is [(2, "Set Sheet Active Cell"), (1, "Set Sheet Active Cell"), (0, "New Workpad")]
+        let mut back_vers = pad.backward_versions();
+        match back_vers.next() {
+            Some(ver) => assert!(ver_is(ver, 2, "Set Sheet Active Cell")),
+            None => panic!(r#"Expected (2, "Set Sheet Active Cell")"#),
+        };
+        match back_vers.next() {
+            Some(ver) => assert!(ver_is(ver, 1, "Set Sheet Active Cell")),
+            None => panic!(r#"Expected (1, "Set Sheet Active Cell")"#),
+        };
+        match back_vers.next() {
+            Some(ver) => assert!(ver_is(ver, 0, "New Workpad")),
+            None => panic!(r#"Expected (0, "New Workpad")"#),
+        };
+        assert!(back_vers.next().is_none());
+
+        // Assert no forward_versions
+        assert!(pad.forward_versions().next().is_none());
+    }
+
+    #[test]
+    fn cannot_set_sheet_active_cell_to_unknown_sheet_id() {
+        let mut master = WorkpadMaster::new_starter();
+        let sheet = master.active_version().active_sheet().unwrap();
+        let cell = sheet.cell(0, 0);
+
+        // Try to set active cell with invalid sheet_id
+        let result = master.update(WorkpadUpdate::SheetSetActiveCell {
+            sheet_id: SheetId(Version::MAX),
+            row_id: cell.row().id(),
+            column_id: cell.column().id(),
+        });
+
+        assert!(result.is_err());
+        assert_eq!(
+            "SheetId(4294967295) not found (during update: Set Sheet Active Cell)",
+            result.err().unwrap().to_string()
+        );
+    }
+
+    #[test]
+    fn cannot_set_sheet_active_cell_to_unknown_row_id() {
+        let mut master = WorkpadMaster::new_starter();
+        let sheet = master.active_version().active_sheet().unwrap();
+        let cell = sheet.cell(0, 0);
+
+        // Try to set active cell with invalid row_id
+        let result = master.update(WorkpadUpdate::SheetSetActiveCell {
+            sheet_id: sheet.id(),
+            row_id: RowId(Version::MAX),
+            column_id: cell.column().id(),
+        });
+
+        assert!(result.is_err());
+        assert_eq!(
+            "RowId(4294967295) not found (during update: Set Sheet Active Cell)",
+            result.err().unwrap().to_string()
+        );
+    }
+
+    #[test]
+    fn cannot_set_sheet_active_cell_to_unknown_column_id() {
+        let mut master = WorkpadMaster::new_starter();
+        let sheet = master.active_version().active_sheet().unwrap();
+        let cell = sheet.cell(0, 0);
+
+        // Try to set active cell with invalid column_id
+        let result = master.update(WorkpadUpdate::SheetSetActiveCell {
+            sheet_id: sheet.id(),
+            row_id: cell.row().id(),
+            column_id: ColumnId(Version::MAX),
+        });
+
+        assert!(result.is_err());
+        assert_eq!(
+            "ColumnId(4294967295) not found (during update: Set Sheet Active Cell)",
+            result.err().unwrap().to_string()
+        );
+    }
+
+    #[test]
+    fn set_sheet_cell_value() {
+        let mut master = WorkpadMaster::new_starter();
+
+        // Assert active cell is empty
+        let pad = master.active_version();
+        let sheet = pad.active_sheet().unwrap();
+        let cell = sheet.active_cell().unwrap();
+        assert!(cell.value().is_empty());
+
+        // Change the cell value
+        let pad = master
+            .update(WorkpadUpdate::SheetSetCellValue {
+                sheet_id: sheet.id(),
+                row_id: cell.row().id(),
+                column_id: cell.column().id(),
+                value: String::from("123"),
+            })
+            .expect("Update should succeed");
+
+        // Assert new value
+        let sheet = pad.active_sheet().unwrap();
+        let cell = sheet.active_cell().unwrap();
+        assert_eq!("123", cell.value());
+
+        // Assert now at version 1 created by "Set Active Cell""
+        assert!(ver_is(pad.version(), 1, "Set Sheet Cell Value"));
+
+        // Assert backward_versions is [(0, "New Workpad")]
+        let mut back_vers = pad.backward_versions();
+        match back_vers.next() {
+            Some(ver) => assert!(ver_is(ver, 0, "New Workpad")),
+            None => panic!(r#"Expected (0, "New Workpad")"#),
+        };
+        assert!(back_vers.next().is_none());
+
+        // Assert no forward_versions
+        assert!(pad.forward_versions().next().is_none());
+    }
+
+    #[test]
+    fn cannot_set_sheet_cell_value_on_unknown_sheet_id() {
+        let mut master = WorkpadMaster::new_starter();
+        let pad = master.active_version();
+        let sheet = pad.active_sheet().unwrap();
+        let cell = sheet.active_cell().unwrap();
+
+        // Try to set cell value with invalid sheet_id
+        let result = master.update(WorkpadUpdate::SheetSetCellValue {
+            sheet_id: SheetId(Version::MAX),
+            row_id: cell.row().id(),
+            column_id: cell.column.id(),
+            value: String::from("123"),
+        });
+
+        assert!(result.is_err());
+        assert_eq!(
+            "SheetId(4294967295) not found (during update: Set Sheet Cell Value)",
+            result.err().unwrap().to_string()
+        );
+    }
+
+    #[test]
+    fn cannot_set_sheet_cell_value_on_unknown_row_id() {
+        let mut master = WorkpadMaster::new_starter();
+        let pad = master.active_version();
+        let sheet = pad.active_sheet().unwrap();
+        let cell = sheet.active_cell().unwrap();
+
+        // Try to set cell value with invalid row_id
+        let result = master.update(WorkpadUpdate::SheetSetCellValue {
+            sheet_id: sheet.id(),
+            row_id: RowId(Version::MAX),
+            column_id: cell.column().id(),
+            value: String::from("123"),
+        });
+
+        assert!(result.is_err());
+        assert_eq!(
+            "RowId(4294967295) not found (during update: Set Sheet Cell Value)",
+            result.err().unwrap().to_string()
+        );
+    }
+
+    #[test]
+    fn cannot_set_sheet_cell_value_on_unknown_column_id() {
+        let mut master = WorkpadMaster::new_starter();
+        let pad = master.active_version();
+        let sheet = pad.active_sheet().unwrap();
+        let cell = sheet.active_cell().unwrap();
+
+        // Try to set cell value with invalid column_id
+        let result = master.update(WorkpadUpdate::SheetSetCellValue {
+            sheet_id: sheet.id(),
+            row_id: cell.row().id(),
+            column_id: ColumnId(Version::MAX),
+            value: String::from("123"),
+        });
+
+        assert!(result.is_err());
+        assert_eq!(
+            "ColumnId(4294967295) not found (during update: Set Sheet Cell Value)",
+            result.err().unwrap().to_string()
+        );
+    }
+
+    #[test]
+    fn multi_simple() {
+        let mut master = WorkpadMaster::new_starter();
+
+        // Assert active cell is empty
+        let pad = master.active_version();
+        let sheet = pad.active_sheet().unwrap();
+        let cell_0_0 = sheet.cell(0, 0);
+        let cell_0_1 = sheet.cell(0, 1);
+        let cell_0_2 = sheet.cell(0, 2);
+
+        // Change the cell values
+        let update_0_0 = WorkpadUpdate::SheetSetCellValue {
+            sheet_id: sheet.id(),
+            row_id: cell_0_0.row().id(),
+            column_id: cell_0_0.column().id(),
+            value: String::from("0"),
+        };
+        let update_0_1 = WorkpadUpdate::SheetSetCellValue {
+            sheet_id: sheet.id(),
+            row_id: cell_0_1.row().id(),
+            column_id: cell_0_1.column().id(),
+            value: String::from("1"),
+        };
+        let update_0_2 = WorkpadUpdate::SheetSetCellValue {
+            sheet_id: sheet.id(),
+            row_id: cell_0_2.row().id(),
+            column_id: cell_0_2.column().id(),
+            value: String::from("2"),
+        };
+        let pad = master
+            .update(WorkpadUpdate::Multi(vec![
+                update_0_0, update_0_1, update_0_2,
+            ]))
+            .expect("Update should succeed");
+
+        // Assert new values
+        let sheet = pad.active_sheet().unwrap();
+        assert_eq!("0", sheet.cell(0, 0).value());
+        assert_eq!("1", sheet.cell(0, 1).value());
+        assert_eq!("2", sheet.cell(0, 2).value());
+
+        // Assert now at version 1 created by "Set Active Cell""
+        assert!(ver_is(
+            pad.version(),
+            1,
+            "Set Sheet Cell Value & Set Sheet Cell Value & Set Sheet Cell Value"
+        ),);
+
+        // Assert backward_versions is [(0, "New Workpad")]
+        let mut back_vers = pad.backward_versions();
+        match back_vers.next() {
+            Some(ver) => assert!(ver_is(ver, 0, "New Workpad")),
+            None => panic!(r#"Expected (0, "New Workpad")"#),
+        };
+        assert!(back_vers.next().is_none());
+
+        // Assert no forward_versions
+        assert!(pad.forward_versions().next().is_none());
+    }
+
+    #[test]
+    fn multi_update_same_cell_twice() {
+        let mut master = WorkpadMaster::new_starter();
+
+        // Assert active cell is empty
+        let pad = master.active_version();
+        let sheet = pad.active_sheet().unwrap();
+        let cell = sheet.cell(0, 0);
+
+        // Change the cell values
+        let update_1 = WorkpadUpdate::SheetSetCellValue {
+            sheet_id: sheet.id(),
+            row_id: cell.row().id(),
+            column_id: cell.column().id(),
+            value: String::from("0"),
+        };
+        let update_2 = WorkpadUpdate::SheetSetCellValue {
+            sheet_id: sheet.id(),
+            row_id: cell.row().id(),
+            column_id: cell.column().id(),
+            value: String::from("1"),
+        };
+        let pad = master
+            .update(WorkpadUpdate::Multi(vec![update_1, update_2]))
+            .expect("Update should succeed");
+
+        // Assert second value
+        let sheet = pad.active_sheet().unwrap();
+        assert_eq!("1", sheet.cell(0, 0).value());
+
+        // Assert now at version 1 created by "Set Active Cell""
+        assert!(ver_is(
+            pad.version(),
+            1,
+            "Set Sheet Cell Value & Set Sheet Cell Value"
+        ),);
+
+        // Assert backward_versions is [(0, "New Workpad")]
+        let mut back_vers = pad.backward_versions();
+        match back_vers.next() {
+            Some(ver) => assert!(ver_is(ver, 0, "New Workpad")),
+            None => panic!(r#"Expected (0, "New Workpad")"#),
+        };
+        assert!(back_vers.next().is_none());
+
+        // Assert no forward_versions
+        assert!(pad.forward_versions().next().is_none());
+    }
+
+    #[test]
+    fn multi_update_second_fails_so_all_fail() {
+        let mut master = WorkpadMaster::new_starter();
+
+        // Assert active cell is empty
+        let pad = master.active_version();
+        let sheet = pad.active_sheet().unwrap();
+        let cell = sheet.cell(0, 0);
+
+        // Change the cell values
+        let update_1 = WorkpadUpdate::SheetSetCellValue {
+            sheet_id: sheet.id(),
+            row_id: cell.row().id(),
+            column_id: cell.column().id(),
+            value: String::from("0"),
+        };
+        let update_2 = WorkpadUpdate::SheetSetCellValue {
+            sheet_id: SheetId(Version::MAX),
+            row_id: cell.row().id(),
+            column_id: cell.column().id(),
+            value: String::from("1"),
+        };
+        let result = master.update(WorkpadUpdate::Multi(vec![update_1, update_2]));
+
+        assert!(result.is_err());
+        assert_eq!(
+            "SheetId(4294967295) not found (during update: Set Sheet Cell Value)",
+            result.err().unwrap().to_string()
+        );
+
+        // Assert first has not changed
+        let pad = master.active_version();
+        let sheet = pad.active_sheet().unwrap();
+        assert!(sheet.cell(0, 0).value().is_empty());
+
+        // Assert still at version 0 created by "New Workpad""
+        assert!(ver_is(pad.version(), 0, "New Workpad"),);
+
+        // Assert no backward_versions and no forward_versions
+        assert!(pad.backward_versions().next().is_none());
+        assert!(pad.forward_versions().next().is_none());
+    }
+
+    fn ver_is(ver: (Version, String), expected_version: Version, expected_desc: &str) -> bool {
+        ver.0 == expected_version && ver.1 == expected_desc
     }
 }
