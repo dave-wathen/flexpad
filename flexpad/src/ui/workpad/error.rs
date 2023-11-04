@@ -1,4 +1,7 @@
-use crate::ui::{action::ActionSet, SPACE_M};
+use crate::ui::{
+    action::{ActionSet, ActionStyle},
+    SPACE_M,
+};
 use iced::{
     theme,
     widget::{column, text},
@@ -27,7 +30,7 @@ impl ErrorUi {
         )
         .foot(
             ActionSet::ok()
-                .ok_button_style(theme::Button::Destructive)
+                .ok_button_style(ActionStyle::Error)
                 .to_element()
                 .map(|_| WorkpadMessage::ModalCancel),
         )

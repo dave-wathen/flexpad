@@ -3,7 +3,7 @@ use iced::{
     event::Status,
     keyboard::{self, KeyCode, Modifiers},
     subscription, theme,
-    widget::{button, horizontal_space, row, text},
+    widget::{self, button, horizontal_space, row, text},
     Event, Length, Subscription,
 };
 use rust_i18n::t;
@@ -42,10 +42,10 @@ impl Action {
         }
     }
 
-    fn style(&self) -> theme::Button {
+    fn style(&self) -> ActionStyle {
         match self {
-            Action::Ok => theme::Button::Primary,
-            Action::Cancel => theme::Button::Secondary,
+            Action::Ok => ActionStyle::Ok,
+            Action::Cancel => ActionStyle::Cancel,
         }
     }
 
@@ -81,7 +81,7 @@ fn check_event(
 pub struct ActionSet {
     actions: Vec<Action>,
     names: Vec<String>,
-    button_styles: Vec<theme::Button>,
+    button_styles: Vec<ActionStyle>,
 }
 
 impl ActionSet {
@@ -134,7 +134,7 @@ impl ActionSet {
 
     /// Change the text on the OK button
     #[allow(dead_code)]
-    pub fn ok_button_style(mut self, style: theme::Button) -> Self {
+    pub fn ok_button_style(mut self, style: ActionStyle) -> Self {
         match self.actions.iter().position(|a| *a == Action::Ok) {
             Some(idx) => self.button_styles[idx] = style,
             None => warn!("Trying to set button style for OK when not included in the set"),
@@ -144,7 +144,7 @@ impl ActionSet {
 
     /// Change the text on the Cancel button
     #[allow(dead_code)]
-    pub fn cancel_button_style(mut self, style: theme::Button) -> Self {
+    pub fn cancel_button_style(mut self, style: ActionStyle) -> Self {
         match self.actions.iter().position(|a| *a == Action::Cancel) {
             Some(idx) => self.button_styles[idx] = style,
             None => warn!("Trying to set text for Cancel when not included in the set"),
@@ -166,19 +166,10 @@ impl ActionSet {
             .zip(self.names.iter())
             .zip(self.button_styles.iter())
         {
-            // theme::Button is neither copy nor clone
-            let style = match style {
-                theme::Button::Primary => theme::Button::Primary,
-                theme::Button::Secondary => theme::Button::Secondary,
-                theme::Button::Positive => theme::Button::Positive,
-                theme::Button::Destructive => theme::Button::Destructive,
-                theme::Button::Text => theme::Button::Text,
-                theme::Button::Custom(_) => panic!("Custom is not supported"),
-            };
             buttons = buttons.push(
                 button(text(txt).horizontal_alignment(Horizontal::Center))
                     .width(DIALOG_BUTTON_WIDTH)
-                    .style(style)
+                    .style(theme::Button::Custom(Box::new(*style)))
                     .on_press(*action),
             );
         }
@@ -186,5 +177,27 @@ impl ActionSet {
         row![horizontal_space(Length::Fill), buttons.spacing(SPACE_M)]
             .width(Length::Fill)
             .into()
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ActionStyle {
+    Ok,
+    Cancel,
+    Error,
+}
+
+impl widget::button::StyleSheet for ActionStyle
+where
+    iced::Theme: widget::button::StyleSheet<Style = theme::Button>,
+{
+    type Style = theme::Theme;
+
+    fn active(&self, theme: &Self::Style) -> button::Appearance {
+        match self {
+            ActionStyle::Ok => theme.active(&theme::Button::Primary),
+            ActionStyle::Cancel => theme.active(&theme::Button::Secondary),
+            ActionStyle::Error => theme.active(&theme::Button::Destructive),
+        }
     }
 }
