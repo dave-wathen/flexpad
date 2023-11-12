@@ -1,13 +1,12 @@
 use crate::{
     model::workpad::{Sheet, SheetId, WorkpadUpdate},
     ui::{
-        action::{Action, ActionSet},
-        text_input,
+        button_bar, dialog::Dialog, dialog_button, dialog_title, handle_cancel_key,
+        handle_ok_and_cancel_keys, style, text_input, SPACE_S,
     },
 };
-use iced::{widget::text, Command, Subscription};
+use iced::{subscription, widget::column, Command, Subscription};
 
-use iced_aw::Card;
 use rust_i18n::t;
 
 use super::WorkpadMessage;
@@ -15,14 +14,15 @@ use super::WorkpadMessage;
 #[derive(Debug, Clone)]
 pub enum SheetPropertiesMessage {
     Name(String),
-    Finish(Action),
+    Cancel,
+    Submit,
 }
 
 impl SheetPropertiesMessage {
     pub fn map_to_workpad(msg: SheetPropertiesMessage) -> WorkpadMessage {
         match msg {
-            Self::Finish(Action::Ok) => WorkpadMessage::ModalSubmit,
-            Self::Finish(Action::Cancel) => WorkpadMessage::ModalCancel,
+            Self::Submit => WorkpadMessage::ModalSubmit,
+            Self::Cancel => WorkpadMessage::ModalCancel,
             m => WorkpadMessage::SheetPropertiesMsg(m),
         }
     }
@@ -33,8 +33,8 @@ impl std::fmt::Display for SheetPropertiesMessage {
         write!(f, "SheetPropertiesMessage::")?;
         match self {
             Self::Name(name) => write!(f, "Name({name})"),
-            Self::Finish(Action::Ok) => write!(f, "Finish(Submit)"),
-            Self::Finish(Action::Cancel) => write!(f, "Finish(Cancel)"),
+            Self::Cancel => write!(f, "Cancel"),
+            Self::Submit => write!(f, "Submit"),
         }
     }
 }
@@ -64,8 +64,15 @@ impl SheetPropertiesUi {
     }
 
     pub fn view(&self) -> iced::Element<'_, SheetPropertiesMessage> {
-        Card::new(
-            text(t!("SheetProperties.Title")),
+        let cancel = dialog_button(t!("Common.Cancel"), style::DialogButtonStyle::Cancel)
+            .on_press(SheetPropertiesMessage::Cancel);
+
+        let mut ok = dialog_button(t!("Common.Ok"), style::DialogButtonStyle::Ok);
+        if self.name_error.is_none() {
+            ok = ok.on_press(SheetPropertiesMessage::Submit)
+        }
+
+        let body = column![
             text_input(
                 t!("SheetName.Label"),
                 t!("SheetName.Placeholder"),
@@ -73,20 +80,32 @@ impl SheetPropertiesUi {
                 SheetPropertiesMessage::Name,
                 self.name_error.as_ref(),
             ),
-        )
-        .foot(
-            ActionSet::cancel_ok()
-                .to_element()
-                .map(SheetPropertiesMessage::Finish),
+            button_bar().push(cancel).push(ok)
+        ]
+        .spacing(SPACE_S);
+
+        Dialog::new(
+            dialog_title(t!("SheetProperties.Title"), Default::default()),
+            body,
         )
         .max_width(400.0)
         .into()
     }
 
     pub fn subscription(&self) -> Subscription<SheetPropertiesMessage> {
-        ActionSet::cancel_ok()
-            .to_subscription()
-            .map(SheetPropertiesMessage::Finish)
+        if self.name_error.is_none() {
+            subscription::events_with(|event, _status| {
+                handle_ok_and_cancel_keys(
+                    &event,
+                    SheetPropertiesMessage::Submit,
+                    SheetPropertiesMessage::Cancel,
+                )
+            })
+        } else {
+            subscription::events_with(|event, _status| {
+                handle_cancel_key(&event, SheetPropertiesMessage::Cancel)
+            })
+        }
     }
 
     pub fn update(&mut self, message: SheetPropertiesMessage) -> Command<SheetPropertiesMessage> {
@@ -101,7 +120,7 @@ impl SheetPropertiesUi {
                 }
                 self.name = name
             }
-            SheetPropertiesMessage::Finish(_) => unreachable!(),
+            _ => unreachable!(),
         }
         Command::none()
     }

@@ -14,7 +14,7 @@ edition = "2021"
 [workspace.dependencies]
 backtrace = "0.3"
 iced = { version = "0.10.0", features = ["advanced", "image", "tokio"] }
-iced_aw = { version = "0.7.0", default-features = false, features = ["card", "menu", "modal", "quad"] }
+iced_aw = { version = "0.7.0", default-features = false, features = ["menu", "modal", "quad"] }
 internment = "0.7.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "registry"] }

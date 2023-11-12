@@ -1,8 +1,11 @@
 use crate::version::Version;
-use iced::widget::{self, button, column, container, horizontal_rule, image, row, text};
+use iced::widget::{
+    self, button, column, container, horizontal_rule, horizontal_space, image, row, text, Button,
+    Row,
+};
 use iced::{
-    alignment, font, theme, window, Alignment, Application, Command, Element, Font, Length,
-    Settings, Subscription, Theme,
+    alignment, font, keyboard, theme, window, Alignment, Application, Command, Element, Event,
+    Font, Length, Settings, Subscription, Theme,
 };
 use rust_i18n::t;
 use tracing::debug;
@@ -10,8 +13,9 @@ use tracing::debug;
 use self::workpad::{WorkpadMessage, WorkpadUI};
 use crate::model::workpad::WorkpadMaster;
 
-mod action;
+mod dialog;
 mod images;
+mod style;
 mod workpad;
 
 pub(crate) fn run() -> iced::Result {
@@ -64,18 +68,6 @@ impl std::fmt::Display for Message {
         }
     }
 }
-
-const SPACE_S: f32 = 5.0;
-const SPACE_M: f32 = SPACE_S * 2.0;
-const SPACE_L: f32 = SPACE_S * 4.0;
-// const SPACE_XL: u16 = SPACE_S * 8;
-
-const TEXT_SIZE_LABEL: f32 = 12.0;
-const TEXT_SIZE_INPUT: f32 = 16.0;
-const TEXT_SIZE_ERROR: f32 = 14.0;
-
-// TODO Can we avoid a constant width via layouts
-const DIALOG_BUTTON_WIDTH: f32 = 100.0;
 
 impl Application for Flexpad {
     type Message = Message;
@@ -151,7 +143,7 @@ impl Application for Flexpad {
         match self.state {
             State::Loading => container(
                 text(t!("Common.Loading"))
-                    .style(TextStyle::Default)
+                    .style(style::TextStyle::Default)
                     .horizontal_alignment(alignment::Horizontal::Center)
                     .size(50),
             )
@@ -222,22 +214,83 @@ impl Flexpad {
     }
 }
 
-fn input_label<'a, Message>(label: impl ToString) -> Element<'a, Message> {
-    iced::widget::text(label)
-        .size(TEXT_SIZE_LABEL)
-        .style(TextStyle::Label)
-        .into()
-}
+const SPACE_S: f32 = 5.0;
+const SPACE_M: f32 = SPACE_S * 2.0;
+const SPACE_L: f32 = SPACE_S * 4.0;
+// const SPACE_XL: u16 = SPACE_S * 8;
 
-fn labeled_element<'a, Message>(
-    label: impl ToString,
-    elem: impl Into<Element<'a, Message>>,
+const TEXT_SIZE_DIALOG_TITLE: f32 = 16.0;
+const TEXT_SIZE_LABEL: f32 = 12.0;
+const TEXT_SIZE_INPUT: f32 = 16.0;
+const TEXT_SIZE_ERROR: f32 = 14.0;
+
+const DIALOG_BUTTON_WIDTH: f32 = 100.0;
+
+fn dialog_title<'a, Message>(
+    title: impl ToString,
+    style: style::DialogStyle,
 ) -> Element<'a, Message>
 where
     Message: 'a,
 {
-    column![input_label(label), elem.into()]
-        .spacing(SPACE_S)
+    container(text(title).size(TEXT_SIZE_DIALOG_TITLE).style(style)).into()
+}
+
+fn dialog_button<'a, Message>(
+    label: impl ToString,
+    style: style::DialogButtonStyle,
+) -> Button<'a, Message>
+where
+    Message: 'a,
+{
+    button(text(label).horizontal_alignment(alignment::Horizontal::Center))
+        .width(DIALOG_BUTTON_WIDTH)
+        .style(theme::Button::Custom(Box::new(style)))
+}
+
+fn button_bar<'a, Message, Renderer>() -> ButtonBar<'a, Message, Renderer>
+where
+    Message: 'a,
+    Renderer: 'a + iced::advanced::Renderer,
+{
+    ButtonBar {
+        row: row![horizontal_space(Length::Fill)].spacing(SPACE_M),
+    }
+}
+
+pub struct ButtonBar<'a, Message, Renderer> {
+    row: Row<'a, Message, Renderer>,
+}
+
+impl<'a, Message, Renderer> ButtonBar<'a, Message, Renderer>
+where
+    Message: 'a + Clone,
+    Renderer: 'a + iced::advanced::Renderer,
+    Renderer::Theme: iced::widget::button::StyleSheet,
+{
+    pub fn push(self, button: Button<'a, Message, Renderer>) -> Self {
+        let Self { row } = self;
+        Self {
+            row: row.push(button),
+        }
+    }
+}
+
+impl<'a, Message, Renderer> From<ButtonBar<'a, Message, Renderer>>
+    for Element<'a, Message, Renderer>
+where
+    Message: 'a,
+    Renderer: 'a + iced::advanced::Renderer,
+{
+    fn from(value: ButtonBar<'a, Message, Renderer>) -> Self {
+        value.row.into()
+    }
+}
+
+fn input_label<'a, Message>(label: impl ToString) -> Element<'a, Message> {
+    iced::widget::text(label)
+        .size(TEXT_SIZE_LABEL)
+        .style(style::TextStyle::Label)
         .into()
 }
 
@@ -256,7 +309,7 @@ where
         Some(msg) => widget::container(
             widget::text(msg)
                 .size(TEXT_SIZE_ERROR)
-                .style(TextStyle::Error),
+                .style(style::TextStyle::Error),
         )
         .height(SPACE_L)
         .into(),
@@ -264,8 +317,8 @@ where
     };
 
     let input_style = match error {
-        Some(_) => TextInputStyle::Error,
-        None => TextInputStyle::Default,
+        Some(_) => style::TextInputStyle::Error,
+        None => style::TextInputStyle::Default,
     };
 
     let icon = match error {
@@ -298,101 +351,35 @@ where
     .into()
 }
 
-enum TextStyle {
-    Default,
-    Label,
-    Error,
-}
+const ESCAPE: Event = Event::Keyboard(keyboard::Event::KeyPressed {
+    key_code: keyboard::KeyCode::Escape,
+    modifiers: keyboard::Modifiers::empty(),
+});
+const ENTER: Event = Event::Keyboard(keyboard::Event::KeyPressed {
+    key_code: keyboard::KeyCode::Enter,
+    modifiers: keyboard::Modifiers::empty(),
+});
 
-impl From<TextStyle> for theme::Text {
-    fn from(value: TextStyle) -> Self {
-        // TODO Theme - there's no Custom for theme::Text!
-        let palette = Theme::Light.extended_palette();
-        let color = match value {
-            TextStyle::Default => palette.primary.base.text,
-            TextStyle::Label => palette.primary.weak.text,
-            TextStyle::Error => palette.danger.base.color,
-        };
-        theme::Text::Color(color)
+fn handle_ok_key<Message>(event: &Event, on_ok: Message) -> Option<Message> {
+    if *event == ENTER {
+        Some(on_ok)
+    } else {
+        None
     }
 }
 
-enum TextInputStyle {
-    Default,
-    Error,
-}
-
-impl From<TextInputStyle> for theme::TextInput {
-    fn from(value: TextInputStyle) -> Self {
-        theme::TextInput::Custom(Box::new(value))
+fn handle_cancel_key<Message>(event: &Event, on_cancel: Message) -> Option<Message> {
+    if *event == ESCAPE {
+        Some(on_cancel)
+    } else {
+        None
     }
 }
 
-impl widget::text_input::StyleSheet for TextInputStyle
-where
-    iced::Theme: widget::text_input::StyleSheet<Style = theme::TextInput>,
-{
-    type Style = iced::Theme;
-
-    fn active(&self, theme: &Self::Style) -> widget::text_input::Appearance {
-        let dflt = theme.active(&theme::TextInput::Default);
-
-        if let Self::Error = self {
-            let palette = theme.extended_palette();
-
-            widget::text_input::Appearance {
-                border_color: palette.danger.strong.color,
-                ..dflt
-            }
-        } else {
-            dflt
-        }
-    }
-
-    fn focused(&self, theme: &Self::Style) -> widget::text_input::Appearance {
-        let dflt = theme.focused(&theme::TextInput::Default);
-
-        if let Self::Error = self {
-            let palette = theme.extended_palette();
-
-            widget::text_input::Appearance {
-                border_color: palette.danger.strong.color,
-                ..dflt
-            }
-        } else {
-            dflt
-        }
-    }
-
-    fn disabled(&self, theme: &Self::Style) -> widget::text_input::Appearance {
-        let dflt = theme.disabled(&theme::TextInput::Default);
-
-        if let Self::Error = self {
-            let palette = theme.extended_palette();
-
-            widget::text_input::Appearance {
-                border_color: palette.danger.weak.color,
-                //icon_color: palette.background.weak.text,
-                ..dflt
-            }
-        } else {
-            dflt
-        }
-    }
-
-    fn placeholder_color(&self, theme: &Self::Style) -> iced::Color {
-        theme.placeholder_color(&theme::TextInput::Default)
-    }
-
-    fn value_color(&self, theme: &Self::Style) -> iced::Color {
-        theme.value_color(&theme::TextInput::Default)
-    }
-
-    fn disabled_color(&self, theme: &Self::Style) -> iced::Color {
-        theme.disabled_color(&theme::TextInput::Default)
-    }
-
-    fn selection_color(&self, theme: &Self::Style) -> iced::Color {
-        theme.selection_color(&theme::TextInput::Default)
-    }
+fn handle_ok_and_cancel_keys<Message>(
+    event: &Event,
+    on_ok: Message,
+    on_cancel: Message,
+) -> Option<Message> {
+    handle_ok_key(event, on_ok).or_else(|| handle_cancel_key(event, on_cancel))
 }

@@ -29,6 +29,7 @@ PadAuthor:
 PadName:
   Label: Workpad Name
   Placeholder: Enter a name for the workpad
+  EmptyError: Please enter a name
 PadProperties:
   Title: Workpad Properties
 Product: Flexpad

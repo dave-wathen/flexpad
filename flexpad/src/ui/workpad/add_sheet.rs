@@ -1,12 +1,12 @@
 use crate::{
     model::workpad::{SheetKind, UpdateError, Workpad, WorkpadUpdate},
     ui::{
-        action::{Action, ActionSet},
-        images, text_input, SPACE_M, SPACE_S,
+        button_bar, dialog_button, handle_ok_and_cancel_keys, handle_ok_key, images, style,
+        text_input, SPACE_M, SPACE_S,
     },
 };
 use iced::{
-    alignment,
+    alignment, subscription,
     theme::{self},
     widget::{button, column, container, horizontal_rule, image, row, text, vertical_space},
     Alignment, Command, Element, Length, Subscription,
@@ -21,14 +21,15 @@ pub enum AddSheetMessage {
     PadUpdated(Result<Workpad, UpdateError>),
     SelectKind(SheetKind),
     Name(String),
-    Finish(Action),
+    Submit,
+    Cancel,
 }
 
 impl AddSheetMessage {
     pub fn map_to_workpad(self) -> WorkpadMessage {
         match self {
             Self::PadUpdated(result) => WorkpadMessage::PadUpdated(result),
-            Self::Finish(Action::Cancel) => WorkpadMessage::AddSheetCancel,
+            Self::Cancel => WorkpadMessage::AddSheetCancel,
             m => WorkpadMessage::AddSheetMsg(m),
         }
     }
@@ -42,8 +43,8 @@ impl std::fmt::Display for AddSheetMessage {
             Self::PadUpdated(Err(err)) => write!(f, "PadUpdated(ERROR: {err})"),
             Self::SelectKind(k) => write!(f, "SelectKind({k})"),
             Self::Name(n) => write!(f, "Name({n})"),
-            Self::Finish(Action::Ok) => write!(f, "Finish(Submit)"),
-            Self::Finish(Action::Cancel) => write!(f, "Finish(Cancel)"),
+            Self::Submit => write!(f, "Submit"),
+            Self::Cancel => write!(f, "Cancel"),
         }
     }
 }
@@ -77,11 +78,18 @@ impl AddSheetUi {
     }
 
     pub fn view(&self) -> iced::Element<'_, AddSheetMessage> {
-        let buttons = self
-            .actions()
-            .ok_text(t!("Common.Add"))
-            .to_element()
-            .map(AddSheetMessage::Finish);
+        let mut buttons = button_bar();
+        if !self.existing_names.is_empty() {
+            buttons = buttons.push(
+                dialog_button(t!("Common.Cancel"), style::DialogButtonStyle::Cancel)
+                    .on_press(AddSheetMessage::Cancel),
+            );
+        }
+        let mut ok = dialog_button(t!("Common.Ok"), style::DialogButtonStyle::Ok);
+        if self.name_error.is_none() {
+            ok = ok.on_press(AddSheetMessage::Submit)
+        }
+        buttons = buttons.push(ok);
 
         column![column![
             text(t!("AddSheet.Type"))
@@ -115,9 +123,15 @@ impl AddSheetUi {
     }
 
     pub fn subscription(&self) -> Subscription<AddSheetMessage> {
-        self.actions()
-            .to_subscription()
-            .map(AddSheetMessage::Finish)
+        if self.existing_names.is_empty() {
+            subscription::events_with(|event, _status| {
+                handle_ok_key(&event, AddSheetMessage::Submit)
+            })
+        } else {
+            subscription::events_with(|event, _status| {
+                handle_ok_and_cancel_keys(&event, AddSheetMessage::Submit, AddSheetMessage::Cancel)
+            })
+        }
     }
 
     pub fn update(&mut self, message: AddSheetMessage) -> Command<AddSheetMessage> {
@@ -139,14 +153,14 @@ impl AddSheetUi {
                 self.name = n;
                 Command::none()
             }
-            AddSheetMessage::Finish(Action::Ok) => {
+            AddSheetMessage::Submit => {
                 debug!(target: "flexpad", %message);
                 self.update_pad(WorkpadUpdate::SheetAdd {
                     kind: self.kind,
                     name: self.name.clone(),
                 })
             }
-            AddSheetMessage::Finish(_) => unreachable!(),
+            AddSheetMessage::Cancel => unreachable!(),
         }
     }
 
@@ -155,14 +169,6 @@ impl AddSheetUi {
             super::update_pad(self.pad.master(), update),
             AddSheetMessage::PadUpdated,
         )
-    }
-
-    fn actions(&self) -> ActionSet {
-        if self.existing_names.is_empty() {
-            ActionSet::ok()
-        } else {
-            ActionSet::cancel_ok()
-        }
     }
 }
 
