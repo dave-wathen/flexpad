@@ -1,7 +1,7 @@
 use crate::{
     model::workpad::{SheetKind, UpdateError, Workpad, WorkpadUpdate},
     ui::{
-        button_bar, dialog_button, handle_ok_and_cancel_keys, handle_ok_key, images, style,
+        button_bar, dialog_button, handle_ok_and_cancel_keys, handle_ok_key, images, menu, style,
         text_input, SPACE_M, SPACE_S,
     },
 };
@@ -169,6 +169,10 @@ impl AddSheetUi {
             super::update_pad(self.pad.master(), update),
             AddSheetMessage::PadUpdated,
         )
+    }
+
+    pub fn menu_paths(&self) -> Vec<menu::Path<AddSheetMessage>> {
+        vec![]
     }
 }
 

@@ -1,11 +1,8 @@
 use crate::version::Version;
-use iced::widget::{
-    self, button, column, container, horizontal_rule, horizontal_space, image, row, text, Button,
-    Row,
-};
+use iced::widget::{self, button, column, container, horizontal_space, row, text, Button, Row};
 use iced::{
-    alignment, font, keyboard, theme, window, Alignment, Application, Command, Element, Event,
-    Font, Length, Settings, Subscription, Theme,
+    alignment, font, keyboard, theme, window, Application, Command, Element, Event, Font, Length,
+    Settings, Subscription, Theme,
 };
 use rust_i18n::t;
 use tracing::debug;
@@ -14,7 +11,11 @@ use self::workpad::{WorkpadMessage, WorkpadUI};
 use crate::model::workpad::WorkpadMaster;
 
 mod dialog;
+mod front_screen;
 mod images;
+mod key;
+mod loading;
+mod menu;
 mod style;
 mod workpad;
 
@@ -52,8 +53,8 @@ pub struct Flexpad {
 #[derive(Debug, Clone)]
 pub enum Message {
     FontLoaded(Result<(), font::Error>),
-    OpenBlankWorkpad,
-    OpenStarterWorkpad,
+    NewBlankWorkpad,
+    NewStarterWorkpad,
     WorkpadMsg(WorkpadMessage),
 }
 
@@ -62,8 +63,8 @@ impl std::fmt::Display for Message {
         write!(f, "Message::")?;
         match self {
             Self::FontLoaded(result) => write!(f, "FontLoaded({result:?})"),
-            Self::OpenBlankWorkpad => write!(f, "OpenBlankWokpad"),
-            Self::OpenStarterWorkpad => write!(f, "OpenStarterWokpad"),
+            Self::NewBlankWorkpad => write!(f, "OpenBlankWokpad"),
+            Self::NewStarterWorkpad => write!(f, "OpenStarterWokpad"),
             Self::WorkpadMsg(msg) => msg.fmt(f),
         }
     }
@@ -109,13 +110,13 @@ impl Application for Flexpad {
                 Command::none()
             }
             State::FrontScreen => match message {
-                Message::OpenBlankWorkpad => {
+                Message::NewBlankWorkpad => {
                     debug!(target: "flexpad", %message);
                     let workpad = WorkpadMaster::new_blank();
                     self.state = State::Workpad(WorkpadUI::new(workpad));
                     Command::none()
                 }
-                Message::OpenStarterWorkpad => {
+                Message::NewStarterWorkpad => {
                     debug!(target: "flexpad", %message);
                     let workpad = WorkpadMaster::new_starter();
                     self.state = State::Workpad(WorkpadUI::new(workpad));
@@ -140,21 +141,24 @@ impl Application for Flexpad {
     #[tracing::instrument(skip_all)]
     fn view(&self) -> iced::Element<'_, Self::Message> {
         debug!(target: "flexpad", state=%self.state, "View");
-        match self.state {
-            State::Loading => container(
-                text(t!("Common.Loading"))
-                    .style(style::TextStyle::Default)
-                    .horizontal_alignment(alignment::Horizontal::Center)
-                    .size(50),
-            )
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .center_y()
-            .center_x()
-            .into(),
-            State::FrontScreen => self.front_screen_view(),
+
+        let body = match self.state {
+            State::Loading => loading::view(),
+            State::FrontScreen => front_screen::view(&self.version),
             State::Workpad(ref pad) => pad.view().map(Message::WorkpadMsg),
-        }
+        };
+
+        let paths: Vec<menu::Path<Message>> = match self.state {
+            State::Loading => loading::menu_paths(),
+            State::FrontScreen => front_screen::menu_paths(),
+            State::Workpad(ref pad) => pad
+                .menu_paths()
+                .into_iter()
+                .map(|p| p.map(Message::WorkpadMsg))
+                .collect(),
+        };
+
+        crate::ui::menu::MenuedContent::new(paths, body).into()
     }
 
     fn subscription(&self) -> iced::Subscription<Self::Message> {
@@ -163,54 +167,6 @@ impl Application for Flexpad {
             State::FrontScreen => Subscription::none(),
             State::Workpad(ref pad) => pad.subscription().map(Message::WorkpadMsg),
         }
-    }
-}
-
-impl Flexpad {
-    fn front_screen_view(&self) -> iced::Element<'_, Message> {
-        let image_button = |img, title, msg| {
-            column![
-                button(image(img).width(48).height(48))
-                    .on_press(msg)
-                    .style(theme::Button::Text),
-                text(title).size(12)
-            ]
-            .align_items(Alignment::Center)
-        };
-
-        column![
-            image(images::app()).width(200).height(200),
-            text(self.version.description()).size(12),
-            horizontal_rule(3),
-            text(t!("Workpads.Create"))
-                .size(20)
-                .width(Length::Fill)
-                .horizontal_alignment(alignment::Horizontal::Left),
-            row![
-                image_button(
-                    images::workpad_no_sheets(),
-                    t!("Workpads.Blank"),
-                    Message::OpenBlankWorkpad
-                ),
-                image_button(
-                    images::workpad_and_sheets(),
-                    t!("Workpads.Starter"),
-                    Message::OpenStarterWorkpad
-                )
-            ]
-            .spacing(SPACE_M)
-            .width(Length::Fill),
-            horizontal_rule(3),
-            text(t!("Workpads.Reopen"))
-                .size(20)
-                .width(Length::Fill)
-                .horizontal_alignment(alignment::Horizontal::Left),
-        ]
-        .width(Length::Fill)
-        .spacing(SPACE_S)
-        .padding(50)
-        .align_items(Alignment::Center)
-        .into()
     }
 }
 

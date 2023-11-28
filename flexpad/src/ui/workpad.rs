@@ -2,17 +2,12 @@ use std::collections::HashMap;
 
 use crate::{
     display_iter,
-    model::workpad::{
-        Sheet, SheetId, UpdateError, UpdateResult, Workpad, WorkpadMaster, WorkpadUpdate,
-    },
+    model::workpad::{SheetId, UpdateError, UpdateResult, Workpad, WorkpadMaster, WorkpadUpdate},
+    ui::key::{command, key, shift},
 };
 use flexpad_grid::{scroll::get_viewport, Viewport};
-use iced::{
-    alignment,
-    widget::{button, column, text},
-    Alignment, Color, Command, Length, Subscription,
-};
-use iced_aw::{helpers::menu_bar, helpers::menu_tree, modal, ItemHeight, ItemWidth, MenuTree};
+use iced::{keyboard, widget::button, Color, Command, Subscription};
+use iced_aw::modal;
 use rust_i18n::t;
 use tracing::{debug, error, info};
 
@@ -24,7 +19,7 @@ use self::{
     sheet_properties::{SheetPropertiesMessage, SheetPropertiesUi},
 };
 
-use super::SPACE_S;
+use super::menu;
 
 mod active_cell;
 mod active_sheet;
@@ -197,22 +192,12 @@ impl WorkpadUI {
     pub fn view(&self) -> iced::Element<'_, WorkpadMessage> {
         debug!(target: "flexpad", state=%self.state, "Workpad View");
 
-        let screen = column![
-            match self.state {
-                State::ActiveSheet(ref child_ui) => self.menu_bar(Some(&child_ui.active_sheet)),
-                State::AddSheet(_) => self.menu_bar(None),
-            },
-            match self.state {
-                State::ActiveSheet(ref child_ui) =>
-                    child_ui.view().map(ActiveSheetMessage::map_to_workpad),
-                State::AddSheet(ref child_ui) =>
-                    child_ui.view().map(AddSheetMessage::map_to_workpad),
-            },
-        ]
-        .padding(10)
-        .spacing(SPACE_S)
-        .align_items(Alignment::Start)
-        .into();
+        let screen = match self.state {
+            State::ActiveSheet(ref child_ui) => {
+                child_ui.view().map(ActiveSheetMessage::map_to_workpad)
+            }
+            State::AddSheet(ref child_ui) => child_ui.view().map(AddSheetMessage::map_to_workpad),
+        };
 
         match &self.modal {
             ShowModal::None => screen,
@@ -230,31 +215,51 @@ impl WorkpadUI {
         }
     }
 
-    // TODO Switch to system menus once available
-    fn menu_bar(&self, sheet: Option<&Sheet>) -> iced::Element<'_, WorkpadMessage> {
-        let mut menus = vec![workpad_menu()];
+    pub fn menu_paths(&self) -> Vec<menu::Path<WorkpadMessage>> {
+        let mut paths = vec![];
 
-        if let Some(sheet) = sheet {
-            menus.push(menu_parent(
-                t!("Menus.Sheet.Title"),
-                vec![
-                    menu_leaf(
-                        t!("Menus.Sheet.SheetShowProperties"),
-                        WorkpadMessage::SheetShowProperties(sheet.id()),
-                    ),
-                    menu_leaf(t!("Menus.Sheet.SheetNew"), WorkpadMessage::PadAddSheet),
-                    menu_leaf(
-                        t!("Menus.Sheet.SheetDelete"),
-                        WorkpadMessage::SheetDelete(sheet.id()),
-                    ),
-                ],
-            ));
+        let workpad_menu = menu::root(t!("Menus.Workpad.Title"));
+        paths.push(workpad_menu.item(
+            menu::item(t!("Menus.Workpad.NewBlank")).shortcut(command(key(keyboard::KeyCode::N))),
+        ));
+        paths.push(
+            workpad_menu.item(
+                menu::item(t!("Menus.Workpad.NewStarter"))
+                    .shortcut(shift(command(key(keyboard::KeyCode::N)))),
+            ),
+        );
+        paths.push(
+            workpad_menu.section("1").item(
+                menu::item(t!("Menus.Workpad.PadShowProperties"))
+                    .on_select(WorkpadMessage::PadShowProperties),
+            ),
+        );
+        paths.push(
+            // TODO No actual delete (since no actual save) at present
+            workpad_menu.section("1").item(
+                menu::item(t!("Menus.Workpad.PadDelete"))
+                    .shortcut(command(key(keyboard::KeyCode::W)))
+                    .on_select(WorkpadMessage::PadClose),
+            ),
+        );
+        paths.push(
+            workpad_menu.section("1").item(
+                menu::item(t!("Menus.Workpad.PadClose"))
+                    .shortcut(command(key(keyboard::KeyCode::W)))
+                    .on_select(WorkpadMessage::PadClose),
+            ),
+        );
+
+        match &self.state {
+            State::ActiveSheet(ui) => paths.extend(ui.menu_paths()),
+            State::AddSheet(ui) => paths.extend(
+                ui.menu_paths()
+                    .into_iter()
+                    .map(|p| p.map(AddSheetMessage::map_to_workpad)),
+            ),
         }
 
-        menu_bar(menus)
-            .item_width(ItemWidth::Uniform(180))
-            .item_height(ItemHeight::Uniform(27))
-            .into()
+        paths
     }
 
     pub(crate) fn subscription(&self) -> iced::Subscription<WorkpadMessage> {
@@ -380,59 +385,6 @@ impl WorkpadUI {
 pub async fn update_pad(mut master: WorkpadMaster, update: WorkpadUpdate) -> UpdateResult {
     info!(target: "flexpad", %update, "Model update");
     master.update(update)
-}
-
-fn workpad_menu() -> iced_aw::menu::menu_tree::MenuTree<'static, WorkpadMessage> {
-    menu_parent(
-        t!("Menus.Workpad.Title"),
-        vec![
-            menu_leaf(
-                t!("Menus.Workpad.PadShowProperties"),
-                WorkpadMessage::PadShowProperties,
-            ),
-            // TODO No actual delete (since no actual save) at present
-            menu_leaf(t!("Menus.Workpad.PadDelete"), WorkpadMessage::PadClose),
-            menu_leaf(t!("Menus.Workpad.PadClose"), WorkpadMessage::PadClose),
-        ],
-    )
-}
-
-fn menu_parent(
-    label: impl ToString,
-    children: Vec<MenuTree<'_, WorkpadMessage, iced::Renderer>>,
-) -> MenuTree<'_, WorkpadMessage, iced::Renderer> {
-    menu_tree(
-        button(
-            text(label.to_string())
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .vertical_alignment(alignment::Vertical::Center),
-        )
-        .padding([4, 8])
-        .style(iced::theme::Button::Custom(Box::new(MenuLeafButtonStyle)))
-        // op_press to stop item appearing disabled
-        .on_press(WorkpadMessage::OpenMenu(label.to_string())),
-        children,
-    )
-}
-
-fn menu_leaf<'a>(
-    label: impl ToString,
-    msg: WorkpadMessage,
-) -> MenuTree<'a, WorkpadMessage, iced::Renderer> {
-    let none: Vec<iced_aw::menu::menu_tree::MenuTree<'_, WorkpadMessage>> = vec![];
-    menu_tree(
-        button(
-            text(label)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .vertical_alignment(alignment::Vertical::Center),
-        )
-        .padding([4, 8])
-        .style(iced::theme::Button::Custom(Box::new(MenuLeafButtonStyle)))
-        .on_press(msg),
-        none,
-    )
 }
 
 struct MenuLeafButtonStyle;

@@ -20,7 +20,7 @@ use tracing::debug;
 use crate::{
     display_iter,
     model::workpad::{Cell, Sheet, UpdateError, Workpad, WorkpadUpdate},
-    ui::{images, SPACE_S},
+    ui::{images, menu, SPACE_S},
 };
 
 use super::{
@@ -456,5 +456,24 @@ impl ActiveSheetUi {
             super::update_pad(self.active_sheet.workpad().master(), update),
             ActiveSheetMessage::PadUpdated,
         )
+    }
+
+    // TODO Should be ActiveSheetMessage?
+    pub fn menu_paths(&self) -> Vec<menu::Path<WorkpadMessage>> {
+        let sheet_menu = menu::root(t!("Menus.Sheet.Title"));
+        let sheet_id = self.active_sheet.id();
+        vec![
+            sheet_menu.item(
+                menu::item(t!("Menus.Sheet.SheetShowProperties"))
+                    .on_select(WorkpadMessage::SheetShowProperties(sheet_id)),
+            ),
+            sheet_menu.item(
+                menu::item(t!("Menus.Sheet.SheetNew")).on_select(WorkpadMessage::PadAddSheet),
+            ),
+            sheet_menu.item(
+                menu::item(t!("Menus.Sheet.SheetDelete"))
+                    .on_select(WorkpadMessage::SheetDelete(sheet_id)),
+            ),
+        ]
     }
 }

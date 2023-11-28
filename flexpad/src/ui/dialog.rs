@@ -322,7 +322,7 @@ where
     }
 }
 
-/// Stylesheet to deterrmine the appearance of a [`Dialog`]
+/// StyleSheet to deterrmine the appearance of a [`Dialog`]
 pub trait StyleSheet {
     type Style: Default;
     /// The normal appearance of a [`Dialog`]
