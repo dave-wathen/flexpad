@@ -10,9 +10,9 @@ use super::{menu, style, Message};
 pub(super) fn view<'a>() -> iced::Element<'a, Message> {
     container(
         text(t!("Common.Loading"))
-            .style(style::TextStyle::Default)
+            .style(style::TextStyle::Loading)
             .horizontal_alignment(alignment::Horizontal::Center)
-            .size(50),
+            .size(40),
     )
     .width(Length::Fill)
     .height(Length::Fill)

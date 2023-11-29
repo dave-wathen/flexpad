@@ -10,6 +10,7 @@ pub enum TextStyle {
     Default,
     Label,
     Error,
+    Loading,
 }
 
 impl From<TextStyle> for theme::Text {
@@ -20,6 +21,7 @@ impl From<TextStyle> for theme::Text {
             TextStyle::Default => palette.primary.base.text,
             TextStyle::Label => palette.primary.weak.text,
             TextStyle::Error => palette.danger.base.color,
+            TextStyle::Loading => palette.secondary.strong.color,
         };
         theme::Text::Color(color)
     }

@@ -3,11 +3,13 @@ use std::collections::HashMap;
 use crate::{
     display_iter,
     model::workpad::{SheetId, UpdateError, UpdateResult, Workpad, WorkpadMaster, WorkpadUpdate},
-    ui::key::{command, key, shift},
+    ui::{
+        key::{command, key, shift},
+        modal,
+    },
 };
 use flexpad_grid::{scroll::get_viewport, Viewport};
 use iced::{keyboard, widget::button, Color, Command, Subscription};
-use iced_aw::modal;
 use rust_i18n::t;
 use tracing::{debug, error, info};
 
@@ -201,17 +203,16 @@ impl WorkpadUI {
 
         match &self.modal {
             ShowModal::None => screen,
-            ShowModal::PadProperties(ui) => modal(
+            ShowModal::PadProperties(ui) => {
+                modal::Modal::new(screen, ui.view().map(PadPropertiesMessage::map_to_workpad))
+                    .into()
+            }
+            ShowModal::SheetProperties(ui) => modal::Modal::new(
                 screen,
-                Some(ui.view().map(PadPropertiesMessage::map_to_workpad)),
+                ui.view().map(SheetPropertiesMessage::map_to_workpad),
             )
             .into(),
-            ShowModal::SheetProperties(ui) => modal(
-                screen,
-                Some(ui.view().map(SheetPropertiesMessage::map_to_workpad)),
-            )
-            .into(),
-            ShowModal::Error(ui) => modal(screen, Some(ui.view())).into(),
+            ShowModal::Error(ui) => modal::Modal::new(screen, ui.view()).into(),
         }
     }
 

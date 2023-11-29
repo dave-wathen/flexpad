@@ -1,7 +1,9 @@
+use std::time::Instant;
+
 use crate::version::Version;
 use iced::widget::{self, button, column, container, horizontal_space, row, text, Button, Row};
 use iced::{
-    alignment, font, keyboard, theme, window, Application, Command, Element, Event, Font, Length,
+    alignment, keyboard, theme, window, Application, Command, Element, Event, Font, Length,
     Settings, Subscription, Theme,
 };
 use rust_i18n::t;
@@ -16,6 +18,7 @@ mod images;
 mod key;
 mod loading;
 mod menu;
+mod modal;
 mod style;
 mod workpad;
 
@@ -52,7 +55,7 @@ pub struct Flexpad {
 
 #[derive(Debug, Clone)]
 pub enum Message {
-    FontLoaded(Result<(), font::Error>),
+    Loaded(Result<(), String>),
     NewBlankWorkpad,
     NewStarterWorkpad,
     WorkpadMsg(WorkpadMessage),
@@ -62,7 +65,7 @@ impl std::fmt::Display for Message {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Message::")?;
         match self {
-            Self::FontLoaded(result) => write!(f, "FontLoaded({result:?})"),
+            Self::Loaded(result) => write!(f, "FontLoaded({result:?})"),
             Self::NewBlankWorkpad => write!(f, "OpenBlankWokpad"),
             Self::NewStarterWorkpad => write!(f, "OpenStarterWokpad"),
             Self::WorkpadMsg(msg) => msg.fmt(f),
@@ -83,7 +86,7 @@ impl Application for Flexpad {
                 state: Default::default(),
             },
             Command::batch(vec![
-                font::load(iced_aw::graphics::icons::ICON_FONT_BYTES).map(Message::FontLoaded),
+                iced::Command::perform(load(), Message::Loaded), //font::load(iced_aw::graphics::icons::ICON_FONT_BYTES).map(Message::FontLoaded),
                 window::maximize(true),
             ]),
         )
@@ -100,8 +103,8 @@ impl Application for Flexpad {
     fn update(&mut self, message: Self::Message) -> Command<Message> {
         match self.state {
             State::Loading => {
-                if let Message::FontLoaded(result) = message {
-                    debug!(target: "flexpad", %message);
+                debug!(target: "flexpad", %message);
+                if let Message::Loaded(result) = message {
                     match result {
                         Ok(_) => self.state = State::FrontScreen,
                         Err(err) => panic!("{err:?}"),
@@ -168,6 +171,12 @@ impl Application for Flexpad {
             State::Workpad(ref pad) => pad.subscription().map(Message::WorkpadMsg),
         }
     }
+}
+
+async fn load() -> Result<(), String> {
+    let t0 = Instant::now();
+    while Instant::now().duration_since(t0).as_secs() < 3 {}
+    Ok(())
 }
 
 const SPACE_S: f32 = 5.0;

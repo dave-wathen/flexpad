@@ -12,7 +12,6 @@ vergen = { version = "8.2.1", features = [ "build", "git", "gitoxide" ] }
 [dependencies]
 backtrace.workspace = true
 iced.workspace = true
-iced_aw.workspace = true
 internment.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
