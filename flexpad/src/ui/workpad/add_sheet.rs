@@ -1,8 +1,11 @@
 use crate::{
     model::workpad::{SheetKind, UpdateError, Workpad, WorkpadUpdate},
     ui::{
-        button_bar, dialog_button, handle_ok_and_cancel_keys, handle_ok_key, images, menu, style,
-        text_input, SPACE_M, SPACE_S,
+        menu, style,
+        util::{
+            button_bar, dialog_button, handle_ok_and_cancel_keys, handle_ok_key, images,
+            text_input, SPACE_M, SPACE_S,
+        },
     },
 };
 use iced::{
@@ -171,8 +174,8 @@ impl AddSheetUi {
         )
     }
 
-    pub fn menu_paths(&self) -> Vec<menu::Path<AddSheetMessage>> {
-        vec![]
+    pub fn menu_paths(&self) -> menu::PathVec<AddSheetMessage> {
+        menu::PathVec::new()
     }
 }
 

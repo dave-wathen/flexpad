@@ -140,20 +140,20 @@ pub enum DialogStyle {
     Error,
 }
 
-impl super::dialog::StyleSheet for iced::Theme {
+impl crate::ui::util::dialog::StyleSheet for iced::Theme {
     type Style = DialogStyle;
 
-    fn active(&self, style: &Self::Style) -> super::dialog::Appearance {
+    fn active(&self, style: &Self::Style) -> crate::ui::util::dialog::Appearance {
         let palette = self.extended_palette();
 
         match style {
-            DialogStyle::Normal => super::dialog::Appearance {
+            DialogStyle::Normal => crate::ui::util::dialog::Appearance {
                 border_color: palette.primary.base.color,
                 border_radius: SPACE_M,
                 background: palette.background.base.color.into(),
                 title_background: palette.primary.base.color.into(),
             },
-            DialogStyle::Error => super::dialog::Appearance {
+            DialogStyle::Error => crate::ui::util::dialog::Appearance {
                 border_color: palette.danger.base.color,
                 border_radius: SPACE_M,
                 background: palette.background.base.color.into(),
@@ -179,19 +179,19 @@ pub enum MenuStyle {
     Normal,
 }
 
-impl super::menu::StyleSheet for iced::Theme {
+impl crate::ui::menu::StyleSheet for iced::Theme {
     type Style = MenuStyle;
 
-    fn menu_bar(&self, _style: &Self::Style) -> super::menu::MenuBarAppearance {
+    fn menu_bar(&self, _style: &Self::Style) -> crate::ui::menu::MenuBarAppearance {
         let palette = self.extended_palette();
-        super::menu::MenuBarAppearance {
+        crate::ui::menu::MenuBarAppearance {
             background: palette.background.weak.color.into(),
         }
     }
 
-    fn active_menu_bar_item(&self, _style: &Self::Style) -> super::menu::MenuBarItemAppearance {
+    fn active_menu_bar_item(&self, _style: &Self::Style) -> crate::ui::menu::MenuBarItemAppearance {
         let palette = self.extended_palette();
-        super::menu::MenuBarItemAppearance {
+        crate::ui::menu::MenuBarItemAppearance {
             background: Color::TRANSPARENT.into(),
             text_color: palette.primary.base.text,
             border_radius: 4.0,
@@ -200,19 +200,22 @@ impl super::menu::StyleSheet for iced::Theme {
         }
     }
 
-    fn selected_menu_bar_item(&self, style: &Self::Style) -> super::menu::MenuBarItemAppearance {
+    fn selected_menu_bar_item(
+        &self,
+        style: &Self::Style,
+    ) -> crate::ui::menu::MenuBarItemAppearance {
         let palette = self.extended_palette();
         let active = self.active_menu_bar_item(style);
-        super::menu::MenuBarItemAppearance {
+        crate::ui::menu::MenuBarItemAppearance {
             background: palette.background.strong.color.into(),
             text_color: palette.primary.base.text,
             ..active
         }
     }
 
-    fn menu(&self, _style: &Self::Style) -> super::menu::MenuAppearance {
+    fn menu(&self, _style: &Self::Style) -> crate::ui::menu::MenuAppearance {
         let palette = self.extended_palette();
-        super::menu::MenuAppearance {
+        crate::ui::menu::MenuAppearance {
             background: palette.background.weak.color.into(),
             separator_fill: palette.background.strong.color.into(),
             border_radius: 6.0,
@@ -221,22 +224,22 @@ impl super::menu::StyleSheet for iced::Theme {
         }
     }
 
-    fn inactive_menu_item(&self, style: &Self::Style) -> super::menu::MenuItemAppearance {
+    fn inactive_menu_item(&self, style: &Self::Style) -> crate::ui::menu::MenuItemAppearance {
         let active = self.active_menu_item(style);
         let color = active.text_color;
         let faded = Color::from_rgba(color.r, color.g, color.b, color.a / 2.0);
-        super::menu::MenuItemAppearance {
+        crate::ui::menu::MenuItemAppearance {
             text_color: faded,
             shortcut_color: faded,
             ..active
         }
     }
 
-    fn active_menu_item(&self, _style: &Self::Style) -> super::menu::MenuItemAppearance {
+    fn active_menu_item(&self, _style: &Self::Style) -> crate::ui::menu::MenuItemAppearance {
         let palette = self.extended_palette();
         let color = palette.primary.base.text;
         let faded = Color::from_rgba(color.r, color.g, color.b, color.a / 2.0);
-        super::menu::MenuItemAppearance {
+        crate::ui::menu::MenuItemAppearance {
             background: Color::TRANSPARENT.into(),
             text_color: color,
             shortcut_color: faded,
@@ -246,13 +249,16 @@ impl super::menu::StyleSheet for iced::Theme {
         }
     }
 
-    fn focused_selected_menu_item(&self, style: &Self::Style) -> super::menu::MenuItemAppearance {
+    fn focused_selected_menu_item(
+        &self,
+        style: &Self::Style,
+    ) -> crate::ui::menu::MenuItemAppearance {
         let palette = self.extended_palette();
         let color = palette.primary.strong.text;
         let faded = Color::from_rgba(color.r, color.g, color.b, color.a / 2.0);
 
         let active = self.active_menu_item(style);
-        super::menu::MenuItemAppearance {
+        crate::ui::menu::MenuItemAppearance {
             background: palette.primary.strong.color.into(),
             text_color: color,
             shortcut_color: faded,
@@ -260,10 +266,13 @@ impl super::menu::StyleSheet for iced::Theme {
         }
     }
 
-    fn unfocused_selected_menu_item(&self, style: &Self::Style) -> super::menu::MenuItemAppearance {
+    fn unfocused_selected_menu_item(
+        &self,
+        style: &Self::Style,
+    ) -> crate::ui::menu::MenuItemAppearance {
         let palette = self.extended_palette();
         let active = self.active_menu_item(style);
-        super::menu::MenuItemAppearance {
+        crate::ui::menu::MenuItemAppearance {
             background: palette.background.strong.color.into(),
             ..active
         }

@@ -1,6 +1,6 @@
-use crate::ui::key::Key;
+use crate::ui::util::key::Key;
 
-use super::{path, Path};
+use super::{path, PathVec};
 
 pub(super) enum MenuEntry<Message>
 where
@@ -35,10 +35,10 @@ impl<Message> Roots<Message>
 where
     Message: Clone,
 {
-    pub(super) fn new(paths: Vec<Path<Message>>) -> Self {
+    pub(super) fn new(paths: PathVec<Message>) -> Self {
         let mut bar = Self { roots: vec![] };
 
-        for path in paths {
+        for path in paths.paths {
             bar.push_path_iter(path.elements.into_iter());
         }
 

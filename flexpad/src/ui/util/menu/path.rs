@@ -1,4 +1,4 @@
-use crate::ui::key::Key;
+use crate::ui::util::key::Key;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -10,6 +10,52 @@ where
     SubMenu(String),
     Section(String),
     Item(String, Option<Key>, Option<Message>),
+}
+
+/// A collection of [`Path`]s
+pub struct PathVec<Message>
+where
+    Message: Clone,
+{
+    pub(super) paths: Vec<Path<Message>>,
+}
+
+impl<Message> PathVec<Message>
+where
+    Message: Clone,
+{
+    pub fn new() -> Self {
+        Self { paths: vec![] }
+    }
+
+    pub fn with(mut self, path: Path<Message>) -> Self {
+        self.paths.push(path);
+        self
+    }
+
+    pub fn extend(mut self, more: PathVec<Message>) -> Self {
+        self.paths.extend(more.paths);
+        self
+    }
+
+    pub fn map<T, F>(self, f: F) -> PathVec<T>
+    where
+        F: Fn(Message) -> T,
+        T: Clone,
+    {
+        PathVec {
+            paths: self.paths.into_iter().map(|p| p.map(&f)).collect(),
+        }
+    }
+}
+
+impl<Message> Default for PathVec<Message>
+where
+    Message: Clone,
+{
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// A full path for a root menu to a menu item possibly via submenus and menu sections

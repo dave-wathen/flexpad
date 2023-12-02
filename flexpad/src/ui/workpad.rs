@@ -4,8 +4,11 @@ use crate::{
     display_iter,
     model::workpad::{SheetId, UpdateError, UpdateResult, Workpad, WorkpadMaster, WorkpadUpdate},
     ui::{
-        key::{command, key, shift},
-        modal,
+        menu,
+        util::{
+            key::{command, key, shift},
+            modal::Modal,
+        },
     },
 };
 use flexpad_grid::{scroll::get_viewport, Viewport};
@@ -16,17 +19,15 @@ use tracing::{debug, error, info};
 use self::{
     active_sheet::{ActiveSheetMessage, ActiveSheetUi},
     add_sheet::{AddSheetMessage, AddSheetUi},
-    error::ErrorUi,
     pad_properties::{PadPropertiesMessage, PadPropertiesUi},
     sheet_properties::{SheetPropertiesMessage, SheetPropertiesUi},
 };
 
-use super::menu;
+use super::util::error::ErrorUi;
 
 mod active_cell;
 mod active_sheet;
 mod add_sheet;
-mod error;
 mod inactive_cell;
 mod pad_properties;
 mod sheet_properties;
@@ -75,9 +76,9 @@ impl std::fmt::Display for State {
 enum ShowModal {
     #[default]
     None,
+    ShowError(ErrorUi),
     PadProperties(PadPropertiesUi),
     SheetProperties(SheetPropertiesUi),
-    Error(ErrorUi),
 }
 
 impl ShowModal {
@@ -103,7 +104,7 @@ impl ShowModal {
         match self {
             Self::SheetProperties(props) => props.into_update(),
             Self::PadProperties(props) => props.into_update(),
-            Self::Error(_) => unreachable!(),
+            Self::ShowError(_) => unreachable!(),
             Self::None => unreachable!(),
         }
     }
@@ -204,63 +205,59 @@ impl WorkpadUI {
         match &self.modal {
             ShowModal::None => screen,
             ShowModal::PadProperties(ui) => {
-                modal::Modal::new(screen, ui.view().map(PadPropertiesMessage::map_to_workpad))
-                    .into()
+                Modal::new(screen, ui.view().map(PadPropertiesMessage::map_to_workpad)).into()
             }
-            ShowModal::SheetProperties(ui) => modal::Modal::new(
+            ShowModal::SheetProperties(ui) => Modal::new(
                 screen,
                 ui.view().map(SheetPropertiesMessage::map_to_workpad),
             )
             .into(),
-            ShowModal::Error(ui) => modal::Modal::new(screen, ui.view()).into(),
+            ShowModal::ShowError(ui) => {
+                Modal::new(screen, ui.view().map(|_| WorkpadMessage::ModalCancel)).into()
+            }
         }
     }
 
-    pub fn menu_paths(&self) -> Vec<menu::Path<WorkpadMessage>> {
-        let mut paths = vec![];
-
+    pub fn menu_paths(&self) -> menu::PathVec<WorkpadMessage> {
         let workpad_menu = menu::root(t!("Menus.Workpad.Title"));
-        paths.push(workpad_menu.item(
-            menu::item(t!("Menus.Workpad.NewBlank")).shortcut(command(key(keyboard::KeyCode::N))),
-        ));
-        paths.push(
-            workpad_menu.item(
-                menu::item(t!("Menus.Workpad.NewStarter"))
-                    .shortcut(shift(command(key(keyboard::KeyCode::N)))),
-            ),
-        );
-        paths.push(
-            workpad_menu.section("1").item(
-                menu::item(t!("Menus.Workpad.PadShowProperties"))
-                    .on_select(WorkpadMessage::PadShowProperties),
-            ),
-        );
-        paths.push(
-            // TODO No actual delete (since no actual save) at present
-            workpad_menu.section("1").item(
-                menu::item(t!("Menus.Workpad.PadDelete"))
-                    .shortcut(command(key(keyboard::KeyCode::W)))
-                    .on_select(WorkpadMessage::PadClose),
-            ),
-        );
-        paths.push(
-            workpad_menu.section("1").item(
-                menu::item(t!("Menus.Workpad.PadClose"))
-                    .shortcut(command(key(keyboard::KeyCode::W)))
-                    .on_select(WorkpadMessage::PadClose),
-            ),
-        );
-
-        match &self.state {
-            State::ActiveSheet(ui) => paths.extend(ui.menu_paths()),
-            State::AddSheet(ui) => paths.extend(
-                ui.menu_paths()
-                    .into_iter()
-                    .map(|p| p.map(AddSheetMessage::map_to_workpad)),
-            ),
-        }
-
-        paths
+        menu::PathVec::new()
+            .with(
+                workpad_menu.item(
+                    menu::item(t!("Menus.Workpad.NewBlank"))
+                        .shortcut(command(key(keyboard::KeyCode::N))),
+                ),
+            )
+            .with(
+                workpad_menu.item(
+                    menu::item(t!("Menus.Workpad.NewStarter"))
+                        .shortcut(shift(command(key(keyboard::KeyCode::N)))),
+                ),
+            )
+            .with(
+                workpad_menu.section("1").item(
+                    menu::item(t!("Menus.Workpad.PadShowProperties"))
+                        .on_select(WorkpadMessage::PadShowProperties),
+                ),
+            )
+            .with(
+                // TODO No actual delete (since no actual save) at present
+                workpad_menu.section("1").item(
+                    menu::item(t!("Menus.Workpad.PadDelete"))
+                        .shortcut(command(key(keyboard::KeyCode::W)))
+                        .on_select(WorkpadMessage::PadClose),
+                ),
+            )
+            .with(
+                workpad_menu.section("1").item(
+                    menu::item(t!("Menus.Workpad.PadClose"))
+                        .shortcut(command(key(keyboard::KeyCode::W)))
+                        .on_select(WorkpadMessage::PadClose),
+                ),
+            )
+            .extend(match &self.state {
+                State::ActiveSheet(ui) => ui.menu_paths(),
+                State::AddSheet(ui) => ui.menu_paths().map(AddSheetMessage::map_to_workpad),
+            })
     }
 
     pub(crate) fn subscription(&self) -> iced::Subscription<WorkpadMessage> {
@@ -275,7 +272,9 @@ impl WorkpadUI {
             ShowModal::SheetProperties(props) => props
                 .subscription()
                 .map(SheetPropertiesMessage::map_to_workpad),
-            ShowModal::Error(ui) => ui.subscription(),
+            ShowModal::ShowError(ui) => ui.subscription().map(|m| match m {
+                super::util::error::Message::Acknowledge => WorkpadMessage::ModalCancel,
+            }),
         }
     }
 
@@ -342,7 +341,7 @@ impl WorkpadUI {
                 }
                 Err(err) => {
                     error!(target: "flexpad", msg=%message, "Update");
-                    self.modal = ShowModal::Error(ErrorUi::new(err.to_string()));
+                    self.modal = ShowModal::ShowError(ErrorUi::new(err.to_string()));
                     Command::none()
                 }
             },

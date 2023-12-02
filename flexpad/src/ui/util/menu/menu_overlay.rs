@@ -11,7 +11,7 @@ use iced::{
     Background, Color, Event, Length, Pixels, Point, Rectangle, Size, Vector,
 };
 
-use crate::ui::SPACE_L;
+use crate::ui::util::SPACE_L;
 
 use super::{
     MenuEntry, MenuStates, StyleSheet, DOWN, ENTER, LEFT, MENU_ENTRY_PADDING, MENU_PADDING, RIGHT,

@@ -13,7 +13,7 @@ use iced::{
     Element, Event, Length, Padding, Pixels, Point, Rectangle, Size,
 };
 
-use super::{
+use crate::ui::util::{
     key::{ctrl, key, pressed, released, Key},
     SPACE_M, SPACE_S,
 };
@@ -30,7 +30,7 @@ use menu_overlay::MenuOverlay;
 pub use menu_overlay::{MenuAppearance, MenuItemAppearance};
 
 mod path;
-pub use path::{item, root, Path, PathItem, PathToMenu, PathToMenuSection};
+pub use path::{item, root, Path, PathItem, PathToMenu, PathToMenuSection, PathVec};
 
 mod state;
 use state::MenuStates;
@@ -87,7 +87,7 @@ where
     Renderer::Theme: StyleSheet,
 {
     /// Creates a [`MenuedContent`] with the given content.
-    pub fn new<T>(paths: Vec<Path<Message>>, content: T) -> Self
+    pub fn new<T>(paths: PathVec<Message>, content: T) -> Self
     where
         Message: 'a,
         Renderer: 'a,

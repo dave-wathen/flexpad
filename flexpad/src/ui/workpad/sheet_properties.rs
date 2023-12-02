@@ -1,8 +1,11 @@
 use crate::{
     model::workpad::{Sheet, SheetId, WorkpadUpdate},
     ui::{
-        button_bar, dialog::Dialog, dialog_button, dialog_title, handle_cancel_key,
-        handle_ok_and_cancel_keys, style, text_input, SPACE_S,
+        style,
+        util::{
+            button_bar, dialog::Dialog, dialog_button, dialog_title, handle_cancel_key,
+            handle_ok_and_cancel_keys, text_input, SPACE_S,
+        },
     },
 };
 use iced::{subscription, widget::column, Command, Subscription};

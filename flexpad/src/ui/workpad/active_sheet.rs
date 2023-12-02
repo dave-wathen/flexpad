@@ -20,7 +20,10 @@ use tracing::debug;
 use crate::{
     display_iter,
     model::workpad::{Cell, Sheet, UpdateError, Workpad, WorkpadUpdate},
-    ui::{images, menu, SPACE_S},
+    ui::{
+        menu,
+        util::{images, SPACE_S},
+    },
 };
 
 use super::{
@@ -459,21 +462,25 @@ impl ActiveSheetUi {
     }
 
     // TODO Should be ActiveSheetMessage?
-    pub fn menu_paths(&self) -> Vec<menu::Path<WorkpadMessage>> {
+    pub fn menu_paths(&self) -> menu::PathVec<WorkpadMessage> {
         let sheet_menu = menu::root(t!("Menus.Sheet.Title"));
         let sheet_id = self.active_sheet.id();
-        vec![
-            sheet_menu.item(
-                menu::item(t!("Menus.Sheet.SheetShowProperties"))
-                    .on_select(WorkpadMessage::SheetShowProperties(sheet_id)),
-            ),
-            sheet_menu.item(
+
+        menu::PathVec::new()
+            .with(
+                sheet_menu.item(
+                    menu::item(t!("Menus.Sheet.SheetShowProperties"))
+                        .on_select(WorkpadMessage::SheetShowProperties(sheet_id)),
+                ),
+            )
+            .with(sheet_menu.item(
                 menu::item(t!("Menus.Sheet.SheetNew")).on_select(WorkpadMessage::PadAddSheet),
-            ),
-            sheet_menu.item(
-                menu::item(t!("Menus.Sheet.SheetDelete"))
-                    .on_select(WorkpadMessage::SheetDelete(sheet_id)),
-            ),
-        ]
+            ))
+            .with(
+                sheet_menu.item(
+                    menu::item(t!("Menus.Sheet.SheetDelete"))
+                        .on_select(WorkpadMessage::SheetDelete(sheet_id)),
+                ),
+            )
     }
 }

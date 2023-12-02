@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Version {
     pub version: &'static str,
     pub git_branch: &'static str,

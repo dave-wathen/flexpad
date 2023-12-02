@@ -8,7 +8,7 @@ use iced::{
     event, Background, Color, Element, Event, Length, Point, Rectangle, Size,
 };
 
-use super::SPACE_M;
+use crate::ui::util::SPACE_M;
 
 /// A Dialog (to be used with modal)
 pub struct Dialog<'a, Message, Renderer = iced::Renderer>
