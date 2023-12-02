@@ -139,15 +139,21 @@ impl Application for Flexpad {
     fn update(&mut self, message: Self::Message) -> Command<Message> {
         let action = match message.clone() {
             Message::Loading(m) => {
-                let Screen::Loading(ui) = &mut self.state else { unreachable!() };
+                let Screen::Loading(ui) = &mut self.state else {
+                    unreachable!()
+                };
                 ui.update(m)
             }
             Message::Lobby(m) => {
-                let Screen::Lobby(ui) = &mut self.state else { unreachable!() };
+                let Screen::Lobby(ui) = &mut self.state else {
+                    unreachable!()
+                };
                 ui.update(m)
             }
             Message::Error(m) => {
-                let Dialog::Error(ui) = &mut self.dialog else { unreachable!() };
+                let Dialog::Error(ui) = &mut self.dialog else {
+                    unreachable!()
+                };
                 ui.update(m)
             }
             _ => Action::None,
