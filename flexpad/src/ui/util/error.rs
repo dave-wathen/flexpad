@@ -3,7 +3,6 @@ use crate::ui::{
     util::{
         button_bar, dialog::Dialog, dialog_button, dialog_title, handle_ok_and_cancel_keys, SPACE_S,
     },
-    Action,
 };
 use iced::{
     subscription,
@@ -24,6 +23,10 @@ impl std::fmt::Display for Message {
             Self::Acknowledge => write!(f, "Acknowledge"),
         }
     }
+}
+
+pub enum Event {
+    Acknowledged,
 }
 
 #[derive(Debug)]
@@ -52,9 +55,9 @@ impl ErrorUi {
         .into()
     }
 
-    pub fn update(&mut self, message: Message) -> Action {
+    pub fn update(&mut self, message: Message) -> Event {
         match message {
-            Message::Acknowledge => Action::CloseDialog,
+            Message::Acknowledge => Event::Acknowledged,
         }
     }
 

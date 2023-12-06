@@ -1,6 +1,6 @@
 use iced::widget::text_input::Value;
 
-use super::super::active_sheet::{ActiveSheetMessage, Move};
+use super::super::active_sheet::{Message, Move};
 
 use super::cursor::Cursor;
 
@@ -68,9 +68,9 @@ impl Editor {
         self.value().to_string()
     }
 
-    pub fn left(&mut self) -> Option<ActiveSheetMessage> {
+    pub fn left(&mut self) -> Option<Message> {
         match self.mode {
-            Mode::Viewing => Some(ActiveSheetMessage::ActiveCellMove(Move::Left)),
+            Mode::Viewing => Some(Message::ActiveCellMove(Move::Left)),
             Mode::Editing => {
                 self.cursor.move_left(&self.edit_value);
                 None
@@ -78,9 +78,9 @@ impl Editor {
         }
     }
 
-    pub fn right(&mut self) -> Option<ActiveSheetMessage> {
+    pub fn right(&mut self) -> Option<Message> {
         match self.mode {
-            Mode::Viewing => Some(ActiveSheetMessage::ActiveCellMove(Move::Right)),
+            Mode::Viewing => Some(Message::ActiveCellMove(Move::Right)),
             Mode::Editing => {
                 self.cursor.move_right(&self.edit_value);
                 None
@@ -88,23 +88,23 @@ impl Editor {
         }
     }
 
-    pub fn up(&mut self) -> Option<ActiveSheetMessage> {
+    pub fn up(&mut self) -> Option<Message> {
         match self.mode {
-            Mode::Viewing => Some(ActiveSheetMessage::ActiveCellMove(Move::Up)),
+            Mode::Viewing => Some(Message::ActiveCellMove(Move::Up)),
             Mode::Editing => None,
         }
     }
 
-    pub fn down(&mut self) -> Option<ActiveSheetMessage> {
+    pub fn down(&mut self) -> Option<Message> {
         match self.mode {
-            Mode::Viewing => Some(ActiveSheetMessage::ActiveCellMove(Move::Down)),
+            Mode::Viewing => Some(Message::ActiveCellMove(Move::Down)),
             Mode::Editing => None,
         }
     }
 
-    pub fn jump_left(&mut self) -> Option<ActiveSheetMessage> {
+    pub fn jump_left(&mut self) -> Option<Message> {
         match self.mode {
-            Mode::Viewing => Some(ActiveSheetMessage::ActiveCellMove(Move::JumpLeft)),
+            Mode::Viewing => Some(Message::ActiveCellMove(Move::JumpLeft)),
             Mode::Editing => {
                 self.cursor.move_left_by_words(&self.edit_value);
                 None
@@ -112,9 +112,9 @@ impl Editor {
         }
     }
 
-    pub fn jump_right(&mut self) -> Option<ActiveSheetMessage> {
+    pub fn jump_right(&mut self) -> Option<Message> {
         match self.mode {
-            Mode::Viewing => Some(ActiveSheetMessage::ActiveCellMove(Move::JumpRight)),
+            Mode::Viewing => Some(Message::ActiveCellMove(Move::JumpRight)),
             Mode::Editing => {
                 self.cursor.move_right_by_words(&self.edit_value);
                 None
@@ -122,57 +122,45 @@ impl Editor {
         }
     }
 
-    pub fn jump_up(&mut self) -> Option<ActiveSheetMessage> {
+    pub fn jump_up(&mut self) -> Option<Message> {
         match self.mode {
-            Mode::Viewing => Some(ActiveSheetMessage::ActiveCellMove(Move::JumpUp)),
+            Mode::Viewing => Some(Message::ActiveCellMove(Move::JumpUp)),
             Mode::Editing => None,
         }
     }
 
-    pub fn jump_down(&mut self) -> Option<ActiveSheetMessage> {
+    pub fn jump_down(&mut self) -> Option<Message> {
         match self.mode {
-            Mode::Viewing => Some(ActiveSheetMessage::ActiveCellMove(Move::JumpDown)),
+            Mode::Viewing => Some(Message::ActiveCellMove(Move::JumpDown)),
             Mode::Editing => None,
         }
     }
 
-    pub fn enter(&mut self) -> Option<ActiveSheetMessage> {
+    pub fn enter(&mut self) -> Option<Message> {
         match self.mode {
-            Mode::Viewing => Some(ActiveSheetMessage::ActiveCellMove(Move::Down)),
-            Mode::Editing => Some(ActiveSheetMessage::Multi(vec![
-                ActiveSheetMessage::ActiveCellNewValue(self.end_editing()),
-                ActiveSheetMessage::ActiveCellMove(Move::Down),
-            ])),
+            Mode::Viewing => Some(Message::ActiveCellMove(Move::Down)),
+            Mode::Editing => Some(Message::ActiveCellNewValue(self.end_editing(), Move::Down)),
         }
     }
 
-    pub fn back_enter(&mut self) -> Option<ActiveSheetMessage> {
+    pub fn back_enter(&mut self) -> Option<Message> {
         match self.mode {
-            Mode::Viewing => Some(ActiveSheetMessage::ActiveCellMove(Move::Up)),
-            Mode::Editing => Some(ActiveSheetMessage::Multi(vec![
-                ActiveSheetMessage::ActiveCellNewValue(self.end_editing()),
-                ActiveSheetMessage::ActiveCellMove(Move::Up),
-            ])),
+            Mode::Viewing => Some(Message::ActiveCellMove(Move::Up)),
+            Mode::Editing => Some(Message::ActiveCellNewValue(self.end_editing(), Move::Up)),
         }
     }
 
-    pub fn tab(&mut self) -> Option<ActiveSheetMessage> {
+    pub fn tab(&mut self) -> Option<Message> {
         match self.mode {
-            Mode::Viewing => Some(ActiveSheetMessage::ActiveCellMove(Move::Right)),
-            Mode::Editing => Some(ActiveSheetMessage::Multi(vec![
-                ActiveSheetMessage::ActiveCellNewValue(self.end_editing()),
-                ActiveSheetMessage::ActiveCellMove(Move::Right),
-            ])),
+            Mode::Viewing => Some(Message::ActiveCellMove(Move::Right)),
+            Mode::Editing => Some(Message::ActiveCellNewValue(self.end_editing(), Move::Right)),
         }
     }
 
-    pub fn back_tab(&mut self) -> Option<ActiveSheetMessage> {
+    pub fn back_tab(&mut self) -> Option<Message> {
         match self.mode {
-            Mode::Viewing => Some(ActiveSheetMessage::ActiveCellMove(Move::Left)),
-            Mode::Editing => Some(ActiveSheetMessage::Multi(vec![
-                ActiveSheetMessage::ActiveCellNewValue(self.end_editing()),
-                ActiveSheetMessage::ActiveCellMove(Move::Left),
-            ])),
+            Mode::Viewing => Some(Message::ActiveCellMove(Move::Left)),
+            Mode::Editing => Some(Message::ActiveCellNewValue(self.end_editing(), Move::Left)),
         }
     }
 

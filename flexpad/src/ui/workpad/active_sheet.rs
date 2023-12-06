@@ -1,12 +1,12 @@
 use std::{cell::RefCell, rc::Rc};
 
 use flexpad_grid::{
-    scroll::ensure_cell_visible, style, Border, Borders, CellRange, ColumnHead, Grid, GridCell,
-    GridCorner, GridScrollable, RowCol, RowHead, SumSeq, Viewport,
+    style, Border, Borders, CellRange, ColumnHead, Grid, GridCell, GridCorner, GridScrollable,
+    RowCol, RowHead, SumSeq, Viewport,
 };
 use iced::{
     advanced::{mouse::click, widget},
-    alignment, theme,
+    alignment, keyboard, theme,
     widget::{
         button, column, horizontal_rule, horizontal_space, image, row, text, vertical_rule,
         vertical_space,
@@ -18,17 +18,20 @@ use rust_i18n::t;
 use tracing::debug;
 
 use crate::{
-    display_iter,
-    model::workpad::{Cell, Sheet, UpdateError, Workpad, WorkpadUpdate},
+    model::workpad::{Cell, Sheet, WorkpadUpdate},
     ui::{
         menu,
-        util::{images, SPACE_S},
+        util::{
+            images,
+            key::{ctrl, key},
+            SPACE_S,
+        },
     },
 };
 
 use super::{
     active_cell::{self, Editor},
-    inactive_cell, WorkpadMessage,
+    inactive_cell,
 };
 
 static FORMULA_BAR_ID: Lazy<active_cell::Id> = Lazy::new(active_cell::Id::unique);
@@ -38,43 +41,31 @@ pub static GRID_SCROLLABLE_ID: Lazy<flexpad_grid::scroll::Id> =
     Lazy::new(flexpad_grid::scroll::Id::unique);
 
 #[derive(Debug, Clone)]
-pub enum ActiveSheetMessage {
+pub enum Message {
     NoOp, // Temporary
-    Multi(Vec<ActiveSheetMessage>),
-    PadUpdated(Result<Workpad, UpdateError>),
     SheetShowDetails,
     Focus(widget::Id),
     ViewportChanged(Viewport),
     ActiveCellMove(Move),
-    ActiveCellNewValue(String),
+    ActiveCellNewValue(String, Move),
+    ShowProperties,
+    DeleteSheet,
+    AddSheet,
 }
 
-impl ActiveSheetMessage {
-    pub fn map_to_workpad(self) -> WorkpadMessage {
-        match self {
-            Self::PadUpdated(result) => WorkpadMessage::PadUpdated(result),
-            m => WorkpadMessage::ActiveSheetMsg(m),
-        }
-    }
-}
-
-impl std::fmt::Display for ActiveSheetMessage {
+impl std::fmt::Display for Message {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("ActiveSheetMessage::")?;
+        f.write_str("active_sheet::Message::")?;
         match self {
             Self::NoOp => write!(f, "NoOp"),
-            Self::Multi(msgs) => {
-                f.write_str("Multi(")?;
-                display_iter(msgs.iter(), f)?;
-                f.write_str(")")
-            }
-            Self::PadUpdated(Ok(workpad)) => write!(f, "PadUpdated({workpad})"),
-            Self::PadUpdated(Err(err)) => write!(f, "PadUpdated(ERROR: {err})"),
             Self::SheetShowDetails => write!(f, "SheetShowDetails"),
             Self::Focus(id) => write!(f, "Focus({id:?})"),
             Self::ViewportChanged(viewport) => write!(f, "ViewportChanged({viewport})"),
             Self::ActiveCellMove(mve) => write!(f, "ActiveCellMove({mve})"),
-            Self::ActiveCellNewValue(value) => write!(f, "ActiveCellNewValue({value})"),
+            Self::ActiveCellNewValue(value, mve) => write!(f, "ActiveCellNewValue({value}, {mve})"),
+            Self::ShowProperties => write!(f, "EditProperties"),
+            Self::DeleteSheet => write!(f, "DeleteSheet"),
+            Self::AddSheet => write!(f, "AddSheet"),
         }
     }
 }
@@ -90,6 +81,25 @@ pub enum Move {
     JumpUp,
     JumpDown,
     To(RowCol),
+}
+
+impl Move {
+    fn apply(&self, position: RowCol, rows_count: usize, columns_count: usize) -> RowCol {
+        let RowCol { row, column } = position;
+        let max_column = columns_count.saturating_sub(1) as u32;
+        let max_row = rows_count.saturating_sub(1) as u32;
+        match self {
+            Move::Left => RowCol::new(row, column.saturating_sub(1)),
+            Move::Right => RowCol::new(row, (column + 1).min(max_column)),
+            Move::Up => RowCol::new(row.saturating_sub(1), column),
+            Move::Down => RowCol::new((row + 1).min(max_row), column),
+            Move::JumpLeft => RowCol::new(row, 0),
+            Move::JumpRight => RowCol::new(row, max_column),
+            Move::JumpUp => RowCol::new(0, column),
+            Move::JumpDown => RowCol::new(max_row, column),
+            Move::To(rc) => *rc,
+        }
+    }
 }
 
 impl std::fmt::Display for Move {
@@ -108,7 +118,13 @@ impl std::fmt::Display for Move {
     }
 }
 
-// TODO Flicker when moving/updating
+pub enum Event {
+    None,
+    EditSheetPropertiesRequested(Sheet),
+    AddSheetRequested,
+    UpdateRequested(crate::model::workpad::WorkpadMaster, WorkpadUpdate),
+}
+
 #[derive(Debug)]
 pub struct ActiveSheetUi {
     pub(crate) active_sheet: Sheet,
@@ -145,7 +161,7 @@ impl ActiveSheetUi {
         }
     }
 
-    pub fn view(&self) -> iced::Element<'_, ActiveSheetMessage> {
+    pub fn view(&self) -> iced::Element<'_, Message> {
         column![
             self.toolbar_view(),
             vertical_space(SPACE_S),
@@ -157,7 +173,7 @@ impl ActiveSheetUi {
         .into()
     }
 
-    fn toolbar_view(&self) -> iced::Element<'_, ActiveSheetMessage> {
+    fn toolbar_view(&self) -> iced::Element<'_, Message> {
         let button = |img, _msg| {
             button(image(img))
                 .width(Length::Shrink)
@@ -167,18 +183,18 @@ impl ActiveSheetUi {
         };
 
         row![
-            button(images::undo(), ActiveSheetMessage::NoOp),
-            button(images::redo(), ActiveSheetMessage::NoOp),
-            button(images::print(), ActiveSheetMessage::NoOp),
+            button(images::undo(), Message::NoOp),
+            button(images::redo(), Message::NoOp),
+            button(images::print(), Message::NoOp),
             vertical_rule(3),
-            button(images::settings(), ActiveSheetMessage::NoOp),
+            button(images::settings(), Message::NoOp),
         ]
         .height(20)
         .spacing(SPACE_S)
         .into()
     }
 
-    fn sheet_and_formula_row_view(&self) -> iced::Element<'_, ActiveSheetMessage> {
+    fn sheet_and_formula_row_view(&self) -> iced::Element<'_, Message> {
         let button = |img, msg| {
             button(image(img))
                 .on_press(msg)
@@ -188,10 +204,10 @@ impl ActiveSheetUi {
                 .style(theme::Button::Text)
         };
 
-        let sheet: iced::Element<'_, ActiveSheetMessage> = row![
+        let sheet: iced::Element<'_, Message> = row![
             text(self.active_sheet.name()).size(14).width(200),
             // TODO
-            button(images::expand_more(), ActiveSheetMessage::SheetShowDetails),
+            button(images::expand_more(), Message::SheetShowDetails),
         ]
         .spacing(SPACE_S)
         .into();
@@ -199,13 +215,13 @@ impl ActiveSheetUi {
         match self.active_cell {
             Some((_, ref editor)) => {
                 let active_cell = self.active_cell();
-                let cell_name: iced::Element<'_, ActiveSheetMessage> = text(active_cell.name())
+                let cell_name: iced::Element<'_, Message> = text(active_cell.name())
                     .size(14)
                     .width(100)
                     .horizontal_alignment(alignment::Horizontal::Center)
                     .into();
 
-                let formula: iced::Element<'_, ActiveSheetMessage> =
+                let formula: iced::Element<'_, Message> =
                     active_cell::ActiveCell::new(editor.clone())
                         .id(FORMULA_BAR_ID.clone())
                         .focused(self.focus == FORMULA_BAR_ID.clone().into())
@@ -239,7 +255,7 @@ impl ActiveSheetUi {
         .into()
     }
 
-    fn grid_view(&self) -> Element<'_, ActiveSheetMessage> {
+    fn grid_view(&self) -> Element<'_, Message> {
         let active_sheet = &self.active_sheet;
         // TODO Allow hetrogenious sizes
         let mut widths = SumSeq::new();
@@ -254,7 +270,7 @@ impl ActiveSheetUi {
         );
 
         // TODO Hardcoded text sizes
-        let mut grid: Grid<ActiveSheetMessage> = Grid::new(heights, widths)
+        let mut grid: Grid<Message> = Grid::new(heights, widths)
             .style(style::Grid::Ruled)
             .push_corner(GridCorner::new(text(t!("ActiveSheet.Corner"))))
             .row_head_width(active_sheet.row_header_width())
@@ -310,177 +326,147 @@ impl ActiveSheetUi {
             .id(GRID_SCROLLABLE_ID.clone())
             .width(Length::Fill)
             .height(Length::Fill)
-            .on_viewport_change(ActiveSheetMessage::ViewportChanged)
+            .on_viewport_change(Message::ViewportChanged)
             .into()
     }
 
-    pub fn update(&mut self, message: ActiveSheetMessage) -> Command<ActiveSheetMessage> {
+    pub fn update(&mut self, message: Message) -> Event {
         match message {
-            ActiveSheetMessage::NoOp => Command::none(),
-            ActiveSheetMessage::Multi(messages) => {
-                debug!(target: "flexpad", "MULTI");
-                let mut commands = vec![];
-                for m in messages {
-                    commands.push(self.update(m));
-                }
-                Command::batch(commands)
-            }
-            ActiveSheetMessage::PadUpdated(_) => unreachable!(),
-            ActiveSheetMessage::SheetShowDetails => {
+            Message::NoOp => Event::None,
+            Message::SheetShowDetails => {
                 debug!(target: "flexpad", %message);
                 dbg!("Show sheet details");
-                Command::none()
+                Event::None
             }
-            ActiveSheetMessage::Focus(ref id) => {
+            Message::Focus(ref id) => {
                 // TODO check for edit in progress?
                 debug!(target: "flexpad", %message);
                 self.focus = id.clone();
-                Command::none()
+                Event::None
             }
-            ActiveSheetMessage::ViewportChanged(viewport) => {
+            Message::ViewportChanged(viewport) => {
                 debug!(target: "flexpad", %message);
                 self.visible_cells = viewport.cell_range();
-                Command::none()
+                Event::None
             }
-            ActiveSheetMessage::ActiveCellMove(mve) => {
+            Message::ActiveCellMove(mve) => {
                 debug!(target:"flexpad", %message);
-                let mut commands = vec![];
-                let sheet = &self.active_sheet;
-                // Cannot move active cell unless there is one to move it from
-                let (prior_active_cell, prior_editor) = self.active_cell.as_ref().unwrap();
-                let RowCol { row, column } = *prior_active_cell;
-                let mut new_active_cell = *prior_active_cell;
-                match mve {
-                    Move::Left => {
-                        if column > 0 {
-                            new_active_cell = RowCol::new(row, column - 1);
-                        }
+                match apply_move(self.active_cell(), mve) {
+                    Some((_new_rc, update_active_cell)) => {
+                        // TODO Can we issue the ensure_cell_visible when the pad update comes through?
+                        // ensure_cell_visible(new_rc)
+                        //     .map(super::Message::ActiveSheet)
+                        //     .map(ui::Message::Workpad)
+                        Event::UpdateRequested(
+                            self.active_sheet.workpad().master(),
+                            update_active_cell,
+                        )
                     }
-                    Move::Right => {
-                        let columns_count = sheet.columns().count() as u32;
-                        let max_index = columns_count.max(1) - 1;
-                        if column < max_index {
-                            new_active_cell = RowCol::new(row, column + 1);
-                        }
-                    }
-                    Move::Up => {
-                        if row > 0 {
-                            new_active_cell = RowCol::new(row - 1, column);
-                        }
-                    }
-                    Move::Down => {
-                        let rows_count = sheet.rows().count() as u32;
-                        let max_index = rows_count.max(1) - 1;
-                        if row < max_index {
-                            new_active_cell = RowCol::new(row + 1, column);
-                        }
-                    }
-                    Move::JumpLeft => {
-                        new_active_cell = RowCol::new(row, 0);
-                    }
-                    Move::JumpRight => {
-                        let columns_count = sheet.columns().count() as u32;
-                        let max_index = columns_count.max(1) - 1;
-                        new_active_cell = RowCol::new(row, max_index);
-                    }
-                    Move::JumpUp => {
-                        new_active_cell = RowCol::new(0, column);
-                    }
-                    Move::JumpDown => {
-                        let rows_count = sheet.rows().count() as u32;
-                        let max_index = rows_count.max(1) - 1;
-                        new_active_cell = RowCol::new(max_index, column);
-                    }
-                    Move::To(rc) => {
-                        new_active_cell = rc;
-                    }
-                }
-
-                if *prior_active_cell != new_active_cell {
-                    let rw = new_active_cell.row as usize;
-                    let cl = new_active_cell.column as usize;
-                    let cell = sheet.cell(rw, cl);
-
-                    commands.push(
-                        ensure_cell_visible(GRID_SCROLLABLE_ID.clone(), new_active_cell)
-                            .map(ActiveSheetMessage::ViewportChanged),
-                    );
-
-                    let update_cell_value = if prior_editor.borrow().is_editing() {
-                        let cell = self.active_cell();
-                        Some(WorkpadUpdate::SheetSetCellValue {
-                            sheet_id: cell.sheet().id(),
-                            row_id: cell.row().id(),
-                            column_id: cell.column().id(),
-                            value: prior_editor.borrow().contents(),
-                        })
-                    } else {
-                        None
-                    };
-
-                    let update_active_cell = WorkpadUpdate::SheetSetActiveCell {
-                        sheet_id: cell.sheet().id(),
-                        row_id: cell.row().id(),
-                        column_id: cell.column().id(),
-                    };
-
-                    let update = match update_cell_value {
-                        Some(update_cell_value) => {
-                            WorkpadUpdate::Multi(vec![update_cell_value, update_active_cell])
-                        }
-                        None => update_active_cell,
-                    };
-                    commands.push(self.update_pad(update));
-                }
-
-                if commands.is_empty() {
-                    Command::none()
-                } else {
-                    Command::batch(commands)
+                    None => Event::None,
                 }
             }
-            ActiveSheetMessage::ActiveCellNewValue(ref new_value) => {
+            Message::ActiveCellNewValue(ref new_value, mve) => {
                 debug!(target: "flexpad", %message);
                 let cell = self.active_cell();
-                let update = WorkpadUpdate::SheetSetCellValue {
+                let update_cell_value = WorkpadUpdate::SheetSetCellValue {
                     sheet_id: cell.sheet().id(),
                     row_id: cell.row().id(),
                     column_id: cell.column().id(),
                     value: new_value.clone(),
                 };
 
-                self.update_pad(update)
+                match apply_move(cell, mve) {
+                    Some((_new_rc, update_active_cell)) => {
+                        let update =
+                            WorkpadUpdate::Multi(vec![update_cell_value, update_active_cell]);
+
+                        // TODO Can we issue the ensure_cell_visible when the pad update comes through?
+                        // ensure_cell_visible(new_rc)
+                        //     .map(super::Message::ActiveSheet)
+                        //     .map(ui::Message::Workpad)
+
+                        Event::UpdateRequested(self.active_sheet.workpad().master(), update)
+                    }
+                    None => Event::UpdateRequested(
+                        self.active_sheet.workpad().master(),
+                        update_cell_value,
+                    ),
+                }
             }
+            Message::ShowProperties => {
+                Event::EditSheetPropertiesRequested(self.active_sheet.clone())
+            }
+            Message::DeleteSheet => Event::UpdateRequested(
+                self.active_sheet.workpad().master(),
+                WorkpadUpdate::SheetDelete {
+                    sheet_id: self.active_sheet.id(),
+                },
+            ),
+            Message::AddSheet => Event::AddSheetRequested,
         }
     }
 
-    pub fn update_pad(&mut self, update: WorkpadUpdate) -> Command<ActiveSheetMessage> {
-        Command::perform(
-            super::update_pad(self.active_sheet.workpad().master(), update),
-            ActiveSheetMessage::PadUpdated,
-        )
-    }
-
-    // TODO Should be ActiveSheetMessage?
-    pub fn menu_paths(&self) -> menu::PathVec<WorkpadMessage> {
+    pub fn menu_paths(&self) -> menu::PathVec<Message> {
         let sheet_menu = menu::root(t!("Menus.Sheet.Title"));
-        let sheet_id = self.active_sheet.id();
 
         menu::PathVec::new()
             .with(
                 sheet_menu.item(
                     menu::item(t!("Menus.Sheet.SheetShowProperties"))
-                        .on_select(WorkpadMessage::SheetShowProperties(sheet_id)),
+                        .shortcut(ctrl(key(keyboard::KeyCode::Comma)))
+                        .on_select(Message::ShowProperties),
                 ),
             )
-            .with(sheet_menu.item(
-                menu::item(t!("Menus.Sheet.SheetNew")).on_select(WorkpadMessage::PadAddSheet),
-            ))
+            .with(
+                sheet_menu.item(
+                    menu::item(t!("Menus.Sheet.SheetNew"))
+                        .shortcut(ctrl(key(keyboard::KeyCode::N)))
+                        .on_select(Message::AddSheet),
+                ),
+            )
             .with(
                 sheet_menu.item(
                     menu::item(t!("Menus.Sheet.SheetDelete"))
-                        .on_select(WorkpadMessage::SheetDelete(sheet_id)),
+                        .shortcut(ctrl(key(keyboard::KeyCode::Delete)))
+                        .on_select(Message::DeleteSheet),
                 ),
             )
     }
+}
+
+pub fn get_viewport() -> Command<Message> {
+    flexpad_grid::scroll::get_viewport(GRID_SCROLLABLE_ID.clone()).map(Message::ViewportChanged)
+}
+
+pub fn _ensure_cell_visible(cell: RowCol) -> Command<Message> {
+    flexpad_grid::scroll::ensure_cell_visible(GRID_SCROLLABLE_ID.clone(), cell)
+        .map(Message::ViewportChanged)
+}
+
+fn apply_move(active_cell: Cell, mve: Move) -> Option<(RowCol, WorkpadUpdate)> {
+    let sheet = active_cell.sheet();
+    let prior_rc = rc_of_cell(active_cell);
+    let new_rc = mve.apply(prior_rc, sheet.rows().count(), sheet.columns().count());
+
+    if prior_rc != new_rc {
+        let new_cell = cell_by_rc(sheet, new_rc);
+
+        let update_active_cell = WorkpadUpdate::SheetSetActiveCell {
+            sheet_id: new_cell.sheet().id(),
+            row_id: new_cell.row().id(),
+            column_id: new_cell.column().id(),
+        };
+
+        Some((new_rc, update_active_cell))
+    } else {
+        None
+    }
+}
+
+fn rc_of_cell(cell: Cell) -> RowCol {
+    RowCol::new(cell.row().index() as u32, cell.column().index() as u32)
+}
+
+fn cell_by_rc(sheet: Sheet, rc: RowCol) -> Cell {
+    sheet.cell(rc.row as usize, rc.column as usize)
 }

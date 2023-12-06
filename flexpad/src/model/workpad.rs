@@ -52,7 +52,7 @@ use crate::display_iter;
 // these is a Workpad (see WorkpadMaster::active_version).  From Workpad types for the
 // various parts (Sheet, Row, Column, Cell, ...) give the detailed view of the version.
 
-/// The [`Result`] type returned when a workpad is updated.  On Sucsess the
+/// The [`Result`] type returned when a workpad is updated.  On Success the
 /// Workpad represents the newly created version.
 pub type UpdateResult = Result<Workpad, UpdateError>;
 
@@ -161,6 +161,11 @@ impl WorkpadMaster {
         WorkpadMaster {
             data: Arc::new(master_data),
         }
+    }
+
+    /// The id of this workpad
+    pub fn id(&self) -> &str {
+        &self.data.id
     }
 
     /// Returns a [`Workpad`] that allows navigation through the data
@@ -812,6 +817,7 @@ impl Workpad {
     /// Returns the version information (see [`Workpad::version`]) for the versions which
     /// preceed this version.  Versions are returned from the immediate predecessor of
     /// this version backwards.
+    #[allow(dead_code)]
     pub fn backward_versions(&self) -> impl Iterator<Item = (Version, String)> {
         let history = self.master.data.history.read().unwrap();
         let mut entry = &history[self.version as usize];
@@ -828,6 +834,7 @@ impl Workpad {
     /// Returns the version information (see [`Workpad::version`]) for the versions which
     /// succeed this version.  Versions are returned from the the immediate successor of
     /// this version forwards.
+    #[allow(dead_code)]
     pub fn forward_versions(&self) -> impl Iterator<Item = (Version, String)> {
         let history = self.master.data.history.read().unwrap();
         // history cannot be empty otherwise this version could not exist
@@ -946,7 +953,6 @@ pub struct Sheet {
 }
 
 impl Sheet {
-    #[allow(dead_code)]
     /// Returns the Id of the sheet.  The id remains constant across all versions of the workpad.
     pub fn id(&self) -> SheetId {
         self.id
@@ -958,6 +964,7 @@ impl Sheet {
     }
 
     /// Return the [`SheetKind`] of the sheet
+    #[allow(dead_code)]
     pub fn kind(&self) -> SheetKind {
         SheetKind::Worksheet
     }

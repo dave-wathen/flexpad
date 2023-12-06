@@ -15,7 +15,7 @@ use iced::{
     Color, Element, Event, Length, Pixels, Rectangle, Size,
 };
 
-use super::active_sheet::{ActiveSheetMessage, Move};
+use super::active_sheet::{Message, Move};
 
 pub struct InactiveCell<Renderer>
 where
@@ -70,7 +70,7 @@ where
     }
 }
 
-impl<Renderer> Widget<ActiveSheetMessage, Renderer> for InactiveCell<Renderer>
+impl<Renderer> Widget<Message, Renderer> for InactiveCell<Renderer>
 where
     Renderer: iced::advanced::Renderer,
     Renderer: text::Renderer,
@@ -159,7 +159,7 @@ where
         _tree: &mut Tree,
         _layout: Layout<'_>,
         _renderer: &Renderer,
-        _operation: &mut dyn Operation<ActiveSheetMessage>,
+        _operation: &mut dyn Operation<Message>,
     ) {
         // let state = tree.state.downcast_mut::<State>();
 
@@ -175,14 +175,14 @@ where
         cursor: mouse::Cursor,
         _renderer: &Renderer,
         _clipboard: &mut dyn Clipboard,
-        shell: &mut Shell<'_, ActiveSheetMessage>,
+        shell: &mut Shell<'_, Message>,
         _viewport: &Rectangle,
     ) -> Status {
         match event {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
             | Event::Touch(touch::Event::FingerPressed { .. }) => {
                 if cursor.position_over(layout.bounds()).is_some() {
-                    shell.publish(ActiveSheetMessage::ActiveCellMove(Move::To(self.rc)));
+                    shell.publish(Message::ActiveCellMove(Move::To(self.rc)));
                     Status::Captured
                 } else {
                     Status::Ignored
@@ -193,7 +193,7 @@ where
     }
 }
 
-impl<'a, Renderer> From<InactiveCell<Renderer>> for Element<'a, ActiveSheetMessage, Renderer>
+impl<'a, Renderer> From<InactiveCell<Renderer>> for Element<'a, Message, Renderer>
 where
     Renderer: iced::advanced::Renderer + 'a,
     Renderer: text::Renderer,

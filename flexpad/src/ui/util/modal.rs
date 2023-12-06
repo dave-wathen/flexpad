@@ -68,29 +68,6 @@ where
         self.base.as_widget().layout(renderer, limits)
     }
 
-    fn on_event(
-        &mut self,
-        state: &mut widget::Tree,
-        event: Event,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
-        shell: &mut Shell<'_, Message>,
-        viewport: &Rectangle,
-    ) -> event::Status {
-        self.base.as_widget_mut().on_event(
-            &mut state.children[0],
-            event,
-            layout,
-            cursor,
-            renderer,
-            clipboard,
-            shell,
-            viewport,
-        )
-    }
-
     fn draw(
         &self,
         state: &widget::Tree,

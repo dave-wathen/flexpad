@@ -1,5 +1,5 @@
 use crate::{
-    model::workpad::{SheetKind, UpdateError, Workpad, WorkpadUpdate},
+    model::workpad::{SheetKind, Workpad, WorkpadMaster, WorkpadUpdate},
     ui::{
         menu, style,
         util::{
@@ -12,44 +12,35 @@ use iced::{
     alignment, subscription,
     theme::{self},
     widget::{button, column, container, horizontal_rule, image, row, text, vertical_space},
-    Alignment, Command, Element, Length, Subscription,
+    Alignment, Element, Length, Subscription,
 };
 use rust_i18n::t;
 use tracing::debug;
 
-use super::WorkpadMessage;
-
 #[derive(Debug, Clone)]
-pub enum AddSheetMessage {
-    PadUpdated(Result<Workpad, UpdateError>),
+pub enum Message {
     SelectKind(SheetKind),
     Name(String),
     Submit,
     Cancel,
 }
 
-impl AddSheetMessage {
-    pub fn map_to_workpad(self) -> WorkpadMessage {
-        match self {
-            Self::PadUpdated(result) => WorkpadMessage::PadUpdated(result),
-            Self::Cancel => WorkpadMessage::AddSheetCancel,
-            m => WorkpadMessage::AddSheetMsg(m),
-        }
-    }
-}
-
-impl std::fmt::Display for AddSheetMessage {
+impl std::fmt::Display for Message {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "AddSheetMessage::")?;
         match self {
-            Self::PadUpdated(Ok(workpad)) => write!(f, "PadUpdated({workpad})"),
-            Self::PadUpdated(Err(err)) => write!(f, "PadUpdated(ERROR: {err})"),
             Self::SelectKind(k) => write!(f, "SelectKind({k})"),
             Self::Name(n) => write!(f, "Name({n})"),
             Self::Submit => write!(f, "Submit"),
             Self::Cancel => write!(f, "Cancel"),
         }
     }
+}
+
+pub enum Event {
+    None,
+    Cancelled,
+    Submitted(WorkpadMaster, WorkpadUpdate),
 }
 
 // TODO Focus management
@@ -80,17 +71,17 @@ impl AddSheetUi {
         }
     }
 
-    pub fn view(&self) -> iced::Element<'_, AddSheetMessage> {
+    pub fn view(&self) -> iced::Element<'_, Message> {
         let mut buttons = button_bar();
         if !self.existing_names.is_empty() {
             buttons = buttons.push(
                 dialog_button(t!("Common.Cancel"), style::DialogButtonStyle::Cancel)
-                    .on_press(AddSheetMessage::Cancel),
+                    .on_press(Message::Cancel),
             );
         }
         let mut ok = dialog_button(t!("Common.Ok"), style::DialogButtonStyle::Ok);
         if self.name_error.is_none() {
-            ok = ok.on_press(AddSheetMessage::Submit)
+            ok = ok.on_press(Message::Submit)
         }
         buttons = buttons.push(ok);
 
@@ -112,7 +103,7 @@ impl AddSheetUi {
                 t!("SheetName.Label"),
                 t!("SheetName.Placeholder"),
                 &self.name,
-                AddSheetMessage::Name,
+                Message::Name,
                 self.name_error.as_ref()
             ),
             buttons
@@ -125,27 +116,24 @@ impl AddSheetUi {
         .into()
     }
 
-    pub fn subscription(&self) -> Subscription<AddSheetMessage> {
+    pub fn subscription(&self) -> Subscription<Message> {
         if self.existing_names.is_empty() {
-            subscription::events_with(|event, _status| {
-                handle_ok_key(&event, AddSheetMessage::Submit)
-            })
+            subscription::events_with(|event, _status| handle_ok_key(&event, Message::Submit))
         } else {
             subscription::events_with(|event, _status| {
-                handle_ok_and_cancel_keys(&event, AddSheetMessage::Submit, AddSheetMessage::Cancel)
+                handle_ok_and_cancel_keys(&event, Message::Submit, Message::Cancel)
             })
         }
     }
 
-    pub fn update(&mut self, message: AddSheetMessage) -> Command<AddSheetMessage> {
+    pub fn update(&mut self, message: Message) -> Event {
         match message {
-            AddSheetMessage::PadUpdated(_) => unreachable!(),
-            AddSheetMessage::SelectKind(kind) => {
+            Message::SelectKind(kind) => {
                 debug!(target: "flexpad", %message);
                 self.kind = kind;
-                Command::none()
+                Event::None
             }
-            AddSheetMessage::Name(n) => {
+            Message::Name(n) => {
                 if self.existing_names.contains(&n) {
                     self.name_error = Some(t!("SheetName.AlreadyUsedError"))
                 } else if n.is_empty() {
@@ -154,32 +142,25 @@ impl AddSheetUi {
                     self.name_error = None
                 }
                 self.name = n;
-                Command::none()
+                Event::None
             }
-            AddSheetMessage::Submit => {
-                debug!(target: "flexpad", %message);
-                self.update_pad(WorkpadUpdate::SheetAdd {
+            Message::Cancel => Event::Cancelled,
+            Message::Submit => Event::Submitted(
+                self.pad.master(),
+                WorkpadUpdate::SheetAdd {
                     kind: self.kind,
                     name: self.name.clone(),
-                })
-            }
-            AddSheetMessage::Cancel => unreachable!(),
+                },
+            ),
         }
     }
 
-    pub fn update_pad(&mut self, update: WorkpadUpdate) -> Command<AddSheetMessage> {
-        Command::perform(
-            super::update_pad(self.pad.master(), update),
-            AddSheetMessage::PadUpdated,
-        )
-    }
-
-    pub fn menu_paths(&self) -> menu::PathVec<AddSheetMessage> {
+    pub fn menu_paths(&self) -> menu::PathVec<Message> {
         menu::PathVec::new()
     }
 }
 
-fn kind_button<'a>(kind: SheetKind, selected: bool) -> Element<'a, AddSheetMessage> {
+fn kind_button<'a>(kind: SheetKind, selected: bool) -> Element<'a, Message> {
     let txt = match kind {
         SheetKind::Worksheet => t!("SheetKind.Worksheet"),
         SheetKind::Textsheet => t!("SheetKind.Textsheet"),
@@ -198,7 +179,7 @@ fn kind_button<'a>(kind: SheetKind, selected: bool) -> Element<'a, AddSheetMessa
     column![
         container(
             button(image(img).width(48).height(48))
-                .on_press(AddSheetMessage::SelectKind(kind))
+                .on_press(Message::SelectKind(kind))
                 .style(theme::Button::Text)
         )
         .style(style),

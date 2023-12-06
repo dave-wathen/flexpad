@@ -131,7 +131,7 @@ impl std::fmt::Display for Key {
             KeyCode::Calculator => write!(f, "Calc")?,
             KeyCode::Capital => write!(f, "Capital")?,
             KeyCode::Colon => write!(f, ":")?,
-            KeyCode::Comma => write!(f, "',")?,
+            KeyCode::Comma => write!(f, ",")?,
             KeyCode::Convert => write!(f, "Convert")?,
             KeyCode::Equals => write!(f, "-=")?,
             KeyCode::Grave => write!(f, "`")?,

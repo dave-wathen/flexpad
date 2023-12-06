@@ -7,7 +7,6 @@ use super::{
         key::{command, key, shift},
         SPACE_M, SPACE_S,
     },
-    Action,
 };
 
 use iced::{
@@ -31,6 +30,11 @@ impl std::fmt::Display for Message {
             Self::NewStarterWorkpad => write!(f, "NewStarterWorkpad"),
         }
     }
+}
+
+pub enum Event {
+    NewBlankWorkpadRequested,
+    NewStarterWorkpadRequested,
 }
 
 pub struct Lobby {
@@ -92,10 +96,10 @@ impl Lobby {
         .into()
     }
 
-    pub fn update(&mut self, message: Message) -> Action {
+    pub fn update(&mut self, message: Message) -> Event {
         match message {
-            Message::NewBlankWorkpad => Action::NewBlankWorkpad,
-            Message::NewStarterWorkpad => Action::NewStarterWorkpad,
+            Message::NewBlankWorkpad => Event::NewBlankWorkpadRequested,
+            Message::NewStarterWorkpad => Event::NewStarterWorkpadRequested,
         }
     }
 

@@ -25,7 +25,7 @@ mod editor;
 mod platform;
 pub use editor::Editor;
 
-use super::active_sheet::ActiveSheetMessage;
+use super::active_sheet::Message;
 
 /// The identifier of a [`ActiveCell`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -124,7 +124,7 @@ where
     }
 }
 
-impl<Renderer> Widget<ActiveSheetMessage, Renderer> for ActiveCell<Renderer>
+impl<Renderer> Widget<Message, Renderer> for ActiveCell<Renderer>
 where
     Renderer: iced::advanced::Renderer,
     Renderer: text::Renderer,
@@ -341,7 +341,7 @@ where
         _tree: &mut Tree,
         _layout: Layout<'_>,
         _renderer: &Renderer,
-        _operation: &mut dyn Operation<ActiveSheetMessage>,
+        _operation: &mut dyn Operation<Message>,
     ) {
         // let state = tree.state.downcast_mut::<State>();
 
@@ -357,10 +357,10 @@ where
         cursor: mouse::Cursor,
         renderer: &Renderer,
         _clipboard: &mut dyn Clipboard,
-        shell: &mut Shell<'_, ActiveSheetMessage>,
+        shell: &mut Shell<'_, Message>,
         _viewport: &Rectangle,
     ) -> Status {
-        let mut publish = |msg: Option<ActiveSheetMessage>| {
+        let mut publish = |msg: Option<Message>| {
             if let Some(m) = msg {
                 shell.publish(m);
             }
@@ -406,7 +406,7 @@ where
                 if let Some(cursor_position) = click_position {
                     if !focused {
                         if let Some(ref id) = self.id {
-                            shell.publish(ActiveSheetMessage::Focus(id.0.clone()))
+                            shell.publish(Message::Focus(id.0.clone()))
                         }
                     }
 
@@ -492,7 +492,11 @@ where
                 Status::Ignored
             }
             Event::Keyboard(keyboard::Event::CharacterReceived(c))
-                if focused && !c.is_control() =>
+                if focused
+                    && !c.is_control()
+                    && !state.keyboard_modifiers.alt()
+                    && !state.keyboard_modifiers.command()
+                    && !state.keyboard_modifiers.control() =>
             {
                 let mut editor = self.editor.borrow_mut();
                 editor.insert(c);
@@ -513,9 +517,13 @@ where
                     keyboard::KeyCode::Escape if state.is_focused() => editor.abandon_editing(),
                     keyboard::KeyCode::Backspace if jump => editor.jump_backspace(),
                     keyboard::KeyCode::Backspace => editor.backspace(),
-                    keyboard::KeyCode::Enter if shift => publish(editor.back_enter()),
+                    keyboard::KeyCode::Enter | keyboard::KeyCode::NumpadEnter if shift => {
+                        publish(editor.back_enter())
+                    }
                     keyboard::KeyCode::Tab if shift => publish(editor.back_tab()),
-                    keyboard::KeyCode::Enter => publish(editor.enter()),
+                    keyboard::KeyCode::Enter | keyboard::KeyCode::NumpadEnter => {
+                        publish(editor.enter())
+                    }
                     keyboard::KeyCode::Tab => publish(editor.tab()),
                     // Selection
                     keyboard::KeyCode::Left if jump && shift => editor.select_left_by_words(),
@@ -643,7 +651,7 @@ where
 
 const CURSOR_BLINK_INTERVAL_MILLIS: u128 = 500;
 
-impl<'a, Renderer> From<ActiveCell<Renderer>> for Element<'a, ActiveSheetMessage, Renderer>
+impl<'a, Renderer> From<ActiveCell<Renderer>> for Element<'a, Message, Renderer>
 where
     Renderer: iced::advanced::Renderer + 'a,
     Renderer: text::Renderer,

@@ -1,5 +1,5 @@
 use crate::{
-    model::workpad::{Workpad, WorkpadUpdate},
+    model::workpad::{Workpad, WorkpadMaster, WorkpadUpdate},
     ui::{
         style,
         util::{
@@ -8,30 +8,18 @@ use crate::{
         },
     },
 };
-use iced::{subscription, widget::column, Command, Subscription};
+use iced::{subscription, widget::column, Subscription};
 use rust_i18n::t;
 
-use super::WorkpadMessage;
-
 #[derive(Debug, Clone)]
-pub enum PadPropertiesMessage {
+pub enum Message {
     Name(String),
     Author(String),
     Submit,
     Cancel,
 }
 
-impl PadPropertiesMessage {
-    pub fn map_to_workpad(msg: PadPropertiesMessage) -> WorkpadMessage {
-        match msg {
-            Self::Submit => WorkpadMessage::ModalSubmit,
-            Self::Cancel => WorkpadMessage::ModalCancel,
-            m => WorkpadMessage::PadPropertiesMsg(m),
-        }
-    }
-}
-
-impl std::fmt::Display for PadPropertiesMessage {
+impl std::fmt::Display for Message {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "PadPropertiesMessage::")?;
         match self {
@@ -43,8 +31,15 @@ impl std::fmt::Display for PadPropertiesMessage {
     }
 }
 
+pub enum Event {
+    None,
+    Cancelled,
+    Submitted(WorkpadMaster, WorkpadUpdate),
+}
+
 #[derive(Debug)]
 pub struct PadPropertiesUi {
+    pad: Workpad,
     name: String,
     author: String,
     name_error: Option<String>,
@@ -53,20 +48,23 @@ pub struct PadPropertiesUi {
 // TODO Focus management
 impl PadPropertiesUi {
     pub fn new(pad: Workpad) -> Self {
+        let name = pad.name().to_owned();
+        let author = pad.author().to_owned();
         Self {
-            name: pad.name().to_owned(),
-            author: pad.author().to_owned(),
+            pad,
+            name,
+            author,
             name_error: None,
         }
     }
 
-    pub fn view(&self) -> iced::Element<'_, PadPropertiesMessage> {
+    pub fn view(&self) -> iced::Element<'_, Message> {
         let cancel = dialog_button(t!("Common.Cancel"), style::DialogButtonStyle::Cancel)
-            .on_press(PadPropertiesMessage::Cancel);
+            .on_press(Message::Cancel);
 
         let mut ok = dialog_button(t!("Common.Ok"), style::DialogButtonStyle::Ok);
         if self.name_error.is_none() {
-            ok = ok.on_press(PadPropertiesMessage::Submit)
+            ok = ok.on_press(Message::Submit)
         }
 
         let body = column![
@@ -74,14 +72,14 @@ impl PadPropertiesUi {
                 t!("PadName.Label"),
                 t!("PadName.Placeholder"),
                 &self.name,
-                PadPropertiesMessage::Name,
+                Message::Name,
                 self.name_error.as_ref(),
             ),
             text_input(
                 t!("PadAuthor.Label"),
                 t!("PadAuthor.Placeholder"),
                 &self.author,
-                PadPropertiesMessage::Author,
+                Message::Author,
                 None,
             ),
             button_bar().push(cancel).push(ok)
@@ -96,42 +94,39 @@ impl PadPropertiesUi {
         .into()
     }
 
-    pub fn subscription(&self) -> Subscription<PadPropertiesMessage> {
+    pub fn subscription(&self) -> Subscription<Message> {
         if self.name_error.is_none() {
             subscription::events_with(|event, _status| {
-                handle_ok_and_cancel_keys(
-                    &event,
-                    PadPropertiesMessage::Submit,
-                    PadPropertiesMessage::Cancel,
-                )
+                handle_ok_and_cancel_keys(&event, Message::Submit, Message::Cancel)
             })
         } else {
-            subscription::events_with(|event, _status| {
-                handle_cancel_key(&event, PadPropertiesMessage::Cancel)
-            })
+            subscription::events_with(|event, _status| handle_cancel_key(&event, Message::Cancel))
         }
     }
 
-    pub fn update(&mut self, message: PadPropertiesMessage) -> Command<PadPropertiesMessage> {
+    pub fn update(&mut self, message: Message) -> Event {
         match message {
-            PadPropertiesMessage::Name(name) => {
+            Message::Name(name) => {
                 if name.is_empty() {
                     self.name_error = Some(t!("PadName.EmptyError"))
                 } else {
                     self.name_error = None
                 }
                 self.name = name;
+                Event::None
             }
-            PadPropertiesMessage::Author(author) => self.author = author,
-            _ => unreachable!(),
-        }
-        Command::none()
-    }
-
-    pub fn into_update(self) -> WorkpadUpdate {
-        WorkpadUpdate::WorkpadSetProperties {
-            new_name: self.name,
-            new_author: self.author,
+            Message::Author(author) => {
+                self.author = author;
+                Event::None
+            }
+            Message::Cancel => Event::Cancelled,
+            Message::Submit => Event::Submitted(
+                self.pad.master(),
+                WorkpadUpdate::WorkpadSetProperties {
+                    new_name: self.name.clone(),
+                    new_author: self.author.clone(),
+                },
+            ),
         }
     }
 }
