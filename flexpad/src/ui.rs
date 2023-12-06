@@ -88,7 +88,7 @@ impl std::fmt::Display for DataEvent {
                 pad.version().1,
             ),
             Self::PadUpdated(Err(error)) => {
-                write!(f, "Message::PadUpdated(ERROR) {}", error.to_string())
+                write!(f, "Message::PadUpdated(ERROR) {}", error)
             }
         }
     }
@@ -246,8 +246,8 @@ impl Application for Flexpad {
                 }
                 DataEvent::PadUpdated(Ok(workpad)) => {
                     let Screen::Workpad(ui) = &mut self.screen else {
-                                unreachable!()
-                            };
+                        unreachable!()
+                    };
                     ui.pad_updated(workpad)
                 }
                 DataEvent::PadUpdated(Err(err)) => {
