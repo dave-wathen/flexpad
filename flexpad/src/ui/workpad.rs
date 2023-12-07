@@ -1,13 +1,10 @@
-use std::collections::HashMap;
-
 use crate::{
-    model::workpad::{Sheet, SheetId, Workpad, WorkpadMaster, WorkpadUpdate},
+    model::workpad::{Sheet, Workpad, WorkpadMaster, WorkpadUpdate},
     ui::{
         menu,
         util::key::{command, key, shift},
     },
 };
-use flexpad_grid::Viewport;
 use iced::{keyboard, Command, Subscription};
 use rust_i18n::t;
 use tracing::debug;
@@ -69,22 +66,17 @@ pub enum Event {
 pub struct WorkpadUi {
     pad: Workpad,
     screen: Screen,
-    sheet_viewports: HashMap<SheetId, Viewport>,
 }
 
 impl WorkpadUi {
     pub fn new(pad_master: WorkpadMaster) -> Self {
         let pad = pad_master.active_version();
         let screen = match pad.active_sheet() {
-            Some(sheet) => Screen::ActiveSheet(active_sheet::ActiveSheetUi::new(sheet, None)),
+            Some(sheet) => Screen::ActiveSheet(active_sheet::ActiveSheetUi::new(sheet)),
             None => Screen::AddSheet(add_sheet::AddSheetUi::new(pad.clone())),
         };
 
-        Self {
-            pad,
-            screen,
-            sheet_viewports: Default::default(),
-        }
+        Self { pad, screen }
     }
 
     pub fn title(&self) -> String {
@@ -154,10 +146,6 @@ impl WorkpadUi {
         match message {
             // Sub views
             Message::ActiveSheet(msg) => {
-                if let active_sheet::Message::ViewportChanged(viewport) = msg {
-                    let sheet = self.pad.active_sheet().unwrap();
-                    self.sheet_viewports.insert(sheet.id(), viewport);
-                }
                 let Screen::ActiveSheet(ui) = &mut self.screen else {
                     unreachable!()
                 };
@@ -185,9 +173,7 @@ impl WorkpadUi {
                     add_sheet::Event::Cancelled => {
                         // Can only cancel if there are sheets present
                         let sheet = self.pad.active_sheet().unwrap();
-                        let viewport = self.sheet_viewports.get(&sheet.id()).copied();
-                        self.screen =
-                            Screen::ActiveSheet(active_sheet::ActiveSheetUi::new(sheet, viewport));
+                        self.screen = Screen::ActiveSheet(active_sheet::ActiveSheetUi::new(sheet));
                         Event::None
                     }
                     add_sheet::Event::Submitted(master, update) => {
@@ -204,12 +190,7 @@ impl WorkpadUi {
     pub fn pad_updated(&mut self, pad: Workpad) -> Command<ui::Message> {
         self.pad = pad.clone();
         self.screen = match pad.active_sheet() {
-            Some(_) => {
-                let sheet = self.pad.active_sheet().unwrap();
-                let viewport = self.sheet_viewports.get(&sheet.id()).copied();
-                let screen = active_sheet::ActiveSheetUi::new(sheet, viewport);
-                Screen::ActiveSheet(screen)
-            }
+            Some(sheet) => Screen::ActiveSheet(active_sheet::ActiveSheetUi::new(sheet)),
             None => Screen::AddSheet(add_sheet::AddSheetUi::new(pad)),
         };
         match &self.screen {

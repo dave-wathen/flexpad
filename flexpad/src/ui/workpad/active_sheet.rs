@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use flexpad_grid::{
     style, Border, Borders, CellRange, ColumnHead, Grid, GridCell, GridCorner, GridScrollable,
@@ -18,7 +18,7 @@ use rust_i18n::t;
 use tracing::debug;
 
 use crate::{
-    model::workpad::{Cell, Sheet, WorkpadUpdate},
+    model::workpad::{Cell, Sheet, SheetId, WorkpadUpdate},
     ui::{
         menu,
         util::{
@@ -39,6 +39,11 @@ static ACTIVE_CELL_ID: Lazy<active_cell::Id> = Lazy::new(active_cell::Id::unique
 
 pub static GRID_SCROLLABLE_ID: Lazy<flexpad_grid::scroll::Id> =
     Lazy::new(flexpad_grid::scroll::Id::unique);
+
+thread_local! {
+static VIEWPORTS_CACHE: RefCell<HashMap<(String, SheetId), Viewport>> =
+    RefCell::new(HashMap::new());
+    }
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -134,7 +139,15 @@ pub struct ActiveSheetUi {
 }
 
 impl ActiveSheetUi {
-    pub fn new(active_sheet: Sheet, viewport: Option<Viewport>) -> Self {
+    pub fn new(active_sheet: Sheet) -> Self {
+        let workpad_id = String::from(active_sheet.workpad().id());
+        let viewport = VIEWPORTS_CACHE.with(|cache| {
+            cache
+                .borrow()
+                .get(&(workpad_id, active_sheet.id()))
+                .copied()
+        });
+
         let active_cell = active_sheet.active_cell().map(|cell| {
             let active_cell_editor = Rc::new(RefCell::new(Editor::new(cell.value())));
             let active_cell = RowCol::new(cell.row().index() as u32, cell.column().index() as u32);
@@ -346,6 +359,12 @@ impl ActiveSheetUi {
             }
             Message::ViewportChanged(viewport) => {
                 debug!(target: "flexpad", %message);
+                let workpad_id = String::from(self.active_sheet.workpad().id());
+                VIEWPORTS_CACHE.with(|cache| {
+                    cache
+                        .borrow_mut()
+                        .insert((workpad_id, self.active_sheet.id()), viewport)
+                });
                 self.visible_cells = viewport.cell_range();
                 Event::None
             }
