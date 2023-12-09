@@ -289,18 +289,22 @@ impl Application for Flexpad {
                     };
                     Command::none()
                 }
-                DataEvent::PadUpdated(Ok(pad)) => {
-                    self.screen = match pad.active_sheet() {
-                        Some(sheet) => Screen::ActiveSheet(active_sheet::ActiveSheetUi::new(sheet)),
-                        None => Screen::AddSheet(add_sheet::AddSheetUi::new(pad)),
-                    };
-                    match &self.screen {
-                        Screen::ActiveSheet(_) => {
-                            active_sheet::get_viewport().map(Message::ActiveSheet)
+                DataEvent::PadUpdated(Ok(pad)) => match pad.active_sheet() {
+                    Some(sheet) => {
+                        if let Screen::ActiveSheet(ui) = &mut self.screen {
+                            dbg!("Keepimng ActiveSheet");
+                            ui.pad_updated(pad).map(Message::ActiveSheet)
+                        } else {
+                            self.screen =
+                                Screen::ActiveSheet(active_sheet::ActiveSheetUi::new(sheet));
+                            Command::none()
                         }
-                        _ => Command::none(),
                     }
-                }
+                    None => {
+                        self.screen = Screen::AddSheet(add_sheet::AddSheetUi::new(pad));
+                        Command::none()
+                    }
+                },
                 DataEvent::PadUpdated(Err(err)) => {
                     self.dialog = Dialog::Error(error::ErrorUi::new(err.to_string()));
                     Command::none()

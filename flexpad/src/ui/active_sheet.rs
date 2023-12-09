@@ -136,7 +136,7 @@ pub enum Event {
 pub struct ActiveSheetUi {
     pub(crate) active_sheet: Sheet,
     visible_cells: CellRange,
-    active_cell: Option<(RowCol, Rc<RefCell<active_cell::Editor>>)>,
+    active_cell: Option<(Cell, Rc<RefCell<active_cell::Editor>>)>,
     focus: widget::Id,
 }
 
@@ -152,8 +152,7 @@ impl ActiveSheetUi {
 
         let active_cell = active_sheet.active_cell().map(|cell| {
             let active_cell_editor = Rc::new(RefCell::new(Editor::new(cell.value())));
-            let active_cell = RowCol::new(cell.row().index() as u32, cell.column().index() as u32);
-            (active_cell, active_cell_editor)
+            (cell, active_cell_editor)
         });
 
         let visible_cells = match viewport {
@@ -166,13 +165,6 @@ impl ActiveSheetUi {
             visible_cells,
             active_cell,
             focus: ACTIVE_CELL_ID.clone().into(),
-        }
-    }
-
-    fn active_cell(&self) -> Cell {
-        match self.active_cell {
-            Some((rc, _)) => self.active_sheet.cell(rc.row as usize, rc.column as usize),
-            None => unreachable!(),
         }
     }
 
@@ -233,7 +225,9 @@ impl ActiveSheetUi {
 
         match self.active_cell {
             Some((_, ref editor)) => {
-                let active_cell = self.active_cell();
+                let Some((active_cell, _)) = &self.active_cell else {
+                    unreachable!();
+                };
                 let cell_name: iced::Element<'_, Message> = text(active_cell.name())
                     .size(14)
                     .width(100)
@@ -310,7 +304,8 @@ impl ActiveSheetUi {
                 row: rw,
                 column: cl,
             } = rc;
-            if let Some((rc, _)) = self.active_cell {
+            if let Some((cell, _)) = &self.active_cell {
+                let rc = rc_of_cell(cell);
                 if rc.row != rw || rc.column != cl {
                     let cell = active_sheet.cell(rw as usize, cl as usize);
                     let ic = inactive_cell::InactiveCell::new(rc, cell.value())
@@ -325,7 +320,8 @@ impl ActiveSheetUi {
             };
         }
 
-        if let Some((rc, ref editor)) = self.active_cell {
+        if let Some((cell, editor)) = &self.active_cell {
+            let rc = rc_of_cell(cell);
             // Always add the active cell even when not visible so keystrokes are handled
             let ac = active_cell::ActiveCell::new(editor.clone())
                 .id(ACTIVE_CELL_ID.clone())
@@ -376,23 +372,22 @@ impl ActiveSheetUi {
             }
             Message::ActiveCellMove(mve) => {
                 debug!(target:"flexpad", %message);
-                match apply_move(self.active_cell(), mve) {
-                    Some((_new_rc, update_active_cell)) => {
-                        // TODO Can we issue the ensure_cell_visible when the pad update comes through?
-                        // ensure_cell_visible(new_rc)
-                        //     .map(super::Message::ActiveSheet)
-                        //     .map(ui::Message::Workpad)
-                        Event::UpdateRequested(
-                            self.active_sheet.workpad().master(),
-                            update_active_cell,
-                        )
-                    }
+                let Some((active_cell, _)) = &self.active_cell else {
+                    unreachable!();
+                };
+                match apply_move(active_cell, mve) {
+                    Some((_new_rc, update_active_cell)) => Event::UpdateRequested(
+                        self.active_sheet.workpad().master(),
+                        update_active_cell,
+                    ),
                     None => Event::None,
                 }
             }
             Message::ActiveCellNewValue(ref new_value, mve) => {
                 debug!(target: "flexpad", %message);
-                let cell = self.active_cell();
+                let Some((cell, _)) = &self.active_cell else {
+                    unreachable!();
+                };
                 let update_cell_value = WorkpadUpdate::SheetSetCellValue {
                     sheet_id: cell.sheet().id(),
                     row_id: cell.row().id(),
@@ -401,17 +396,10 @@ impl ActiveSheetUi {
                 };
 
                 match apply_move(cell, mve) {
-                    Some((_new_rc, update_active_cell)) => {
-                        let update =
-                            WorkpadUpdate::Multi(vec![update_cell_value, update_active_cell]);
-
-                        // TODO Can we issue the ensure_cell_visible when the pad update comes through?
-                        // ensure_cell_visible(new_rc)
-                        //     .map(super::Message::ActiveSheet)
-                        //     .map(ui::Message::Workpad)
-
-                        Event::UpdateRequested(self.active_sheet.workpad().master(), update)
-                    }
+                    Some((_new_rc, update_active_cell)) => Event::UpdateRequested(
+                        self.active_sheet.workpad().master(),
+                        WorkpadUpdate::Multi(vec![update_cell_value, update_active_cell]),
+                    ),
                     None => Event::UpdateRequested(
                         self.active_sheet.workpad().master(),
                         update_cell_value,
@@ -432,6 +420,22 @@ impl ActiveSheetUi {
                 Event::EditPadPropertiesRequested(self.active_sheet.workpad())
             }
             Message::PadClose => Event::CloseWorkpadRequested,
+        }
+    }
+
+    pub fn pad_updated(&mut self, pad: Workpad) -> Command<Message> {
+        self.active_sheet = pad.active_sheet().unwrap();
+
+        let prior_rc = self.active_cell.as_ref().map(|(cell, _)| rc_of_cell(cell));
+        self.active_cell = self.active_sheet.active_cell().map(|cell| {
+            let active_cell_editor = Rc::new(RefCell::new(Editor::new(cell.value())));
+            (cell, active_cell_editor)
+        });
+        let new_rc = self.active_cell.as_ref().map(|(cell, _)| rc_of_cell(cell));
+
+        match (prior_rc, new_rc) {
+            (Some(prior), Some(new)) if prior != new => ensure_cell_visible(new),
+            _ => Command::none(),
         }
     }
 
@@ -457,16 +461,12 @@ impl ActiveSheetUi {
     }
 }
 
-pub fn get_viewport() -> Command<Message> {
-    flexpad_grid::scroll::get_viewport(GRID_SCROLLABLE_ID.clone()).map(Message::ViewportChanged)
-}
-
-pub fn _ensure_cell_visible(cell: RowCol) -> Command<Message> {
+pub fn ensure_cell_visible(cell: RowCol) -> Command<Message> {
     flexpad_grid::scroll::ensure_cell_visible(GRID_SCROLLABLE_ID.clone(), cell)
         .map(Message::ViewportChanged)
 }
 
-fn apply_move(active_cell: Cell, mve: Move) -> Option<(RowCol, WorkpadUpdate)> {
+fn apply_move(active_cell: &Cell, mve: Move) -> Option<(RowCol, WorkpadUpdate)> {
     let sheet = active_cell.sheet();
     let prior_rc = rc_of_cell(active_cell);
     let new_rc = mve.apply(prior_rc, sheet.rows().count(), sheet.columns().count());
@@ -486,7 +486,7 @@ fn apply_move(active_cell: Cell, mve: Move) -> Option<(RowCol, WorkpadUpdate)> {
     }
 }
 
-fn rc_of_cell(cell: Cell) -> RowCol {
+fn rc_of_cell(cell: &Cell) -> RowCol {
     RowCol::new(cell.row().index() as u32, cell.column().index() as u32)
 }
 
