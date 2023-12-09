@@ -6,6 +6,7 @@ use crate::{
             button_bar, dialog_button, handle_ok_and_cancel_keys, handle_ok_key, images,
             text_input, SPACE_M, SPACE_S,
         },
+        workpad_menu,
     },
 };
 use iced::{
@@ -23,6 +24,8 @@ pub enum Message {
     Name(String),
     Submit,
     Cancel,
+    PadClose,
+    PadShowProperties,
 }
 
 impl std::fmt::Display for Message {
@@ -33,13 +36,17 @@ impl std::fmt::Display for Message {
             Self::Name(n) => write!(f, "Name({n})"),
             Self::Submit => write!(f, "Submit"),
             Self::Cancel => write!(f, "Cancel"),
+            Self::PadShowProperties => write!(f, "PadShowProperties"),
+            Self::PadClose => write!(f, "PadClose"),
         }
     }
 }
 
 pub enum Event {
     None,
-    Cancelled,
+    EditPadPropertiesRequested(Workpad),
+    CloseWorkpadRequested,
+    Cancelled(Workpad),
     Submitted(WorkpadMaster, WorkpadUpdate),
 }
 
@@ -69,6 +76,10 @@ impl AddSheetUi {
             name,
             name_error: None,
         }
+    }
+
+    pub fn title(&self) -> String {
+        self.pad.name().to_owned()
     }
 
     pub fn view(&self) -> iced::Element<'_, Message> {
@@ -144,7 +155,7 @@ impl AddSheetUi {
                 self.name = n;
                 Event::None
             }
-            Message::Cancel => Event::Cancelled,
+            Message::Cancel => Event::Cancelled(self.pad.clone()),
             Message::Submit => Event::Submitted(
                 self.pad.master(),
                 WorkpadUpdate::SheetAdd {
@@ -152,11 +163,21 @@ impl AddSheetUi {
                     name: self.name.clone(),
                 },
             ),
+            Message::PadShowProperties => Event::EditPadPropertiesRequested(self.pad.clone()),
+            Message::PadClose => Event::CloseWorkpadRequested,
         }
     }
 
     pub fn menu_paths(&self) -> menu::PathVec<Message> {
         menu::PathVec::new()
+            .with(workpad_menu::new_blank_workpad(None))
+            .with(workpad_menu::new_starter_workpad(None))
+            .with(workpad_menu::show_properties(Some(
+                Message::PadShowProperties,
+            )))
+            // TODO No actual delete (since no actual save) at present
+            .with(workpad_menu::delete_pad(Some(Message::PadClose)))
+            .with(workpad_menu::close_pad(Some(Message::PadClose)))
     }
 }
 

@@ -11,23 +11,23 @@ use iced::{
         button, column, horizontal_rule, horizontal_space, image, row, text, vertical_rule,
         vertical_space,
     },
-    Alignment, Color, Command, Element, Length,
+    Alignment, Color, Command, Element, Length, Subscription,
 };
 use once_cell::sync::Lazy;
 use rust_i18n::t;
 use tracing::debug;
 
 use crate::{
-    model::workpad::{Cell, Sheet, SheetId, WorkpadUpdate},
+    model::workpad::{Cell, Sheet, SheetId, Workpad, WorkpadMaster, WorkpadUpdate},
     ui::{
         menu,
         util::{images, SPACE_S},
+        widget::{
+            active_cell::{self, Editor},
+            inactive_cell,
+        },
+        workpad_menu,
     },
-};
-
-use super::{
-    active_cell::{self, Editor},
-    inactive_cell,
 };
 
 static FORMULA_BAR_ID: Lazy<active_cell::Id> = Lazy::new(active_cell::Id::unique);
@@ -44,14 +44,16 @@ thread_local! {
 #[derive(Debug, Clone)]
 pub enum Message {
     NoOp, // Temporary
-    SheetShowDetails,
     Focus(widget::Id),
     ViewportChanged(Viewport),
     ActiveCellMove(Move),
     ActiveCellNewValue(String, Move),
-    ShowProperties,
-    DeleteSheet,
-    AddSheet,
+    SheetShowDetails,
+    SheetShowProperties,
+    SheetDelete,
+    SheetAdd,
+    PadClose,
+    PadShowProperties,
 }
 
 impl std::fmt::Display for Message {
@@ -64,9 +66,11 @@ impl std::fmt::Display for Message {
             Self::ViewportChanged(viewport) => write!(f, "ViewportChanged({viewport})"),
             Self::ActiveCellMove(mve) => write!(f, "ActiveCellMove({mve})"),
             Self::ActiveCellNewValue(value, mve) => write!(f, "ActiveCellNewValue({value}, {mve})"),
-            Self::ShowProperties => write!(f, "EditProperties"),
-            Self::DeleteSheet => write!(f, "DeleteSheet"),
-            Self::AddSheet => write!(f, "AddSheet"),
+            Self::SheetShowProperties => write!(f, "EditProperties"),
+            Self::SheetDelete => write!(f, "DeleteSheet"),
+            Self::SheetAdd => write!(f, "AddSheet"),
+            Self::PadShowProperties => write!(f, "PadShowProperties"),
+            Self::PadClose => write!(f, "PadClose"),
         }
     }
 }
@@ -121,9 +125,11 @@ impl std::fmt::Display for Move {
 
 pub enum Event {
     None,
+    EditPadPropertiesRequested(Workpad),
+    CloseWorkpadRequested,
     EditSheetPropertiesRequested(Sheet),
-    AddSheetRequested,
-    UpdateRequested(crate::model::workpad::WorkpadMaster, WorkpadUpdate),
+    AddSheetRequested(Workpad),
+    UpdateRequested(WorkpadMaster, WorkpadUpdate),
 }
 
 #[derive(Debug)]
@@ -168,6 +174,10 @@ impl ActiveSheetUi {
             Some((rc, _)) => self.active_sheet.cell(rc.row as usize, rc.column as usize),
             None => unreachable!(),
         }
+    }
+
+    pub fn title(&self) -> String {
+        self.active_sheet.workpad().name().to_owned()
     }
 
     pub fn view(&self) -> iced::Element<'_, Message> {
@@ -408,24 +418,42 @@ impl ActiveSheetUi {
                     ),
                 }
             }
-            Message::ShowProperties => {
+            Message::SheetShowProperties => {
                 Event::EditSheetPropertiesRequested(self.active_sheet.clone())
             }
-            Message::DeleteSheet => Event::UpdateRequested(
+            Message::SheetDelete => Event::UpdateRequested(
                 self.active_sheet.workpad().master(),
                 WorkpadUpdate::SheetDelete {
                     sheet_id: self.active_sheet.id(),
                 },
             ),
-            Message::AddSheet => Event::AddSheetRequested,
+            Message::SheetAdd => Event::AddSheetRequested(self.active_sheet.workpad()),
+            Message::PadShowProperties => {
+                Event::EditPadPropertiesRequested(self.active_sheet.workpad())
+            }
+            Message::PadClose => Event::CloseWorkpadRequested,
         }
+    }
+
+    pub fn subscription(&self) -> iced::Subscription<Message> {
+        Subscription::none()
     }
 
     pub fn menu_paths(&self) -> menu::PathVec<Message> {
         menu::PathVec::new()
-            .with(sheets_menu::show_properties(Some(Message::ShowProperties)))
-            .with(sheets_menu::new_sheet(Some(Message::AddSheet)))
-            .with(sheets_menu::delete_sheet(Some(Message::DeleteSheet)))
+            .with(workpad_menu::new_blank_workpad(None))
+            .with(workpad_menu::new_starter_workpad(None))
+            .with(workpad_menu::show_properties(Some(
+                Message::PadShowProperties,
+            )))
+            // TODO No actual delete (since no actual save) at present
+            .with(workpad_menu::delete_pad(Some(Message::PadClose)))
+            .with(workpad_menu::close_pad(Some(Message::PadClose)))
+            .with(sheets_menu::show_properties(Some(
+                Message::SheetShowProperties,
+            )))
+            .with(sheets_menu::new_sheet(Some(Message::SheetAdd)))
+            .with(sheets_menu::delete_sheet(Some(Message::SheetDelete)))
     }
 }
 

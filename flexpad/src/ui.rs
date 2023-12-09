@@ -13,12 +13,17 @@ use tracing::{debug, info};
 
 use crate::model::workpad::WorkpadMaster;
 
+mod active_sheet;
+mod add_sheet;
 mod loading;
 mod lobby;
 mod pad_properties;
 mod sheet_properties;
 mod util;
-mod workpad;
+pub mod widget {
+    pub mod active_cell;
+    pub mod inactive_cell;
+}
 pub mod workpad_menu;
 
 pub use util::style;
@@ -42,7 +47,8 @@ where
 enum Screen {
     Loading(loading::Loading),
     Lobby(lobby::Lobby),
-    Workpad(workpad::WorkpadUi),
+    ActiveSheet(active_sheet::ActiveSheetUi),
+    AddSheet(add_sheet::AddSheetUi),
 }
 
 #[derive(Default)]
@@ -59,7 +65,8 @@ impl std::fmt::Display for Screen {
         match self {
             Screen::Loading(_) => write!(f, "Loading"),
             Screen::Lobby(_) => write!(f, "FrontScreen"),
-            Screen::Workpad(_) => write!(f, "Workpad"),
+            Screen::ActiveSheet(_) => write!(f, "ActiveSheet"),
+            Screen::AddSheet(_) => write!(f, "AddSheet"),
         }
     }
 }
@@ -99,7 +106,8 @@ impl std::fmt::Display for DataEvent {
 pub enum Message {
     LoadingComplete(Result<(), String>),
     Lobby(lobby::Message),
-    Workpad(workpad::Message),
+    ActiveSheet(active_sheet::Message),
+    AddSheet(add_sheet::Message),
     Error(util::error::Message),
     SheetProperties(sheet_properties::Message),
     PadProperties(pad_properties::Message),
@@ -114,7 +122,8 @@ impl std::fmt::Display for Message {
                 write!(f, "Message::LoadingComplete(ERROR) {}", error)
             }
             Self::Lobby(msg) => msg.fmt(f),
-            Self::Workpad(msg) => msg.fmt(f),
+            Self::ActiveSheet(msg) => msg.fmt(f),
+            Self::AddSheet(msg) => msg.fmt(f),
             Self::Error(msg) => msg.fmt(f),
             Self::PadProperties(msg) => msg.fmt(f),
             Self::SheetProperties(msg) => msg.fmt(f),
@@ -150,8 +159,9 @@ impl Application for Flexpad {
     }
 
     fn title(&self) -> String {
-        match self.screen {
-            Screen::Workpad(ref pad) => pad.title(),
+        match &self.screen {
+            Screen::ActiveSheet(ui) => ui.title(),
+            Screen::AddSheet(ui) => ui.title(),
             _ => t!("Product"),
         }
     }
@@ -173,28 +183,58 @@ impl Application for Flexpad {
                     lobby::Event::NewStarterWorkpadRequested => new_starter_workpad(),
                 }
             }
-            Message::Workpad(m) => {
-                let Screen::Workpad(ui) = &mut self.screen else {
+            Message::ActiveSheet(m) => {
+                let Screen::ActiveSheet(ui) = &mut self.screen else {
                     unreachable!()
                 };
                 match ui.update(m) {
-                    workpad::Event::None => Command::none(),
-                    workpad::Event::EditPadPropertiesRequested(pad) => {
+                    active_sheet::Event::None => Command::none(),
+                    active_sheet::Event::EditPadPropertiesRequested(pad) => {
                         self.dialog =
                             Dialog::PadProperties(pad_properties::PadPropertiesUi::new(pad));
                         Command::none()
                     }
-                    workpad::Event::EditSheetPropertiesRequested(sheet) => {
+                    active_sheet::Event::CloseWorkpadRequested => {
+                        self.screen = Screen::Lobby(lobby::Lobby::new(self.version));
+                        Command::none()
+                    }
+                    active_sheet::Event::EditSheetPropertiesRequested(sheet) => {
                         self.dialog = Dialog::SheetProperties(
                             sheet_properties::SheetPropertiesUi::new(sheet),
                         );
                         Command::none()
                     }
-                    workpad::Event::CloseWorkpadRequested => {
+                    active_sheet::Event::AddSheetRequested(pad) => {
+                        self.screen = Screen::AddSheet(add_sheet::AddSheetUi::new(pad));
+                        Command::none()
+                    }
+                    active_sheet::Event::UpdateRequested(master, update) => {
+                        update_pad(master, update)
+                    }
+                }
+            }
+            Message::AddSheet(m) => {
+                let Screen::AddSheet(ui) = &mut self.screen else {
+                    unreachable!()
+                };
+                match ui.update(m) {
+                    add_sheet::Event::None => Command::none(),
+                    add_sheet::Event::EditPadPropertiesRequested(pad) => {
+                        self.dialog =
+                            Dialog::PadProperties(pad_properties::PadPropertiesUi::new(pad));
+                        Command::none()
+                    }
+                    add_sheet::Event::CloseWorkpadRequested => {
                         self.screen = Screen::Lobby(lobby::Lobby::new(self.version));
                         Command::none()
                     }
-                    workpad::Event::UpdateRequested(master, update) => update_pad(master, update),
+                    add_sheet::Event::Cancelled(pad) => {
+                        // Can only cancel if there are sheets present
+                        let sheet = pad.active_sheet().unwrap();
+                        self.screen = Screen::ActiveSheet(active_sheet::ActiveSheetUi::new(sheet));
+                        Command::none()
+                    }
+                    add_sheet::Event::Submitted(master, update) => update_pad(master, update),
                 }
             }
             Message::Error(m) => {
@@ -242,14 +282,24 @@ impl Application for Flexpad {
             }
             Message::Data(event) => match event {
                 DataEvent::PadOpened(master) => {
-                    self.screen = Screen::Workpad(workpad::WorkpadUi::new(master));
+                    let pad = master.active_version();
+                    self.screen = match pad.active_sheet() {
+                        Some(sheet) => Screen::ActiveSheet(active_sheet::ActiveSheetUi::new(sheet)),
+                        None => Screen::AddSheet(add_sheet::AddSheetUi::new(pad.clone())),
+                    };
                     Command::none()
                 }
-                DataEvent::PadUpdated(Ok(workpad)) => {
-                    let Screen::Workpad(ui) = &mut self.screen else {
-                        unreachable!()
+                DataEvent::PadUpdated(Ok(pad)) => {
+                    self.screen = match pad.active_sheet() {
+                        Some(sheet) => Screen::ActiveSheet(active_sheet::ActiveSheetUi::new(sheet)),
+                        None => Screen::AddSheet(add_sheet::AddSheetUi::new(pad)),
                     };
-                    ui.pad_updated(workpad)
+                    match &self.screen {
+                        Screen::ActiveSheet(_) => {
+                            active_sheet::get_viewport().map(Message::ActiveSheet)
+                        }
+                        _ => Command::none(),
+                    }
                 }
                 DataEvent::PadUpdated(Err(err)) => {
                     self.dialog = Dialog::Error(error::ErrorUi::new(err.to_string()));
@@ -266,13 +316,15 @@ impl Application for Flexpad {
         let body = match &self.screen {
             Screen::Loading(ui) => ui.view(),
             Screen::Lobby(ui) => ui.view().map(Message::Lobby),
-            Screen::Workpad(pad) => pad.view().map(Message::Workpad),
+            Screen::ActiveSheet(ui) => ui.view().map(Message::ActiveSheet),
+            Screen::AddSheet(ui) => ui.view().map(Message::AddSheet),
         };
 
         let paths: menu::PathVec<Message> = match &self.screen {
             Screen::Loading(_) => PathVec::new(),
             Screen::Lobby(ui) => ui.menu_paths().map(Message::Lobby),
-            Screen::Workpad(ui) => ui.menu_paths().map(Message::Workpad),
+            Screen::ActiveSheet(ui) => ui.menu_paths().map(Message::ActiveSheet),
+            Screen::AddSheet(ui) => ui.menu_paths().map(Message::AddSheet),
         };
 
         let screen = crate::ui::menu::MenuedContent::new(paths, body).into();
@@ -294,7 +346,8 @@ impl Application for Flexpad {
             Dialog::None => match &self.screen {
                 Screen::Loading(_) => iced::Subscription::none(),
                 Screen::Lobby(ui) => ui.subscription().map(Message::Lobby),
-                Screen::Workpad(ui) => ui.subscription().map(Message::Workpad),
+                Screen::ActiveSheet(ui) => ui.subscription().map(Message::ActiveSheet),
+                Screen::AddSheet(ui) => ui.subscription().map(Message::AddSheet),
             },
             Dialog::Error(ui) => ui.subscription().map(Message::Error),
             Dialog::PadProperties(ui) => ui.subscription().map(Message::PadProperties),

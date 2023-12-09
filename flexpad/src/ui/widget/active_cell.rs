@@ -25,7 +25,7 @@ mod editor;
 mod platform;
 pub use editor::Editor;
 
-use super::active_sheet::Message;
+use crate::ui::active_sheet::Message;
 
 /// The identifier of a [`ActiveCell`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

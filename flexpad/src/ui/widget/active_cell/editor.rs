@@ -1,6 +1,6 @@
 use iced::widget::text_input::Value;
 
-use super::super::active_sheet::{Message, Move};
+use crate::ui::active_sheet::{Message, Move};
 
 use super::cursor::Cursor;
 
