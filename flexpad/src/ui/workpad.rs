@@ -1,12 +1,8 @@
 use crate::{
     model::workpad::{Sheet, Workpad, WorkpadMaster, WorkpadUpdate},
-    ui::{
-        menu,
-        util::key::{command, key, shift},
-    },
+    ui::{menu, workpad_menu},
 };
-use iced::{keyboard, Command, Subscription};
-use rust_i18n::t;
+use iced::{Command, Subscription};
 use tracing::debug;
 
 use crate::ui;
@@ -93,42 +89,14 @@ impl WorkpadUi {
     }
 
     pub fn menu_paths(&self) -> menu::PathVec<Message> {
-        let workpad_menu = menu::root(t!("Menus.Workpad.Title"));
+        //let workpad_menu = menu::root(t!("Menus.Workpad.Title"));
         menu::PathVec::new()
-            .with(
-                workpad_menu.item(
-                    menu::item(t!("Menus.Workpad.NewBlank"))
-                        .shortcut(command(key(keyboard::KeyCode::N))),
-                ),
-            )
-            .with(
-                workpad_menu.item(
-                    menu::item(t!("Menus.Workpad.NewStarter"))
-                        .shortcut(shift(command(key(keyboard::KeyCode::N)))),
-                ),
-            )
-            .with(
-                workpad_menu.section("1").item(
-                    menu::item(t!("Menus.Workpad.PadShowProperties"))
-                        .shortcut(command(key(keyboard::KeyCode::Comma)))
-                        .on_select(Message::ShowProperties),
-                ),
-            )
-            .with(
-                // TODO No actual delete (since no actual save) at present
-                workpad_menu.section("1").item(
-                    menu::item(t!("Menus.Workpad.PadDelete"))
-                        .shortcut(command(key(keyboard::KeyCode::Delete)))
-                        .on_select(Message::PadClose),
-                ),
-            )
-            .with(
-                workpad_menu.section("1").item(
-                    menu::item(t!("Menus.Workpad.PadClose"))
-                        .shortcut(command(key(keyboard::KeyCode::W)))
-                        .on_select(Message::PadClose),
-                ),
-            )
+            .with(workpad_menu::new_blank_workpad(None))
+            .with(workpad_menu::new_starter_workpad(None))
+            .with(workpad_menu::show_properties(Some(Message::ShowProperties)))
+            // TODO No actual delete (since no actual save) at present
+            .with(workpad_menu::delete_pad(Some(Message::PadClose)))
+            .with(workpad_menu::close_pad(Some(Message::PadClose)))
             .extend(match &self.screen {
                 Screen::ActiveSheet(ui) => ui.menu_paths().map(Message::ActiveSheet),
                 Screen::AddSheet(ui) => ui.menu_paths().map(Message::AddSheet),

@@ -1,16 +1,13 @@
 use crate::version::Version;
 
-use super::{
+use crate::ui::{
     menu,
-    util::{
-        images,
-        key::{command, key, shift},
-        SPACE_M, SPACE_S,
-    },
+    util::{images, SPACE_M, SPACE_S},
+    workpad_menu,
 };
 
 use iced::{
-    alignment, keyboard, theme,
+    alignment, theme,
     widget::{button, column, horizontal_rule, image, row, text},
     Alignment, Length,
 };
@@ -104,21 +101,12 @@ impl Lobby {
     }
 
     pub fn menu_paths(&self) -> menu::PathVec<Message> {
-        let workpad = menu::root(t!("Menus.Workpad.Title"));
         menu::PathVec::new()
-            .with(
-                workpad.item(
-                    menu::item(t!("Menus.Workpad.NewBlank"))
-                        .shortcut(command(key(keyboard::KeyCode::N)))
-                        .on_select(Message::NewBlankWorkpad),
-                ),
-            )
-            .with(
-                workpad.item(
-                    menu::item(t!("Menus.Workpad.NewStarter"))
-                        .shortcut(shift(command(key(keyboard::KeyCode::N))))
-                        .on_select(Message::NewStarterWorkpad),
-                ),
-            )
+            .with(workpad_menu::new_blank_workpad(Some(
+                Message::NewBlankWorkpad,
+            )))
+            .with(workpad_menu::new_starter_workpad(Some(
+                Message::NewStarterWorkpad,
+            )))
     }
 }

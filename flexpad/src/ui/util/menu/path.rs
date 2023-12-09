@@ -70,6 +70,26 @@ impl<Message> Path<Message>
 where
     Message: Clone,
 {
+    pub fn new(
+        partial: impl PartialPath<Message>,
+        item_name: String,
+        shortcut: Option<Key>,
+        on_select: Option<Message>,
+    ) -> Path<Message>
+    where
+        Message: Clone,
+    {
+        let item = item(item_name);
+        let item = match shortcut {
+            Some(key) => item.shortcut(key),
+            None => item,
+        };
+        match on_select {
+            Some(msg) => partial.item(item.on_select(msg)),
+            None => partial.item(item),
+        }
+    }
+
     pub fn map<T, F>(self, mut f: F) -> Path<T>
     where
         F: Fn(Message) -> T,
@@ -109,6 +129,14 @@ where
     }
 }
 
+pub trait PartialPath<Message>
+where
+    Message: Clone,
+{
+    /// Add a menu item to this partial path to give a full [`Path`].
+    fn item(&self, item: PathItem<Message>) -> Path<Message>;
+}
+
 /// A partial [`Path`] that terminates in a menu
 pub struct PathToMenu<Message>
 where
@@ -144,9 +172,14 @@ where
         elements.push(Element::Section(name));
         PathToMenuSection { elements }
     }
+}
 
+impl<Message> PartialPath<Message> for PathToMenu<Message>
+where
+    Message: Clone,
+{
     /// Add a menu item to this partial path to give a full [`Path`].
-    pub fn item(&self, item: PathItem<Message>) -> Path<Message> {
+    fn item(&self, item: PathItem<Message>) -> Path<Message> {
         let mut elements = self.elements.clone();
         elements.push(Element::Item(item.name, item.shortcut, item.on_select));
         Path { elements }
@@ -175,8 +208,13 @@ where
         elements.push(Element::SubMenu(name));
         PathToMenu { elements }
     }
+}
 
-    pub fn item(&self, item: PathItem<Message>) -> Path<Message> {
+impl<Message> PartialPath<Message> for PathToMenuSection<Message>
+where
+    Message: Clone,
+{
+    fn item(&self, item: PathItem<Message>) -> Path<Message> {
         let mut elements = self.elements.clone();
         elements.push(Element::Item(item.name, item.shortcut, item.on_select));
         Path { elements }

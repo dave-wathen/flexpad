@@ -19,6 +19,7 @@ mod pad_properties;
 mod sheet_properties;
 mod util;
 mod workpad;
+pub mod workpad_menu;
 
 pub use util::style;
 

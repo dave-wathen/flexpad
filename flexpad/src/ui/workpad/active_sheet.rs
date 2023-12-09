@@ -6,7 +6,7 @@ use flexpad_grid::{
 };
 use iced::{
     advanced::{mouse::click, widget},
-    alignment, keyboard, theme,
+    alignment, theme,
     widget::{
         button, column, horizontal_rule, horizontal_space, image, row, text, vertical_rule,
         vertical_space,
@@ -21,11 +21,7 @@ use crate::{
     model::workpad::{Cell, Sheet, SheetId, WorkpadUpdate},
     ui::{
         menu,
-        util::{
-            images,
-            key::{ctrl, key},
-            SPACE_S,
-        },
+        util::{images, SPACE_S},
     },
 };
 
@@ -41,9 +37,9 @@ pub static GRID_SCROLLABLE_ID: Lazy<flexpad_grid::scroll::Id> =
     Lazy::new(flexpad_grid::scroll::Id::unique);
 
 thread_local! {
-static VIEWPORTS_CACHE: RefCell<HashMap<(String, SheetId), Viewport>> =
-    RefCell::new(HashMap::new());
-    }
+    static VIEWPORTS_CACHE: RefCell<HashMap<(String, SheetId), Viewport>> =
+        RefCell::new(HashMap::new());
+}
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -426,30 +422,10 @@ impl ActiveSheetUi {
     }
 
     pub fn menu_paths(&self) -> menu::PathVec<Message> {
-        let sheet_menu = menu::root(t!("Menus.Sheet.Title"));
-
         menu::PathVec::new()
-            .with(
-                sheet_menu.item(
-                    menu::item(t!("Menus.Sheet.SheetShowProperties"))
-                        .shortcut(ctrl(key(keyboard::KeyCode::Comma)))
-                        .on_select(Message::ShowProperties),
-                ),
-            )
-            .with(
-                sheet_menu.item(
-                    menu::item(t!("Menus.Sheet.SheetNew"))
-                        .shortcut(ctrl(key(keyboard::KeyCode::N)))
-                        .on_select(Message::AddSheet),
-                ),
-            )
-            .with(
-                sheet_menu.item(
-                    menu::item(t!("Menus.Sheet.SheetDelete"))
-                        .shortcut(ctrl(key(keyboard::KeyCode::Delete)))
-                        .on_select(Message::DeleteSheet),
-                ),
-            )
+            .with(sheets_menu::show_properties(Some(Message::ShowProperties)))
+            .with(sheets_menu::new_sheet(Some(Message::AddSheet)))
+            .with(sheets_menu::delete_sheet(Some(Message::DeleteSheet)))
     }
 }
 
@@ -488,4 +464,57 @@ fn rc_of_cell(cell: Cell) -> RowCol {
 
 fn cell_by_rc(sheet: Sheet, rc: RowCol) -> Cell {
     sheet.cell(rc.row as usize, rc.column as usize)
+}
+
+mod sheets_menu {
+    use iced::keyboard;
+    use rust_i18n::t;
+
+    use crate::ui::util::{
+        key::{alt, key},
+        menu,
+    };
+
+    fn root<Message>() -> menu::PathToMenu<Message>
+    where
+        Message: Clone,
+    {
+        menu::root(t!("Menus.Sheets.Title"))
+    }
+
+    pub fn show_properties<Message>(on_select: Option<Message>) -> menu::Path<Message>
+    where
+        Message: Clone,
+    {
+        menu::Path::new(
+            root(),
+            t!("Menus.Sheets.SheetShowProperties"),
+            Some(alt(key(keyboard::KeyCode::Comma))),
+            on_select,
+        )
+    }
+
+    pub fn new_sheet<Message>(on_select: Option<Message>) -> menu::Path<Message>
+    where
+        Message: Clone,
+    {
+        menu::Path::new(
+            root(),
+            t!("Menus.Sheets.SheetNew"),
+            Some(alt(key(keyboard::KeyCode::N))),
+            on_select,
+        )
+    }
+
+    pub fn delete_sheet<Message>(on_select: Option<Message>) -> menu::Path<Message>
+    where
+        Message: Clone,
+    {
+        menu::Path::new(
+            root(),
+            t!("Menus.Sheets.SheetDelete"),
+            Some(alt(key(keyboard::KeyCode::Delete))),
+            on_select,
+        )
+    }
 }

@@ -20,8 +20,8 @@ Menus:
     PadShowProperties: Properties ...
     PadDelete: Delete Workpad
     PadClose: Close Workpad
-  Sheet:
-    Title: Sheet
+  Sheets:
+    Title: Sheets
     SheetShowProperties: Properties ...
     SheetNew: New Sheet
     SheetDelete: Delete Sheet
