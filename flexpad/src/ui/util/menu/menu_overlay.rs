@@ -4,11 +4,13 @@ use iced::{
     advanced::{
         self,
         layout::{self, Limits, Node},
-        mouse, overlay, renderer, text, Clipboard, Layout, Shell, Text,
+        mouse, overlay, renderer,
+        text::{self, Paragraph},
+        Clipboard, Layout, Shell, Text,
     },
-    event, touch,
+    alignment, event, touch,
     widget::text::LineHeight,
-    Background, Color, Event, Length, Pixels, Point, Rectangle, Size, Vector,
+    Background, Color, Event, Length, Point, Rectangle, Size, Vector,
 };
 
 use crate::ui::util::SPACE_L;
@@ -60,42 +62,51 @@ where
         self.menu_states.move_down();
     }
 
-    fn entry_sizes(&self, renderer: &Renderer, limits: Limits) -> Vec<Size> {
+    fn entry_sizes(&self, _renderer: &Renderer, _limits: Limits) -> Vec<Size> {
         let sizes: Vec<(Size, Size)> = self
             .entries
             .iter()
             .map(|e| match e {
                 MenuEntry::SectionStart(_) => (Size::new(0.0, SEPARATOR_HEIGHT), Size::ZERO),
                 MenuEntry::SubMenu(menu) => {
-                    let text_size = renderer.measure(
-                        &menu.name,
-                        TEXT_SIZE_MENU,
-                        LineHeight::Absolute(Pixels(TEXT_SIZE_MENU)),
-                        self.font,
-                        limits.max(),
-                        text::Shaping::Basic,
-                    );
+                    let paragraph = Renderer::Paragraph::with_text(Text {
+                        content: &menu.name,
+                        bounds: Size::INFINITY,
+                        size: TEXT_SIZE_MENU,
+                        line_height: LineHeight::Absolute(TEXT_SIZE_MENU),
+                        font: self.font,
+                        horizontal_alignment: alignment::Horizontal::Left,
+                        vertical_alignment: alignment::Vertical::Top,
+                        shaping: text::Shaping::Basic,
+                    });
+                    let text_size = paragraph.min_bounds();
                     (text_size, Size::ZERO)
                 }
                 MenuEntry::Item(name, shortcut, _) => {
-                    let text_size = renderer.measure(
-                        name,
-                        TEXT_SIZE_MENU,
-                        LineHeight::Absolute(Pixels(TEXT_SIZE_MENU)),
-                        self.font,
-                        limits.max(),
-                        text::Shaping::Basic,
-                    );
+                    let paragraph = Renderer::Paragraph::with_text(Text {
+                        content: name,
+                        bounds: Size::INFINITY,
+                        size: TEXT_SIZE_MENU,
+                        line_height: LineHeight::Absolute(TEXT_SIZE_MENU),
+                        font: self.font,
+                        horizontal_alignment: alignment::Horizontal::Left,
+                        vertical_alignment: alignment::Vertical::Top,
+                        shaping: text::Shaping::Basic,
+                    });
+                    let text_size = paragraph.min_bounds();
 
                     let shorcut_size = if let Some(key) = shortcut {
-                        renderer.measure(
-                            &key.to_string(),
-                            TEXT_SIZE_MENU,
-                            LineHeight::Absolute(Pixels(TEXT_SIZE_MENU)),
-                            self.font,
-                            limits.max(),
-                            text::Shaping::Basic,
-                        )
+                        let paragraph = Renderer::Paragraph::with_text(Text {
+                            content: &key.to_string(),
+                            bounds: Size::INFINITY,
+                            size: TEXT_SIZE_MENU,
+                            line_height: LineHeight::Absolute(TEXT_SIZE_MENU),
+                            font: self.font,
+                            horizontal_alignment: alignment::Horizontal::Left,
+                            vertical_alignment: alignment::Vertical::Top,
+                            shaping: text::Shaping::Basic,
+                        });
+                        paragraph.min_bounds()
                     } else {
                         Size::ZERO
                     };
@@ -125,10 +136,11 @@ where
     Renderer::Theme: StyleSheet,
 {
     fn layout(
-        &self,
+        &mut self,
         renderer: &Renderer,
         bounds: Size,
         position: Point,
+        _translation: Vector,
     ) -> iced::advanced::layout::Node {
         let limits = layout::Limits::new(Size::ZERO, bounds)
             .width(Length::Shrink)
@@ -212,9 +224,12 @@ where
                 ),
             );
 
-            let text_bounds = Rectangle::new(
-                Point::new(inner_bounds.x, inner_bounds.y + inner_bounds.height),
-                inner_bounds.size(),
+            let text_bounds = inner_bounds;
+            let text_position_left =
+                Point::new(inner_bounds.x, inner_bounds.y + inner_bounds.height);
+            let text_position_right = Point::new(
+                inner_bounds.x + inner_bounds.width,
+                inner_bounds.y + inner_bounds.height,
             );
 
             match entry {
@@ -230,71 +245,71 @@ where
                     );
                 }
                 MenuEntry::SubMenu(menu) => {
-                    renderer.fill_text(Text {
-                        content: &menu.name,
-                        color: item_appearance.text_color,
-                        font: self.font,
-                        bounds: text_bounds,
-                        size: TEXT_SIZE_MENU,
-                        line_height: LineHeight::Absolute(Pixels(TEXT_SIZE_MENU)),
-                        horizontal_alignment: iced::alignment::Horizontal::Left,
-                        vertical_alignment: iced::alignment::Vertical::Bottom,
-                        shaping: text::Shaping::Advanced,
-                    });
-
-                    let text_bounds = Rectangle::new(
-                        Point::new(
-                            inner_bounds.x + inner_bounds.width,
-                            inner_bounds.y + inner_bounds.height,
-                        ),
-                        inner_bounds.size(),
+                    renderer.fill_text(
+                        Text {
+                            content: &menu.name,
+                            font: self.font,
+                            bounds: text_bounds.size(),
+                            size: TEXT_SIZE_MENU,
+                            line_height: LineHeight::Absolute(TEXT_SIZE_MENU),
+                            horizontal_alignment: iced::alignment::Horizontal::Left,
+                            vertical_alignment: iced::alignment::Vertical::Bottom,
+                            shaping: text::Shaping::Advanced,
+                        },
+                        text_position_left,
+                        item_appearance.text_color,
+                        text_bounds,
                     );
 
-                    renderer.fill_text(Text {
-                        content: ">",
-                        color: item_appearance.text_color,
-                        font: self.font,
-                        bounds: text_bounds,
-                        size: TEXT_SIZE_MENU,
-                        line_height: LineHeight::Absolute(Pixels(TEXT_SIZE_MENU)),
-                        horizontal_alignment: iced::alignment::Horizontal::Right,
-                        vertical_alignment: iced::alignment::Vertical::Bottom,
-                        shaping: text::Shaping::Advanced,
-                    });
-                }
-                MenuEntry::Item(name, shortcut, _) => {
-                    renderer.fill_text(Text {
-                        content: name,
-                        color: item_appearance.text_color,
-                        font: self.font,
-                        bounds: text_bounds,
-                        size: TEXT_SIZE_MENU,
-                        line_height: LineHeight::Absolute(Pixels(TEXT_SIZE_MENU)),
-                        horizontal_alignment: iced::alignment::Horizontal::Left,
-                        vertical_alignment: iced::alignment::Vertical::Bottom,
-                        shaping: text::Shaping::Advanced,
-                    });
-
-                    if let Some(key) = shortcut {
-                        let text_bounds = Rectangle::new(
-                            Point::new(
-                                inner_bounds.x + inner_bounds.width,
-                                inner_bounds.y + inner_bounds.height,
-                            ),
-                            inner_bounds.size(),
-                        );
-
-                        renderer.fill_text(Text {
-                            content: &key.to_string(),
-                            color: item_appearance.shortcut_color,
+                    renderer.fill_text(
+                        Text {
+                            content: ">",
                             font: self.font,
-                            bounds: text_bounds,
+                            bounds: text_bounds.size(),
                             size: TEXT_SIZE_MENU,
-                            line_height: LineHeight::Absolute(Pixels(TEXT_SIZE_MENU)),
+                            line_height: LineHeight::Absolute(TEXT_SIZE_MENU),
                             horizontal_alignment: iced::alignment::Horizontal::Right,
                             vertical_alignment: iced::alignment::Vertical::Bottom,
                             shaping: text::Shaping::Advanced,
-                        });
+                        },
+                        text_position_right,
+                        item_appearance.text_color,
+                        text_bounds,
+                    );
+                }
+                MenuEntry::Item(name, shortcut, _) => {
+                    renderer.fill_text(
+                        Text {
+                            content: name,
+                            font: self.font,
+                            bounds: text_bounds.size(),
+                            size: TEXT_SIZE_MENU,
+                            line_height: LineHeight::Absolute(TEXT_SIZE_MENU),
+                            horizontal_alignment: iced::alignment::Horizontal::Left,
+                            vertical_alignment: iced::alignment::Vertical::Bottom,
+                            shaping: text::Shaping::Advanced,
+                        },
+                        text_position_left,
+                        item_appearance.text_color,
+                        text_bounds,
+                    );
+
+                    if let Some(key) = shortcut {
+                        renderer.fill_text(
+                            Text {
+                                content: &key.to_string(),
+                                font: self.font,
+                                bounds: text_bounds.size(),
+                                size: TEXT_SIZE_MENU,
+                                line_height: LineHeight::Absolute(TEXT_SIZE_MENU),
+                                horizontal_alignment: iced::alignment::Horizontal::Right,
+                                vertical_alignment: iced::alignment::Vertical::Bottom,
+                                shaping: text::Shaping::Advanced,
+                            },
+                            text_position_right,
+                            item_appearance.shortcut_color,
+                            text_bounds,
+                        );
                     }
                 }
             }

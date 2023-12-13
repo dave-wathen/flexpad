@@ -4,7 +4,7 @@ use iced::{
         layout::{Limits, Node},
         mouse,
         renderer::Style,
-        text,
+        text::{self, Paragraph},
         widget::{Operation, Tree},
         Clipboard, Layout, Shell, Text, Widget,
     },
@@ -12,7 +12,7 @@ use iced::{
     event::Status,
     touch,
     widget::{text::LineHeight, text_input::Value},
-    Color, Element, Event, Length, Pixels, Rectangle, Size,
+    Color, Element, Event, Length, Pixels, Point, Rectangle, Size,
 };
 
 use crate::ui::active_sheet::{Message, Move};
@@ -26,7 +26,7 @@ where
     horizontal_alignment: alignment::Horizontal,
     vertical_alignment: alignment::Vertical,
     font: Option<Renderer::Font>,
-    font_size: f32,
+    font_size: Pixels,
 }
 
 impl<Renderer> InactiveCell<Renderer>
@@ -41,7 +41,7 @@ where
             horizontal_alignment: alignment::Horizontal::Center,
             vertical_alignment: alignment::Vertical::Center,
             font: None,
-            font_size: 10.0,
+            font_size: Pixels::from(10.0),
         }
     }
 
@@ -65,7 +65,7 @@ where
 
     /// Sets the font size of the [`ActiveCell`].
     pub fn font_size(mut self, size: impl Into<Pixels>) -> Self {
-        self.font_size = size.into().0;
+        self.font_size = size.into();
         self
     }
 }
@@ -83,7 +83,7 @@ where
         iced::Length::Fill
     }
 
-    fn layout(&self, _renderer: &Renderer, limits: &Limits) -> Node {
+    fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
         let bounds = limits
             .width(Length::Fill)
             .height(Length::Fill)
@@ -107,14 +107,23 @@ where
         let font = self.font.unwrap_or_else(|| renderer.default_font());
         let size = self.font_size;
 
-        let text_width = renderer.measure_width(&text, size, font, text::Shaping::Advanced);
+        let paragraph = Renderer::Paragraph::with_text(Text {
+            content: &text,
+            bounds: Size::INFINITY,
+            size,
+            line_height: LineHeight::Absolute(size),
+            font,
+            horizontal_alignment: alignment::Horizontal::Left,
+            vertical_alignment: alignment::Vertical::Top,
+            shaping: text::Shaping::Advanced,
+        });
+        let text_width = paragraph.min_width();
 
         let render = |renderer: &mut Renderer| {
             // TODO Colors
             let color = Color::BLACK;
             let h_align = self.horizontal_alignment;
             let v_align = self.vertical_alignment;
-            let width = bounds.width;
             let x = match h_align {
                 alignment::Horizontal::Left => bounds.x,
                 alignment::Horizontal::Center => bounds.center_x(),
@@ -125,23 +134,22 @@ where
                 alignment::Vertical::Center => bounds.center_y(),
                 alignment::Vertical::Bottom => bounds.y + bounds.width,
             };
-            let text_bounds = Rectangle {
-                x,
-                y,
-                width,
-                ..bounds
-            };
-            renderer.fill_text(Text {
-                content: &text,
+            let text_position = Point::new(x, y);
+            renderer.fill_text(
+                Text {
+                    content: &text,
+                    font,
+                    bounds: bounds.size(),
+                    size,
+                    line_height: LineHeight::default(),
+                    horizontal_alignment: h_align,
+                    vertical_alignment: v_align,
+                    shaping: text::Shaping::Advanced,
+                },
+                text_position,
                 color,
-                font,
-                bounds: text_bounds,
-                size,
-                line_height: LineHeight::default(),
-                horizontal_alignment: h_align,
-                vertical_alignment: v_align,
-                shaping: text::Shaping::Advanced,
-            });
+                bounds,
+            );
         };
 
         if text_width > bounds.width {

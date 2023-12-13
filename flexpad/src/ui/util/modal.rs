@@ -3,11 +3,11 @@
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::overlay;
 use iced::advanced::renderer;
-use iced::advanced::widget::{self, Widget};
+use iced::advanced::widget::{self, Tree, Widget};
 use iced::advanced::{self, Clipboard, Shell};
 use iced::alignment::Alignment;
-use iced::event;
 use iced::mouse;
+use iced::{event, Vector};
 use iced::{Color, Element, Event, Length, Point, Rectangle, Size};
 
 /// A widget that centers a modal element over some base element
@@ -64,8 +64,15 @@ where
         self.base.as_widget().height()
     }
 
-    fn layout(&self, renderer: &Renderer, limits: &layout::Limits) -> layout::Node {
-        self.base.as_widget().layout(renderer, limits)
+    fn layout(
+        &self,
+        tree: &mut Tree,
+        renderer: &Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
+        self.base
+            .as_widget()
+            .layout(&mut tree.children[0], renderer, limits)
     }
 
     fn draw(
@@ -149,12 +156,21 @@ where
     Renderer: advanced::Renderer,
     Message: Clone,
 {
-    fn layout(&self, renderer: &Renderer, _bounds: Size, position: Point) -> layout::Node {
+    fn layout(
+        &mut self,
+        renderer: &Renderer,
+        _bounds: Size,
+        position: Point,
+        _translation: Vector,
+    ) -> layout::Node {
         let limits = layout::Limits::new(Size::ZERO, self.size)
             .width(Length::Fill)
             .height(Length::Fill);
 
-        let mut child = self.content.as_widget().layout(renderer, &limits);
+        let mut child = self
+            .content
+            .as_widget()
+            .layout(self.tree, renderer, &limits);
         child.align(Alignment::Center, Alignment::Center, limits.max());
 
         let mut node = layout::Node::with_children(self.size, vec![child]);

@@ -180,7 +180,12 @@ where
         self.height
     }
 
-    fn layout(&self, renderer: &Renderer, limits: &layout::Limits) -> layout::Node {
+    fn layout(
+        &self,
+        tree: &mut Tree,
+        renderer: &Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
         let limits = limits.width(self.width).height(self.height);
 
         let child_limits = layout::Limits::new(
@@ -188,7 +193,9 @@ where
             Size::new(f32::INFINITY, f32::MAX),
         );
 
-        let content = self.content.layout(renderer, &child_limits);
+        let content = self
+            .content
+            .layout(&mut tree.children[0], renderer, &child_limits);
         let size = limits.resolve(content.size());
 
         // Add buffer space to ensure last row/column can be seen
@@ -309,7 +316,7 @@ where
         }
 
         match event {
-            Event::Window(window::Event::Resized { width, height }) => {
+            Event::Window(_, window::Event::Resized { width, height }) => {
                 let new_bounds = Rectangle::new(
                     layout.bounds().position(),
                     Size::new(width as f32, height as f32),
@@ -328,7 +335,9 @@ where
                 );
                 return event::Status::Ignored;
             }
-            Event::Window(window::Event::RedrawRequested(_)) if !state.is_viewport_notified() => {
+            Event::Window(_, window::Event::RedrawRequested(_))
+                if !state.is_viewport_notified() =>
+            {
                 state.notify_viewport_change(
                     &self.on_viewport_change,
                     parts.cells_viewport.size(),

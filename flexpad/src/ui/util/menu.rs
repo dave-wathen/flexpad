@@ -59,7 +59,7 @@ const MENU_ENTRY_PADDING: Padding = Padding {
     bottom: SPACE_S,
     left: SPACE_M,
 };
-const TEXT_SIZE_MENU: f32 = 14.0;
+const TEXT_SIZE_MENU: Pixels = Pixels(14.0);
 
 /// A limited emulation of macOS menus to suffice until system menu support
 /// is available in Iced.
@@ -173,18 +173,29 @@ where
         self.height
     }
 
-    fn layout(&self, renderer: &Renderer, limits: &layout::Limits) -> layout::Node {
+    fn layout(
+        &self,
+        tree: &mut Tree,
+        renderer: &Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
         let limits = limits
             .max_width(self.max_width)
             .max_height(self.max_height)
             .width(self.width)
             .height(self.height);
 
-        let mb_layout = self.menu_bar.as_widget().layout(renderer, &limits);
+        let mb_layout = self
+            .menu_bar
+            .as_widget()
+            .layout(&mut tree.children[0], renderer, &limits);
         let mb_size = mb_layout.size();
 
         let content_limits = limits.shrink(Size::new(0.0, mb_size.height));
-        let mut c_layout = self.content.as_widget().layout(renderer, &content_limits);
+        let mut c_layout =
+            self.content
+                .as_widget()
+                .layout(&mut tree.children[1], renderer, &content_limits);
         c_layout.move_to(Point::new(0.0, mb_size.height));
         let c_size = c_layout.size();
 

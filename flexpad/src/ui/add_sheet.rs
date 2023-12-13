@@ -10,7 +10,7 @@ use crate::{
     },
 };
 use iced::{
-    alignment, subscription,
+    alignment, event,
     theme::{self},
     widget::{button, column, container, horizontal_rule, image, row, text, vertical_space},
     Alignment, Element, Length, Subscription,
@@ -129,9 +129,9 @@ impl AddSheetUi {
 
     pub fn subscription(&self) -> Subscription<Message> {
         if self.existing_names.is_empty() {
-            subscription::events_with(|event, _status| handle_ok_key(&event, Message::Submit))
+            event::listen_with(|event, _status| handle_ok_key(&event, Message::Submit))
         } else {
-            subscription::events_with(|event, _status| {
+            event::listen_with(|event, _status| {
                 handle_ok_and_cancel_keys(&event, Message::Submit, Message::Cancel)
             })
         }

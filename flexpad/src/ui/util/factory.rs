@@ -3,7 +3,7 @@ use iced::{
     widget::{
         self, button, column, container, horizontal_space, row, text, vertical_space, Button, Row,
     },
-    Element, Event, Font, Length,
+    Element, Event, Font, Length, Pixels,
 };
 
 use crate::ui::style;
@@ -13,10 +13,10 @@ pub const SPACE_M: f32 = SPACE_S * 2.0;
 pub const SPACE_L: f32 = SPACE_S * 4.0;
 // const SPACE_XL: u16 = SPACE_S * 8;
 
-pub const TEXT_SIZE_DIALOG_TITLE: f32 = 16.0;
-pub const TEXT_SIZE_LABEL: f32 = 12.0;
-pub const TEXT_SIZE_INPUT: f32 = 16.0;
-pub const TEXT_SIZE_ERROR: f32 = 14.0;
+pub const TEXT_SIZE_DIALOG_TITLE: Pixels = Pixels(16.0);
+pub const TEXT_SIZE_LABEL: Pixels = Pixels(12.0);
+pub const TEXT_SIZE_INPUT: Pixels = Pixels(16.0);
+pub const TEXT_SIZE_ERROR: Pixels = Pixels(14.0);
 
 pub const DIALOG_BUTTON_WIDTH: f32 = 100.0;
 

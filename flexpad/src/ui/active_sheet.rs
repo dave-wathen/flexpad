@@ -285,18 +285,23 @@ impl ActiveSheetUi {
         // TODO Hardcoded text sizes
         let mut grid: Grid<Message> = Grid::new(heights, widths)
             .style(style::Grid::Ruled)
-            .push_corner(GridCorner::new(text(t!("ActiveSheet.Corner"))))
+            .push_corner(GridCorner::new(
+                text(t!("ActiveSheet.Corner")).size(12).line_height(1.0),
+            ))
             .row_head_width(active_sheet.row_header_width())
             .column_head_height(active_sheet.column_header_height());
 
         for cl in self.visible_cells.columns() {
             let column = active_sheet.column(cl as usize);
-            grid = grid.push_column_head(ColumnHead::new(cl, text(column.name()).size(10)))
+            grid = grid.push_column_head(ColumnHead::new(
+                cl,
+                text(column.name()).size(12).line_height(1.0),
+            ))
         }
 
         for rw in self.visible_cells.rows() {
             let row = active_sheet.row(rw as usize);
-            grid = grid.push_row_head(RowHead::new(rw, text(row.name()).size(10)))
+            grid = grid.push_row_head(RowHead::new(rw, text(row.name()).size(12).line_height(1.0)))
         }
 
         for rc in self.visible_cells.cells() {

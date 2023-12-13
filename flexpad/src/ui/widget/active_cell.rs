@@ -9,7 +9,7 @@ use iced::{
         layout::{Limits, Node},
         mouse::{self, click},
         renderer::{Quad, Style},
-        text,
+        text::{self, Paragraph},
         widget::{self, tree, Operation, Tree},
         Clipboard, Layout, Shell, Text, Widget,
     },
@@ -60,7 +60,7 @@ where
     horizontal_alignment: alignment::Horizontal,
     vertical_alignment: alignment::Vertical,
     font: Option<Renderer::Font>,
-    font_size: f32,
+    font_size: Pixels,
     edit_when_clicked: click::Kind,
 }
 
@@ -77,7 +77,7 @@ where
             horizontal_alignment: alignment::Horizontal::Center,
             vertical_alignment: alignment::Vertical::Center,
             font: None,
-            font_size: 10.0,
+            font_size: Pixels::from(10.0),
             edit_when_clicked: click::Kind::Single,
         }
     }
@@ -119,7 +119,7 @@ where
 
     /// Sets the font size of the [`ActiveCell`].
     pub fn font_size(mut self, size: impl Into<Pixels>) -> Self {
-        self.font_size = size.into().0;
+        self.font_size = size.into();
         self
     }
 }
@@ -161,7 +161,7 @@ where
         }
     }
 
-    fn layout(&self, _renderer: &Renderer, limits: &Limits) -> Node {
+    fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
         let bounds = limits
             .width(Length::Fill)
             .height(Length::Fill)
@@ -267,7 +267,17 @@ where
             (None, 0.0)
         };
 
-        let text_width = renderer.measure_width(&text, size, font, text::Shaping::Advanced);
+        let paragraph = Renderer::Paragraph::with_text(Text {
+            content: &text,
+            bounds: Size::INFINITY,
+            size,
+            line_height: LineHeight::Absolute(size),
+            font,
+            horizontal_alignment: alignment::Horizontal::Left,
+            vertical_alignment: alignment::Vertical::Top,
+            shaping: text::Shaping::Advanced,
+        });
+        let text_width = paragraph.min_width();
 
         let render = |renderer: &mut Renderer| {
             if let Some((cursor, color)) = cursor {
@@ -285,18 +295,10 @@ where
             //     theme.value_color(style)
             // },
             let color = Color::BLACK;
-            let (h_align, v_align, width) = if state.is_focused() && editor.is_editing() {
-                (
-                    alignment::Horizontal::Left,
-                    alignment::Vertical::Center,
-                    f32::INFINITY,
-                )
+            let (h_align, v_align) = if state.is_focused() && editor.is_editing() {
+                (alignment::Horizontal::Left, alignment::Vertical::Center)
             } else {
-                (
-                    self.horizontal_alignment,
-                    self.vertical_alignment,
-                    bounds.width,
-                )
+                (self.horizontal_alignment, self.vertical_alignment)
             };
             let x = match h_align {
                 alignment::Horizontal::Left => bounds.x,
@@ -308,23 +310,22 @@ where
                 alignment::Vertical::Center => bounds.center_y(),
                 alignment::Vertical::Bottom => bounds.y + bounds.width,
             };
-            let text_bounds = Rectangle {
-                x,
-                y,
-                width,
-                ..bounds
-            };
-            renderer.fill_text(Text {
-                content: &text,
+            let text_position = Point::new(x, y);
+            renderer.fill_text(
+                Text {
+                    content: &text,
+                    font,
+                    bounds: bounds.size(),
+                    size,
+                    line_height: LineHeight::default(),
+                    horizontal_alignment: h_align,
+                    vertical_alignment: v_align,
+                    shaping: text::Shaping::Advanced,
+                },
+                text_position,
                 color,
-                font,
-                bounds: text_bounds,
-                size,
-                line_height: LineHeight::default(),
-                horizontal_alignment: h_align,
-                vertical_alignment: v_align,
-                shaping: text::Shaping::Advanced,
-            });
+                bounds,
+            );
         };
 
         if text_width > bounds.width {
@@ -370,13 +371,13 @@ where
         let focused = state.is_focused();
 
         match event {
-            Event::Window(window::Event::Unfocused) => {
+            Event::Window(_, window::Event::Unfocused) => {
                 if let Some(focus) = &mut state.is_focused {
                     focus.is_window_focused = false;
                 }
                 Status::Ignored
             }
-            Event::Window(window::Event::Focused) => {
+            Event::Window(_, window::Event::Focused) => {
                 if let Some(focus) = &mut state.is_focused {
                     focus.is_window_focused = true;
                     focus.updated_at = Instant::now();
@@ -385,7 +386,7 @@ where
                 }
                 Status::Ignored
             }
-            Event::Window(window::Event::RedrawRequested(now)) => {
+            Event::Window(_, window::Event::RedrawRequested(now)) => {
                 if let Some(focus) = &mut state.is_focused {
                     if focus.is_window_focused {
                         focus.now = now;
@@ -577,7 +578,7 @@ fn find_cursor_position<Renderer>(
     renderer: &Renderer,
     text_bounds: Rectangle,
     font: Renderer::Font,
-    size: f32,
+    size: Pixels,
     line_height: text::LineHeight,
     editor: &Editor,
     x: f32,
@@ -588,17 +589,18 @@ where
     let offset = offset(renderer, text_bounds, font, size, editor);
     let value = editor.contents();
 
-    let char_offset = renderer
-        .hit_test(
-            &value,
-            size,
-            line_height,
-            font,
-            Size::INFINITY,
-            text::Shaping::Advanced,
-            Point::new(x + offset, text_bounds.height / 2.0),
-            true,
-        )
+    let paragraph = Renderer::Paragraph::with_text(Text {
+        content: &value,
+        bounds: Size::INFINITY,
+        size,
+        line_height,
+        font,
+        horizontal_alignment: alignment::Horizontal::Left,
+        vertical_alignment: alignment::Vertical::Top,
+        shaping: text::Shaping::Advanced,
+    });
+    let char_offset = paragraph
+        .hit_test(Point::new(x + offset, text_bounds.height / 2.0))
         .map(text::Hit::cursor)?;
 
     Some(unicode_segmentation::UnicodeSegmentation::graphemes(&value[..char_offset], true).count())
@@ -608,7 +610,7 @@ fn offset<Renderer>(
     renderer: &Renderer,
     text_bounds: Rectangle,
     font: Renderer::Font,
-    size: f32,
+    size: Pixels,
     editor: &Editor,
 ) -> f32
 where
@@ -629,10 +631,10 @@ where
 }
 
 fn measure_cursor_and_scroll_offset<Renderer>(
-    renderer: &Renderer,
+    _renderer: &Renderer,
     text_bounds: Rectangle,
     value: &Value,
-    size: f32,
+    size: Pixels,
     cursor_index: usize,
     font: Renderer::Font,
 ) -> (f32, f32)
@@ -641,8 +643,17 @@ where
 {
     let text_before_cursor = value.until(cursor_index).to_string();
 
-    let text_value_width =
-        renderer.measure_width(&text_before_cursor, size, font, text::Shaping::Advanced);
+    let paragraph = Renderer::Paragraph::with_text(Text {
+        content: &text_before_cursor,
+        bounds: Size::INFINITY,
+        size,
+        line_height: LineHeight::Absolute(size),
+        font,
+        horizontal_alignment: alignment::Horizontal::Left,
+        vertical_alignment: alignment::Vertical::Top,
+        shaping: text::Shaping::Advanced,
+    });
+    let text_value_width = paragraph.min_width();
 
     let offset = ((text_value_width + 5.0) - text_bounds.width).max(0.0);
 

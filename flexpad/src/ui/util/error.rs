@@ -5,7 +5,7 @@ use crate::ui::{
     },
 };
 use iced::{
-    subscription,
+    event,
     widget::{column, text},
     Subscription,
 };
@@ -62,7 +62,7 @@ impl ErrorUi {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        subscription::events_with(|event, _status| {
+        event::listen_with(|event, _status| {
             handle_ok_and_cancel_keys(&event, Message::Acknowledge, Message::Acknowledge)
         })
     }

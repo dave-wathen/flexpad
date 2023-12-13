@@ -154,7 +154,10 @@ impl Application for Flexpad {
                 screen: Screen::Loading(screen),
                 dialog: Default::default(),
             },
-            Command::batch(vec![loading_command, window::maximize(true)]),
+            Command::batch(vec![
+                loading_command,
+                window::maximize(window::Id::MAIN, true),
+            ]),
         )
     }
 

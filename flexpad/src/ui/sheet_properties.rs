@@ -8,7 +8,7 @@ use crate::{
         },
     },
 };
-use iced::{subscription, widget::column, Subscription};
+use iced::{event, widget::column, Subscription};
 
 use rust_i18n::t;
 
@@ -94,11 +94,11 @@ impl SheetPropertiesUi {
 
     pub fn subscription(&self) -> Subscription<Message> {
         if self.name_error.is_none() {
-            subscription::events_with(|event, _status| {
+            event::listen_with(|event, _status| {
                 handle_ok_and_cancel_keys(&event, Message::Submit, Message::Cancel)
             })
         } else {
-            subscription::events_with(|event, _status| handle_cancel_key(&event, Message::Cancel))
+            event::listen_with(|event, _status| handle_cancel_key(&event, Message::Cancel))
         }
     }
 

@@ -5,7 +5,7 @@ use iced::{
         layout::{self, Limits},
         overlay::Group,
         renderer,
-        widget::{tree, Operation},
+        widget::{tree, Operation, Tree},
         Clipboard, Layout, Shell, Widget,
     },
     event,
@@ -76,7 +76,12 @@ where
         Length::Shrink
     }
 
-    fn layout(&self, renderer: &Renderer, limits: &layout::Limits) -> layout::Node {
+    fn layout(
+        &self,
+        tree: &mut Tree,
+        renderer: &Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
         let info = (*self.info).borrow();
         let height = info.row_heights.sum();
         let width = info.column_widths.sum();
@@ -84,7 +89,8 @@ where
         let children = self
             .cells
             .iter()
-            .map(|cell| {
+            .zip(tree.children.iter_mut())
+            .map(|(cell, tree)| {
                 let rows = cell.range.rows();
                 let y1 = info.row_heights.sum_to(rows.start as usize);
                 let y2 = info.row_heights.sum_to(rows.end as usize);
@@ -93,7 +99,7 @@ where
                 let x2 = info.column_widths.sum_to(columns.end as usize);
                 let cell_size = Size::new(x2 - x1, y2 - y1);
                 let cell_limits = Limits::new(cell_size, cell_size);
-                let mut cell_layout = cell.layout(renderer, &cell_limits);
+                let mut cell_layout = cell.layout(tree, renderer, &cell_limits);
                 cell_layout.move_to(Point::new(x1, y1));
                 cell_layout
             })

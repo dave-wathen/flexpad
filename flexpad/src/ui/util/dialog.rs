@@ -98,7 +98,12 @@ where
         tree.diff_children(&[&self.title, &self.body]);
     }
 
-    fn layout(&self, renderer: &Renderer, limits: &layout::Limits) -> layout::Node {
+    fn layout(
+        &self,
+        tree: &mut Tree,
+        renderer: &Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
         let limits = limits.max_width(self.max_width).max_height(self.max_height);
 
         let padding = SPACE_M.into();
@@ -108,11 +113,17 @@ where
             .height(self.height)
             .pad(padding);
 
-        let mut title = self.title.as_widget().layout(renderer, &limits);
+        let mut title = self
+            .title
+            .as_widget()
+            .layout(&mut tree.children[0], renderer, &limits);
         title.move_to(Point::new(SPACE_M, SPACE_M));
         let limits = limits.shrink(Size::new(0.0, title.size().height + SPACE_M * 2.0));
 
-        let mut body = self.body.as_widget().layout(renderer, &limits);
+        let mut body = self
+            .body
+            .as_widget()
+            .layout(&mut tree.children[1], renderer, &limits);
         body.move_to(Point::new(
             SPACE_M,
             SPACE_M + title.size().height + SPACE_M * 2.0,

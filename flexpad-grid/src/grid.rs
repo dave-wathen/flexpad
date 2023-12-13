@@ -234,16 +234,23 @@ where
         self.height
     }
 
-    fn layout(&self, renderer: &Renderer, limits: &layout::Limits) -> layout::Node {
+    fn layout(
+        &self,
+        tree: &mut Tree,
+        renderer: &Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
+        let mut child_trees = tree.children.iter_mut();
+
         let mut row_heads_layout = self
             .row_heads
             .as_ref()
-            .map(|ch| ch.layout(renderer, &limits.loose()));
+            .map(|ch| ch.layout(child_trees.next().unwrap(), renderer, &limits.loose()));
 
         let mut column_heads_layout = self
             .column_heads
             .as_ref()
-            .map(|ch| ch.layout(renderer, &limits.loose()));
+            .map(|ch| ch.layout(child_trees.next().unwrap(), renderer, &limits.loose()));
 
         let (heads_offset, corner_layout) =
             match (row_heads_layout.as_mut(), column_heads_layout.as_mut()) {
@@ -259,14 +266,16 @@ where
                         Vector::new(x, y),
                         self.corner.as_ref().map(|cnr| {
                             let corner_limits = limits.loose().max_width(x).max_height(y);
-                            cnr.layout(renderer, &corner_limits)
+                            cnr.layout(child_trees.next().unwrap(), renderer, &corner_limits)
                         }),
                     )
                 }
             };
 
         let cell_limits = limits.loose().shrink(heads_offset.into());
-        let mut cells_layout = self.cells.layout(renderer, &cell_limits);
+        let mut cells_layout =
+            self.cells
+                .layout(child_trees.next().unwrap(), renderer, &cell_limits);
         cells_layout.move_to(Point::ORIGIN + heads_offset);
 
         let gp_layout = GridPartsLayout {

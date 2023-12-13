@@ -3,13 +3,14 @@ use std::{rc::Rc, time::Instant};
 use iced::{
     advanced::{
         layout::Node,
-        mouse, overlay, renderer, text,
+        mouse, overlay, renderer,
+        text::{self, Paragraph},
         widget::{tree, Tree},
         Clipboard, Layout, Shell, Text, Widget,
     },
     event, touch,
     widget::text::LineHeight,
-    Background, Color, Element, Event, Length, Pixels, Point, Rectangle, Size, Vector,
+    Background, Color, Element, Event, Length, Point, Rectangle, Size, Vector,
 };
 
 use super::{
@@ -78,6 +79,7 @@ where
 
     fn layout(
         &self,
+        _tree: &mut Tree,
         renderer: &Renderer,
         limits: &iced::advanced::layout::Limits,
     ) -> iced::advanced::layout::Node {
@@ -98,14 +100,17 @@ where
             .pad(MENUBAR_ENTRY_PADDING);
 
         for menu in self.roots.iter() {
-            let text_size = renderer.measure(
-                &menu.name,
-                TEXT_SIZE_MENU,
-                LineHeight::Absolute(Pixels(TEXT_SIZE_MENU)),
+            let paragraph = Renderer::Paragraph::with_text(Text {
+                content: &menu.name,
+                bounds: Size::INFINITY,
+                size: TEXT_SIZE_MENU,
+                line_height: LineHeight::Absolute(TEXT_SIZE_MENU),
                 font,
-                limits.max(),
-                text::Shaping::Basic,
-            );
+                horizontal_alignment: iced::alignment::Horizontal::Left,
+                vertical_alignment: iced::alignment::Vertical::Top,
+                shaping: text::Shaping::Advanced,
+            });
+            let text_size = paragraph.min_bounds();
 
             let entry_size = entry_limits.resolve(text_size).pad(MENUBAR_ENTRY_PADDING);
             let entry_position = Point::new(x, MENUBAR_PADDING.top);
@@ -157,7 +162,7 @@ where
                 false => theme.active_menu_bar_item(&style),
             };
 
-            // Selected Background
+            // Background
             renderer.fill_quad(
                 renderer::Quad {
                     bounds,
@@ -175,24 +180,43 @@ where
 
             let text_bounds = Rectangle::new(
                 Point::new(
-                    bounds.x + MENUBAR_ENTRY_PADDING.left + text_size.width / 2.0,
-                    bounds.y + MENUBAR_ENTRY_PADDING.top + text_size.height,
+                    bounds.x + MENUBAR_ENTRY_PADDING.left,
+                    bounds.y + MENUBAR_ENTRY_PADDING.top,
                 ),
                 text_size,
             );
 
+            let text_position = Point::new(
+                text_bounds.position().x + text_size.width / 2.0,
+                text_bounds.position().y + text_size.height,
+            );
+
+            renderer.fill_quad(
+                renderer::Quad {
+                    bounds: text_bounds,
+                    border_radius: item_appearance.border_radius.into(),
+                    border_width: item_appearance.border_width,
+                    border_color: item_appearance.border_color,
+                },
+                item_appearance.background,
+            );
+
             let font = self.font.unwrap_or_else(|| renderer.default_font());
-            renderer.fill_text(Text {
-                content: &menu.name,
-                color: item_appearance.text_color,
-                font,
-                bounds: text_bounds,
-                size: TEXT_SIZE_MENU,
-                line_height: LineHeight::Absolute(Pixels(TEXT_SIZE_MENU)),
-                horizontal_alignment: iced::alignment::Horizontal::Center,
-                vertical_alignment: iced::alignment::Vertical::Bottom,
-                shaping: text::Shaping::Advanced,
-            });
+            renderer.fill_text(
+                Text {
+                    content: &menu.name,
+                    font,
+                    bounds: text_bounds.size(),
+                    size: TEXT_SIZE_MENU,
+                    line_height: LineHeight::Absolute(TEXT_SIZE_MENU),
+                    horizontal_alignment: iced::alignment::Horizontal::Center,
+                    vertical_alignment: iced::alignment::Vertical::Bottom,
+                    shaping: text::Shaping::Advanced,
+                },
+                text_position,
+                item_appearance.text_color,
+                text_bounds,
+            );
         }
     }
 
@@ -391,7 +415,7 @@ where
                 None => None,
             };
             let overlay = MenuOverlay::new(entries, font, Rc::clone(&state.menu_states), depth);
-            let element = overlay::Element::new(position, Box::new(overlay));
+            let mut element = overlay::Element::new(position, Box::new(overlay));
             let layout = element.layout(renderer, Size::INFINITY, Vector::ZERO);
             if let Some(index) = state.menu_states.selected(depth) {
                 let child_layout = &layout.children()[index];

@@ -124,7 +124,12 @@ where
         Length::Fill
     }
 
-    fn layout(&self, renderer: &Renderer, limits: &layout::Limits) -> layout::Node {
+    fn layout(
+        &self,
+        tree: &mut Tree,
+        renderer: &Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
         let limits = limits
             .loose()
             .max_width(f32::INFINITY)
@@ -132,10 +137,11 @@ where
             .width(Length::Fill)
             .height(Length::Fill);
 
-        let mut content = self
-            .content
-            .as_widget()
-            .layout(renderer, &limits.pad(self.padding));
+        let mut content = self.content.as_widget().layout(
+            &mut tree.children[0],
+            renderer,
+            &limits.pad(self.padding),
+        );
         let padding = self.padding.fit(content.size(), limits.max());
         let size = limits.pad(padding).resolve(content.size());
 

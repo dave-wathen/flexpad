@@ -1,6 +1,6 @@
 _version: 1
 ActiveSheet:
-  Corner: "*"
+  Corner: "#"
 AddSheet:
   Type: "Sheet Type To Add ..."
 Common:

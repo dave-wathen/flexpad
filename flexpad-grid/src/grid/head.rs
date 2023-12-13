@@ -5,6 +5,7 @@ use std::rc::Rc;
 use iced::advanced::overlay::Group;
 use iced::advanced::widget::tree;
 use iced::advanced::widget::Operation;
+use iced::advanced::widget::Tree;
 use iced::advanced::{layout, overlay, renderer, Clipboard, Layout, Shell, Widget};
 use iced::mouse::{self, Cursor};
 use iced::{
@@ -254,7 +255,12 @@ where
         Length::Fill
     }
 
-    fn layout(&self, renderer: &Renderer, limits: &layout::Limits) -> layout::Node {
+    fn layout(
+        &self,
+        tree: &mut Tree,
+        renderer: &Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
         let limits = limits
             .loose()
             .max_width(f32::INFINITY)
@@ -262,10 +268,11 @@ where
             .width(Length::Fill)
             .height(Length::Fill);
 
-        let mut content = self
-            .content
-            .as_widget()
-            .layout(renderer, &limits.pad(self.padding));
+        let mut content = self.content.as_widget().layout(
+            &mut tree.children[0],
+            renderer,
+            &limits.pad(self.padding),
+        );
         let padding = self.padding.fit(content.size(), limits.max());
         let size = limits.pad(padding).resolve(content.size());
 
@@ -477,19 +484,24 @@ where
         Length::Fill
     }
 
-    fn layout(&self, renderer: &Renderer, limits: &layout::Limits) -> layout::Node {
+    fn layout(
+        &self,
+        tree: &mut Tree,
+        renderer: &Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
         let info = (*self.info).borrow();
         let height = info.row_heights.sum();
         let limits = limits.width(self.width).height(height);
 
         let mut children = vec![];
         let mut max_width: f32 = 0.0;
-        for r_head in self.row_heads.iter() {
+        for (r_head, tree) in self.row_heads.iter().zip(tree.children.iter_mut()) {
             let rw = r_head.index;
             let y1 = info.row_heights.sum_to(rw as usize);
             let y2 = info.row_heights.sum_to((rw + 1) as usize);
             let cell_limits = limits.loose().max_height(y2 - y1);
-            let mut child_layout = r_head.layout(renderer, &cell_limits);
+            let mut child_layout = r_head.layout(tree, renderer, &cell_limits);
             max_width = max_width.max(child_layout.size().width);
             child_layout.move_to(Point::new(0.0, y1));
             children.push(child_layout);
@@ -700,19 +712,24 @@ where
         self.height
     }
 
-    fn layout(&self, renderer: &Renderer, limits: &layout::Limits) -> layout::Node {
+    fn layout(
+        &self,
+        tree: &mut Tree,
+        renderer: &Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
         let info = (*self.info).borrow();
         let width = info.column_widths.sum();
         let limits = limits.width(width).height(self.height);
 
         let mut children = vec![];
         let mut max_height: f32 = 0.0;
-        for c_head in self.column_heads.iter() {
+        for (c_head, tree) in self.column_heads.iter().zip(tree.children.iter_mut()) {
             let cl = c_head.index;
             let x1 = info.column_widths.sum_to(cl as usize);
             let x2 = info.column_widths.sum_to((cl + 1) as usize);
             let cell_limits = limits.loose().max_width(x2 - x1);
-            let mut child_layout = c_head.layout(renderer, &cell_limits);
+            let mut child_layout = c_head.layout(tree, renderer, &cell_limits);
             max_height = max_height.max(child_layout.size().height);
             child_layout.move_to(Point::new(x1, 0.0));
             children.push(child_layout);
