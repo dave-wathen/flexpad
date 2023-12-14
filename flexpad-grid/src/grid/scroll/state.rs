@@ -391,6 +391,15 @@ impl GridScrollableState {
         self.set_x_offset(offset, viewport_width);
     }
 
+    pub fn scroll_to_column(&mut self, column: u32) {
+        let new_x = self.column_widths.sum_to(column as usize);
+        self.set_x_offset(new_x, self.cells_bounds.width);
+    }
+
+    pub fn scroll_to_row(&mut self, row: u32) {
+        let new_y = self.row_heights.sum_to(row as usize);
+        self.set_y_offset(new_y, self.cells_bounds.height);
+    }
     pub fn ensure_column_visible(&mut self, column: u32) {
         let required = self.column_widths.sum_to(column as usize)
             ..=self.column_widths.sum_to(column as usize + 1);

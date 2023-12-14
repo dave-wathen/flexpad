@@ -242,6 +242,19 @@ impl WorkpadMaster {
                 self.data
                     .write_workpad(Arc::new(new_workpad_data), new_version);
             }
+            WorkpadUpdate::SetActiveSheet { sheet_id } => {
+                let workpad_data = self.data.read_workpad(active_version);
+                if !workpad_data.sheets.contains(sheet_id) {
+                    return new_err(ErrorKind::MissingSheet(*sheet_id));
+                }
+
+                let new_workpad_data = WorkpadData {
+                    active_sheet: Some(*sheet_id),
+                    ..(*workpad_data).clone()
+                };
+                self.data
+                    .write_workpad(Arc::new(new_workpad_data), new_version);
+            }
             WorkpadUpdate::SheetAdd { kind, ref name } => {
                 if name.is_empty() {
                     return new_err(ErrorKind::InvalidName(name.clone()));
@@ -430,6 +443,8 @@ pub enum WorkpadUpdate {
         new_name: String,
         new_author: String,
     },
+    /// Instruction to change the active sheet of the workpad
+    SetActiveSheet { sheet_id: SheetId },
     /// Instruction to add a sheet to the workpad
     SheetAdd { kind: SheetKind, name: String },
     /// Instruction to delete a specific sheet within a workpad.
@@ -463,19 +478,19 @@ impl std::fmt::Display for WorkpadUpdate {
             }
             Ok(())
         } else {
-            let name = match self {
-                WorkpadUpdate::Multi(_) => unreachable!(),
-                WorkpadUpdate::NewWorkpad => t!("WorkpadUpdate.NewWorkpad"),
-                WorkpadUpdate::WorkpadSetProperties { .. } => {
-                    t!("WorkpadUpdate.WorkpadSetProperties")
-                }
-                WorkpadUpdate::SheetAdd { .. } => t!("WorkpadUpdate.SheetAdd"),
-                WorkpadUpdate::SheetDelete { .. } => t!("WorkpadUpdate.SheetDelete"),
-                WorkpadUpdate::SheetSetProperties { .. } => t!("WorkpadUpdate.SheetSetProperties"),
-                WorkpadUpdate::SheetSetCellValue { .. } => t!("WorkpadUpdate.SheetSetCellValue"),
-                WorkpadUpdate::SheetSetActiveCell { .. } => t!("WorkpadUpdate.SheetSetActiveCell"),
+            type WU = WorkpadUpdate;
+            let variant = match self {
+                WU::Multi(_) => unreachable!(),
+                WU::NewWorkpad => "NewWorkpad",
+                WU::WorkpadSetProperties { .. } => "WorkpadSetProperties",
+                WU::SetActiveSheet { .. } => "SetActiveSheet",
+                WU::SheetAdd { .. } => "SheetAdd",
+                WU::SheetDelete { .. } => "SheetDelete",
+                WU::SheetSetProperties { .. } => "SheetSetProperties",
+                WU::SheetSetCellValue { .. } => "SheetSetCellValue",
+                WU::SheetSetActiveCell { .. } => "SheetSetActiveCell",
             };
-
+            let name = t!(&format!("WorkpadUpdate.{variant}"));
             write!(f, "{name}")
         }
     }
@@ -1733,6 +1748,71 @@ mod tests {
     }
 
     #[test]
+    fn set_workpad_active_sheet() {
+        let mut master = WorkpadMaster::new_starter();
+
+        let pad = master.active_version();
+        let sheet_2_id = pad.sheets().nth(1).unwrap().id();
+
+        // Change active sheet
+        let pad = master
+            .update(WorkpadUpdate::SetActiveSheet {
+                sheet_id: sheet_2_id,
+            })
+            .expect("Update should succeed");
+
+        // Assert sheets is: ["Sheet 1", "Sheet 2", "Sheet 3"] and "Sheet 2" is the active sheet
+        let mut sheets = pad.sheets();
+        match sheets.next() {
+            Some(s) => {
+                assert_eq!("Sheet 1", s.name());
+            }
+            None => panic!(r#"Expected: "Sheet 1""#),
+        };
+        match sheets.next() {
+            Some(s) => {
+                assert_eq!("Sheet 2", s.name());
+                assert_eq!(pad.active_sheet().unwrap(), s);
+            }
+            None => panic!(r#"Expected: "Sheet 2""#),
+        };
+        match sheets.next() {
+            Some(s) => assert_eq!("Sheet 3", s.name()),
+            None => panic!(r#"Expected: "Sheet 3""#),
+        };
+        assert!(sheets.next().is_none());
+
+        // Assert now at version 1 created by "Set Active Sheet""
+        assert!(ver_is(pad.version(), 1, "Set Active Sheet"));
+
+        // Assert backward_versions is [(0, "New Workpad"]
+        let mut back_vers = pad.backward_versions();
+        match back_vers.next() {
+            Some(ver) => assert!(ver_is(ver, 0, "New Workpad")),
+            None => panic!(r#"Expected (0, "New Workpad")"#),
+        };
+        assert!(back_vers.next().is_none());
+
+        // Assert no forward_versions
+        assert!(pad.forward_versions().next().is_none());
+    }
+
+    #[test]
+    fn set_active_sheet_invalid_id() {
+        let mut master = WorkpadMaster::new_starter();
+
+        // Try to switch to invalid sheet
+        let sheet_id = SheetId(Version::MAX);
+        let result = master.update(WorkpadUpdate::SetActiveSheet { sheet_id });
+
+        assert!(result.is_err());
+        assert_eq!(
+            "SheetId(4294967295) not found (during update: Set Active Sheet)",
+            result.err().unwrap().to_string()
+        );
+    }
+
+    #[test]
     fn delete_active_sheet() {
         let mut master = WorkpadMaster::new_starter();
 
@@ -1816,7 +1896,7 @@ mod tests {
     fn delete_sheet_invalid_id() {
         let mut master = WorkpadMaster::new_starter();
 
-        // Delete the active sheet
+        // Try to delete invalid sheet
         let sheet_id = SheetId(Version::MAX);
         let result = master.update(WorkpadUpdate::SheetDelete { sheet_id });
 

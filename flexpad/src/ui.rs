@@ -295,7 +295,6 @@ impl Application for Flexpad {
                 DataEvent::PadUpdated(Ok(pad)) => match pad.active_sheet() {
                     Some(sheet) => {
                         if let Screen::ActiveSheet(ui) = &mut self.screen {
-                            dbg!("Keepimng ActiveSheet");
                             ui.pad_updated(pad).map(Message::ActiveSheet)
                         } else {
                             self.screen =

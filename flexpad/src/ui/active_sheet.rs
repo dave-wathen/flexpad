@@ -54,6 +54,7 @@ pub enum Message {
     SheetAdd,
     PadClose,
     PadShowProperties,
+    SetActiveSheet(SheetId),
 }
 
 impl std::fmt::Display for Message {
@@ -71,6 +72,7 @@ impl std::fmt::Display for Message {
             Self::SheetAdd => write!(f, "AddSheet"),
             Self::PadShowProperties => write!(f, "PadShowProperties"),
             Self::PadClose => write!(f, "PadClose"),
+            Self::SetActiveSheet(id) => write!(f, "SetActiveSheet({id})"),
         }
     }
 }
@@ -425,22 +427,66 @@ impl ActiveSheetUi {
                 Event::EditPadPropertiesRequested(self.active_sheet.workpad())
             }
             Message::PadClose => Event::CloseWorkpadRequested,
+            Message::SetActiveSheet(sheet_id) => Event::UpdateRequested(
+                self.active_sheet.workpad().master(),
+                WorkpadUpdate::SetActiveSheet { sheet_id },
+            ),
         }
     }
 
     pub fn pad_updated(&mut self, pad: Workpad) -> Command<Message> {
-        self.active_sheet = pad.active_sheet().unwrap();
+        let new_active_sheet = pad.active_sheet().unwrap();
 
-        let prior_rc = self.active_cell.as_ref().map(|(cell, _)| rc_of_cell(cell));
-        self.active_cell = self.active_sheet.active_cell().map(|cell| {
-            let active_cell_editor = Rc::new(RefCell::new(Editor::new(cell.value())));
-            (cell, active_cell_editor)
-        });
-        let new_rc = self.active_cell.as_ref().map(|(cell, _)| rc_of_cell(cell));
+        if self.active_sheet.id() != new_active_sheet.id() {
+            // View has switched to a new sheet
+            let viewport = VIEWPORTS_CACHE.with(|cache| {
+                cache
+                    .borrow()
+                    .get(&(
+                        new_active_sheet.workpad().id().to_owned(),
+                        new_active_sheet.id(),
+                    ))
+                    .copied()
+            });
+            self.active_sheet = new_active_sheet;
+            self.visible_cells = match viewport {
+                Some(viewport) => viewport.cell_range(),
+                None => CellRange::empty(),
+            };
+            self.active_cell = self.active_sheet.active_cell().map(|cell| {
+                let active_cell_editor = Rc::new(RefCell::new(Editor::new(cell.value())));
+                (cell, active_cell_editor)
+            });
 
-        match (prior_rc, new_rc) {
-            (Some(prior), Some(new)) if prior != new => ensure_cell_visible(new),
-            _ => Command::none(),
+            let scroll_to = self.visible_cells.cells().next().map(scroll_to);
+            let ensure_visible = self
+                .active_cell
+                .as_ref()
+                .map(|(cell, _)| ensure_cell_visible(rc_of_cell(cell)));
+
+            match (scroll_to, ensure_visible) {
+                (None, None) => Command::none(),
+                (None, Some(ensure_visible)) => ensure_visible,
+                (Some(scroll_to), None) => scroll_to,
+                (Some(scroll_to), Some(ensure_visible)) => {
+                    Command::batch(vec![scroll_to, ensure_visible])
+                }
+            }
+        } else {
+            // View has switched to a new version of the same sheet
+            self.active_sheet = new_active_sheet;
+
+            let prior_rc = self.active_cell.as_ref().map(|(cell, _)| rc_of_cell(cell));
+            self.active_cell = self.active_sheet.active_cell().map(|cell| {
+                let active_cell_editor = Rc::new(RefCell::new(Editor::new(cell.value())));
+                (cell, active_cell_editor)
+            });
+            let new_rc = self.active_cell.as_ref().map(|(cell, _)| rc_of_cell(cell));
+
+            match (prior_rc, new_rc) {
+                (Some(prior), Some(new)) if prior != new => ensure_cell_visible(new),
+                _ => Command::none(),
+            }
         }
     }
 
@@ -449,7 +495,7 @@ impl ActiveSheetUi {
     }
 
     pub fn menu_paths(&self) -> menu::PathVec<Message> {
-        menu::PathVec::new()
+        let mut paths = menu::PathVec::new()
             .with(workpad_menu::new_blank_workpad(None))
             .with(workpad_menu::new_starter_workpad(None))
             .with(workpad_menu::show_properties(Some(
@@ -462,12 +508,31 @@ impl ActiveSheetUi {
                 Message::SheetShowProperties,
             )))
             .with(sheets_menu::new_sheet(Some(Message::SheetAdd)))
-            .with(sheets_menu::delete_sheet(Some(Message::SheetDelete)))
+            .with(sheets_menu::delete_sheet(Some(Message::SheetDelete)));
+
+        for sheet in self.active_sheet.workpad().sheets() {
+            let on_select = if sheet == self.active_sheet {
+                None
+            } else {
+                Some(Message::SetActiveSheet(sheet.id()))
+            };
+            paths = paths.with(sheets_menu::activate_sheet(
+                sheet.name().to_owned(),
+                on_select,
+            ));
+        }
+
+        paths
     }
 }
 
 pub fn ensure_cell_visible(cell: RowCol) -> Command<Message> {
     flexpad_grid::scroll::ensure_cell_visible(GRID_SCROLLABLE_ID.clone(), cell)
+        .map(Message::ViewportChanged)
+}
+
+pub fn scroll_to(cell: RowCol) -> Command<Message> {
+    flexpad_grid::scroll::scroll_to_cell(GRID_SCROLLABLE_ID.clone(), cell)
         .map(Message::ViewportChanged)
 }
 
@@ -515,6 +580,13 @@ mod sheets_menu {
         menu::root(t!("Menus.Sheets.Title"))
     }
 
+    fn activate_sheets<Message>() -> menu::PathToMenuSection<Message>
+    where
+        Message: Clone,
+    {
+        root().section("sheets")
+    }
+
     pub fn show_properties<Message>(on_select: Option<Message>) -> menu::Path<Message>
     where
         Message: Clone,
@@ -549,5 +621,12 @@ mod sheets_menu {
             Some(alt(key(keyboard::KeyCode::Delete))),
             on_select,
         )
+    }
+
+    pub fn activate_sheet<Message>(name: String, on_select: Option<Message>) -> menu::Path<Message>
+    where
+        Message: Clone,
+    {
+        menu::Path::new(activate_sheets(), name, None, on_select)
     }
 }

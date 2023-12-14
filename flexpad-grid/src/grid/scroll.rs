@@ -795,6 +795,12 @@ pub fn ensure_cell_visible(id: Id, cell: RowCol) -> Command<Viewport> {
     Command::widget(operation::ensure_cell_visible(id.0, cell))
 }
 
+/// Produces a [`Command`] that scrolls the [`GridScrollable`] with the given [`Id`]
+/// to ensure that a cell is available.
+pub fn scroll_to_cell(id: Id, cell: RowCol) -> Command<Viewport> {
+    Command::widget(operation::scroll_to_cell(id.0, cell))
+}
+
 /// Produces a [`Command`] that returns the viewport of the  [`GridScrollable`] with the given [`Id`].
 pub fn get_viewport(id: Id) -> Command<Viewport> {
     Command::widget(operation::get_viewport(id.0))
