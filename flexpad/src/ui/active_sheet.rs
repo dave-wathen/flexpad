@@ -306,24 +306,18 @@ impl ActiveSheetUi {
             grid = grid.push_row_head(RowHead::new(rw, text(row.name()).size(12).line_height(1.0)))
         }
 
+        let active_cell_rc = self.active_cell.as_ref().map(|(cell, _)| rc_of_cell(cell));
         for rc in self.visible_cells.cells() {
-            let RowCol {
-                row: rw,
-                column: cl,
-            } = rc;
-            if let Some((cell, _)) = &self.active_cell {
-                let rc = rc_of_cell(cell);
-                if rc.row != rw || rc.column != cl {
-                    let cell = active_sheet.cell(rw as usize, cl as usize);
-                    let ic = inactive_cell::InactiveCell::new(rc, cell.value())
-                        // TODO Set details from spreadsheet data
-                        .horizontal_alignment(alignment::Horizontal::Center)
-                        .vertical_alignment(alignment::Vertical::Center)
-                        .font_size(10.0);
+            if Some(rc) != active_cell_rc {
+                let cell = cell_by_rc(active_sheet, rc);
+                let ic = inactive_cell::InactiveCell::new(rc, cell.value())
+                    // TODO Set details from spreadsheet data
+                    .horizontal_alignment(alignment::Horizontal::Center)
+                    .vertical_alignment(alignment::Vertical::Center)
+                    .font_size(10.0);
 
-                    let grid_cell = GridCell::new((rw, cl), ic);
-                    grid = grid.push_cell(grid_cell);
-                }
+                let grid_cell = GridCell::new(rc, ic);
+                grid = grid.push_cell(grid_cell);
             };
         }
 
@@ -379,39 +373,16 @@ impl ActiveSheetUi {
             }
             Message::ActiveCellMove(mve) => {
                 debug!(target:"flexpad", %message);
-                let Some((active_cell, _)) = &self.active_cell else {
+                let Some((_, editor)) = &self.active_cell else {
                     unreachable!();
                 };
-                match apply_move(active_cell, mve) {
-                    Some((_new_rc, update_active_cell)) => Event::UpdateRequested(
-                        self.active_sheet.workpad().master(),
-                        update_active_cell,
-                    ),
-                    None => Event::None,
-                }
+                let mut editor = editor.borrow_mut();
+                let new_value = editor.is_editing().then(|| editor.end_editing());
+                self.update_value_and_move(new_value, mve)
             }
             Message::ActiveCellNewValue(ref new_value, mve) => {
                 debug!(target: "flexpad", %message);
-                let Some((cell, _)) = &self.active_cell else {
-                    unreachable!();
-                };
-                let update_cell_value = WorkpadUpdate::SheetSetCellValue {
-                    sheet_id: cell.sheet().id(),
-                    row_id: cell.row().id(),
-                    column_id: cell.column().id(),
-                    value: new_value.clone(),
-                };
-
-                match apply_move(cell, mve) {
-                    Some((_new_rc, update_active_cell)) => Event::UpdateRequested(
-                        self.active_sheet.workpad().master(),
-                        WorkpadUpdate::Multi(vec![update_cell_value, update_active_cell]),
-                    ),
-                    None => Event::UpdateRequested(
-                        self.active_sheet.workpad().master(),
-                        update_cell_value,
-                    ),
-                }
+                self.update_value_and_move(Some(new_value.clone()), mve)
             }
             Message::SheetShowProperties => {
                 Event::EditSheetPropertiesRequested(self.active_sheet.clone())
@@ -430,6 +401,32 @@ impl ActiveSheetUi {
             Message::SetActiveSheet(sheet_id) => Event::UpdateRequested(
                 self.active_sheet.workpad().master(),
                 WorkpadUpdate::SetActiveSheet { sheet_id },
+            ),
+        }
+    }
+
+    fn update_value_and_move(&self, new_value: Option<String>, mve: Move) -> Event {
+        let Some((cell, _)) = &self.active_cell else {
+            unreachable!();
+        };
+
+        let update_cell_value = new_value.map(|new_value| WorkpadUpdate::SheetSetCellValue {
+            sheet_id: cell.sheet().id(),
+            row_id: cell.row().id(),
+            column_id: cell.column().id(),
+            value: new_value,
+        });
+
+        let update_active_cell = apply_move(cell, mve).map(|(_, update)| update);
+
+        let master = self.active_sheet.workpad().master();
+        match (update_cell_value, update_active_cell) {
+            (None, None) => Event::None,
+            (None, Some(update_active_cell)) => Event::UpdateRequested(master, update_active_cell),
+            (Some(update_cell_value), None) => Event::UpdateRequested(master, update_cell_value),
+            (Some(update_cell_value), Some(update_active_cell)) => Event::UpdateRequested(
+                master,
+                WorkpadUpdate::Multi(vec![update_cell_value, update_active_cell]),
             ),
         }
     }
@@ -542,7 +539,7 @@ fn apply_move(active_cell: &Cell, mve: Move) -> Option<(RowCol, WorkpadUpdate)> 
     let new_rc = mve.apply(prior_rc, sheet.rows().count(), sheet.columns().count());
 
     if prior_rc != new_rc {
-        let new_cell = cell_by_rc(sheet, new_rc);
+        let new_cell = cell_by_rc(&sheet, new_rc);
 
         let update_active_cell = WorkpadUpdate::SheetSetActiveCell {
             sheet_id: new_cell.sheet().id(),
@@ -560,7 +557,7 @@ fn rc_of_cell(cell: &Cell) -> RowCol {
     RowCol::new(cell.row().index() as u32, cell.column().index() as u32)
 }
 
-fn cell_by_rc(sheet: Sheet, rc: RowCol) -> Cell {
+fn cell_by_rc(sheet: &Sheet, rc: RowCol) -> Cell {
     sheet.cell(rc.row as usize, rc.column as usize)
 }
 
