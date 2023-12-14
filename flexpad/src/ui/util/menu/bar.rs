@@ -56,16 +56,19 @@ where
     Renderer::Theme: StyleSheet,
 {
     fn tag(&self) -> tree::Tag {
-        tree::Tag::of::<MenuBarState>()
+        tree::Tag::of::<MenuBarState<Renderer::Paragraph>>()
     }
 
     fn state(&self) -> tree::State {
-        tree::State::new(MenuBarState::new())
+        let state: MenuBarState<Renderer::Paragraph> = MenuBarState::new();
+        tree::State::new(state)
     }
 
     fn diff(&self, tree: &mut Tree) {
         // Reset state if the tree is being rebuilt
-        let state = tree.state.downcast_mut::<MenuBarState>();
+        let state = tree
+            .state
+            .downcast_mut::<MenuBarState<Renderer::Paragraph>>();
         state.reset();
     }
 
@@ -79,53 +82,70 @@ where
 
     fn layout(
         &self,
-        _tree: &mut Tree,
+        tree: &mut Tree,
         renderer: &Renderer,
         limits: &iced::advanced::layout::Limits,
     ) -> iced::advanced::layout::Node {
+        let state = tree
+            .state
+            .downcast_mut::<MenuBarState<Renderer::Paragraph>>();
+
         let menubar_limits = limits
             .width(self.width)
             .height(self.height)
             .pad(MENUBAR_PADDING);
-
-        let mut chidren = vec![];
-        let mut width: f32 = 0.0;
-        let mut height: f32 = 0.0;
-        let mut x = MENUBAR_PADDING.left;
 
         let font = self.font.unwrap_or_else(|| renderer.default_font());
         let entry_limits = menubar_limits
             .width(Length::Shrink)
             .height(Length::Shrink)
             .pad(MENUBAR_ENTRY_PADDING);
+        let mut x = MENUBAR_PADDING.left;
 
-        for menu in self.roots.iter() {
-            let paragraph = Renderer::Paragraph::with_text(Text {
-                content: &menu.name,
-                bounds: Size::INFINITY,
-                size: TEXT_SIZE_MENU,
-                line_height: LineHeight::Absolute(TEXT_SIZE_MENU),
-                font,
-                horizontal_alignment: iced::alignment::Horizontal::Left,
-                vertical_alignment: iced::alignment::Vertical::Top,
-                shaping: text::Shaping::Advanced,
+        state.entries = self
+            .roots
+            .iter()
+            .map(|menu| {
+                let text = Renderer::Paragraph::with_text(Text {
+                    content: &menu.name,
+                    bounds: Size::INFINITY,
+                    size: TEXT_SIZE_MENU,
+                    line_height: LineHeight::Absolute(TEXT_SIZE_MENU),
+                    font,
+                    horizontal_alignment: iced::alignment::Horizontal::Center,
+                    vertical_alignment: iced::alignment::Vertical::Bottom,
+                    shaping: text::Shaping::Advanced,
+                });
+
+                let entry_position = Point::new(x, MENUBAR_PADDING.top);
+                let text_position =
+                    entry_position + Vector::new(MENUBAR_ENTRY_PADDING.left, MENUBAR_PADDING.top);
+
+                let text_size = text.min_bounds();
+                let text_bounds = Rectangle::new(text_position, text_size);
+
+                let entry_size = entry_limits.resolve(text_size).pad(MENUBAR_ENTRY_PADDING);
+                x += entry_size.width;
+                let entry_bounds = Rectangle::new(entry_position, entry_size);
+
+                EntryState {
+                    text,
+                    text_bounds,
+                    entry_bounds,
+                }
+            })
+            .collect();
+
+        let (width, height) = state
+            .entries
+            .iter()
+            .fold((0.0_f32, 0.0_f32), |(w, h), entry| {
+                let size = entry.entry_bounds.size();
+                (w + size.width, h.max(size.height))
             });
-            let text_size = paragraph.min_bounds();
-
-            let entry_size = entry_limits.resolve(text_size).pad(MENUBAR_ENTRY_PADDING);
-            let entry_position = Point::new(x, MENUBAR_PADDING.top);
-            x += entry_size.width;
-            width += entry_size.width;
-            height = height.max(entry_size.height);
-
-            let mut entry_layout = Node::new(entry_size);
-            entry_layout.move_to(entry_position);
-            chidren.push(entry_layout);
-        }
         let content_size = Size::new(width, height);
 
-        let menubar_size = menubar_limits.resolve(content_size).pad(MENUBAR_PADDING);
-        Node::with_children(menubar_size, chidren)
+        Node::new(menubar_limits.resolve(content_size).pad(MENUBAR_PADDING))
     }
 
     fn draw(
@@ -141,7 +161,9 @@ where
         let bounds = layout.bounds();
         let style: <Renderer::Theme as StyleSheet>::Style = Default::default();
         let menu_bar_appearance = theme.menu_bar(&style);
-        let state = tree.state.downcast_ref::<MenuBarState>();
+        let state = tree
+            .state
+            .downcast_ref::<MenuBarState<Renderer::Paragraph>>();
 
         // Background
         renderer.fill_quad(
@@ -154,8 +176,10 @@ where
             menu_bar_appearance.background,
         );
 
-        for (index, (menu, layout)) in self.roots.iter().zip(layout.children()).enumerate() {
-            let bounds = layout.bounds();
+        let translation = Vector::new(bounds.x, bounds.y);
+        for (index, entry) in state.entries.iter().enumerate() {
+            let entry_bounds = entry.entry_bounds + translation;
+            let text_bounds = entry.text_bounds + translation;
 
             let item_appearance = match state.active.is_open_at(index) {
                 true => theme.selected_menu_bar_item(&style),
@@ -165,30 +189,12 @@ where
             // Background
             renderer.fill_quad(
                 renderer::Quad {
-                    bounds,
+                    bounds: entry_bounds,
                     border_radius: item_appearance.border_radius.into(),
                     border_width: item_appearance.border_width,
                     border_color: item_appearance.border_color,
                 },
                 item_appearance.background,
-            );
-
-            let text_size = Size::new(
-                bounds.size().width - MENUBAR_ENTRY_PADDING.horizontal(),
-                bounds.size().height - MENUBAR_ENTRY_PADDING.vertical(),
-            );
-
-            let text_bounds = Rectangle::new(
-                Point::new(
-                    bounds.x + MENUBAR_ENTRY_PADDING.left,
-                    bounds.y + MENUBAR_ENTRY_PADDING.top,
-                ),
-                text_size,
-            );
-
-            let text_position = Point::new(
-                text_bounds.position().x + text_size.width / 2.0,
-                text_bounds.position().y + text_size.height,
             );
 
             renderer.fill_quad(
@@ -201,21 +207,12 @@ where
                 item_appearance.background,
             );
 
-            let font = self.font.unwrap_or_else(|| renderer.default_font());
-            renderer.fill_text(
-                Text {
-                    content: &menu.name,
-                    font,
-                    bounds: text_bounds.size(),
-                    size: TEXT_SIZE_MENU,
-                    line_height: LineHeight::Absolute(TEXT_SIZE_MENU),
-                    horizontal_alignment: iced::alignment::Horizontal::Center,
-                    vertical_alignment: iced::alignment::Vertical::Bottom,
-                    shaping: text::Shaping::Advanced,
-                },
-                text_position,
+            renderer.fill_paragraph(
+                &entry.text,
+                text_bounds.position()
+                    + Vector::new(entry.text_bounds.width / 2.0, entry.text_bounds.height),
                 item_appearance.text_color,
-                text_bounds,
+                entry_bounds,
             );
         }
     }
@@ -236,7 +233,9 @@ where
             return event::Status::Ignored;
         }
 
-        let state = tree.state.downcast_mut::<MenuBarState>();
+        let state = tree
+            .state
+            .downcast_mut::<MenuBarState<Renderer::Paragraph>>();
 
         match event {
             Event::Keyboard(key_event) => match key_event {
@@ -292,9 +291,13 @@ where
             Event::Mouse(mouse::Event::CursorMoved { .. })
             | Event::Touch(touch::Event::FingerMoved { .. }) => {
                 let bounds = layout.bounds();
+                let translation = Vector::new(bounds.x, bounds.y);
 
                 if cursor.is_over(bounds) {
-                    let over = layout.children().position(|n| cursor.is_over(n.bounds()));
+                    let over = state
+                        .entries
+                        .iter()
+                        .position(|s| cursor.is_over(s.entry_bounds + translation));
                     match over {
                         Some(over) => match state.active {
                             Activation::Open(active) if active != over => {
@@ -325,10 +328,15 @@ where
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
             | Event::Touch(touch::Event::FingerPressed { .. }) => {
                 let bounds = layout.bounds();
+                let translation = Vector::new(bounds.x, bounds.y);
 
                 if cursor.is_over(bounds) && !state.active.is_open() {
                     state.pressed = Some((cursor.position().unwrap(), Instant::now()));
-                    if let Some(over) = layout.children().position(|n| cursor.is_over(n.bounds())) {
+                    if let Some(over) = state
+                        .entries
+                        .iter()
+                        .position(|s| cursor.is_over(s.entry_bounds + translation))
+                    {
                         if !state.active.is_open_at(over) {
                             state.active = Activation::Open(over);
                             state.menu_states.clear_after(0);
@@ -374,23 +382,20 @@ where
         layout: Layout<'_>,
         renderer: &Renderer,
     ) -> Option<overlay::Element<'b, Message, Renderer>> {
-        let state = tree.state.downcast_ref::<MenuBarState>();
+        let state = tree
+            .state
+            .downcast_ref::<MenuBarState<Renderer::Paragraph>>();
         if state.menu_states.depth() == 0 {
             return None;
         }
 
         let mut elements = vec![];
 
+        let translation = Vector::new(layout.bounds().x, layout.bounds().y);
         let mut menu = state.active.map(|i| &self.roots[i]);
         let mut position = state
             .active
-            .map(|i| {
-                layout
-                    .children()
-                    .nth(i)
-                    .expect("Expected menubar entry layout")
-            })
-            .map(|l| l.bounds())
+            .map(|i| state.entries[i].entry_bounds + translation)
             .map(|b| b.position() + Vector::new(0.0, b.size().height))
             .unwrap_or(Point::ORIGIN);
         let mut depth = 0;
@@ -484,18 +489,27 @@ impl Activation {
 }
 
 #[derive(Debug)]
-struct MenuBarState {
+struct EntryState<P: Paragraph> {
+    text: P,
+    text_bounds: Rectangle,
+    entry_bounds: Rectangle,
+}
+
+#[derive(Debug)]
+struct MenuBarState<P: Paragraph> {
     active: Activation,
     menu_states: Rc<MenuStates>,
     pressed: Option<(Point, Instant)>,
+    entries: Vec<EntryState<P>>,
 }
 
-impl MenuBarState {
+impl<P: Paragraph> MenuBarState<P> {
     fn new() -> Self {
         Self {
             active: Default::default(),
             menu_states: Rc::new(MenuStates::new()),
             pressed: None,
+            entries: vec![],
         }
     }
 
