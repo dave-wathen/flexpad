@@ -8,8 +8,8 @@ use iced::{
     advanced::{mouse::click, widget},
     alignment, theme,
     widget::{
-        button, column, horizontal_rule, horizontal_space, image, row, text, vertical_rule,
-        vertical_space,
+        button, column, container, horizontal_rule, horizontal_space, image, row, text,
+        vertical_rule,
     },
     Alignment, Color, Command, Element, Length, Subscription,
 };
@@ -18,10 +18,14 @@ use rust_i18n::t;
 use tracing::debug;
 
 use crate::{
-    model::workpad::{Cell, Sheet, SheetId, Workpad, WorkpadMaster, WorkpadUpdate},
+    model::workpad::{Cell, Sheet, SheetId, Version, Workpad, WorkpadMaster, WorkpadUpdate},
     ui::{
         menu,
-        util::{images, SPACE_S},
+        style::TextBarStyle,
+        util::{
+            images, SPACE_S, TOOLBAR_BUTTON_HEIGHT, TOOLBAR_END_SPACE, TOOLBAR_PADDING,
+            TOOLBAR_SEPARATOR_SIZE,
+        },
         widget::{
             active_cell::{self, Editor},
             inactive_cell,
@@ -29,6 +33,8 @@ use crate::{
         workpad_menu,
     },
 };
+
+use super::edit_menu;
 
 static FORMULA_BAR_ID: Lazy<active_cell::Id> = Lazy::new(active_cell::Id::unique);
 static ACTIVE_CELL_ID: Lazy<active_cell::Id> = Lazy::new(active_cell::Id::unique);
@@ -43,7 +49,6 @@ thread_local! {
 
 #[derive(Debug, Clone)]
 pub enum Message {
-    NoOp, // Temporary
     Focus(widget::Id),
     ViewportChanged(Viewport),
     ActiveCellMove(Move),
@@ -55,13 +60,13 @@ pub enum Message {
     PadClose,
     PadShowProperties,
     SetActiveSheet(SheetId),
+    GotoVersion(Version),
 }
 
 impl std::fmt::Display for Message {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("active_sheet::Message::")?;
         match self {
-            Self::NoOp => write!(f, "NoOp"),
             Self::SheetShowDetails => write!(f, "SheetShowDetails"),
             Self::Focus(id) => write!(f, "Focus({id:?})"),
             Self::ViewportChanged(viewport) => write!(f, "ViewportChanged({viewport})"),
@@ -73,6 +78,7 @@ impl std::fmt::Display for Message {
             Self::PadShowProperties => write!(f, "PadShowProperties"),
             Self::PadClose => write!(f, "PadClose"),
             Self::SetActiveSheet(id) => write!(f, "SetActiveSheet({id})"),
+            Self::GotoVersion(version) => write!(f, "GotoVersion({version})"),
         }
     }
 }
@@ -177,8 +183,6 @@ impl ActiveSheetUi {
     pub fn view(&self) -> iced::Element<'_, Message> {
         column![
             self.toolbar_view(),
-            vertical_space(SPACE_S),
-            horizontal_rule(3),
             self.sheet_and_formula_row_view(),
             self.grid_view(),
         ]
@@ -187,24 +191,31 @@ impl ActiveSheetUi {
     }
 
     fn toolbar_view(&self) -> iced::Element<'_, Message> {
-        let button = |img, _msg| {
+        let button = |img, msg| {
             button(image(img))
                 .width(Length::Shrink)
-                .height(20)
-                .padding(2)
-                .style(theme::Button::Secondary)
+                .height(TOOLBAR_BUTTON_HEIGHT)
+                .style(theme::Button::Text)
+                .on_press_maybe(msg)
         };
 
-        row![
-            button(images::undo(), Message::NoOp),
-            button(images::redo(), Message::NoOp),
-            button(images::print(), Message::NoOp),
-            vertical_rule(3),
-            button(images::settings(), Message::NoOp),
+        let (undo_to, redo_to) = surrounding_versions(&self.active_sheet.workpad());
+
+        let buttons = row![
+            horizontal_space(TOOLBAR_END_SPACE),
+            button(images::undo(), undo_to.map(Message::GotoVersion)),
+            button(images::redo(), redo_to.map(Message::GotoVersion)),
+            button(images::print(), None),
+            vertical_rule(TOOLBAR_SEPARATOR_SIZE).style(TextBarStyle),
+            button(images::settings(), None),
+            horizontal_space(TOOLBAR_END_SPACE),
         ]
-        .height(20)
-        .spacing(SPACE_S)
-        .into()
+        .height(TOOLBAR_BUTTON_HEIGHT);
+
+        container(container(buttons).width(Length::Fill).style(TextBarStyle))
+            .width(Length::Fill)
+            .padding(TOOLBAR_PADDING)
+            .into()
     }
 
     fn sheet_and_formula_row_view(&self) -> iced::Element<'_, Message> {
@@ -225,7 +236,7 @@ impl ActiveSheetUi {
         .spacing(SPACE_S)
         .into();
 
-        match self.active_cell {
+        let controls = match self.active_cell {
             Some((_, ref editor)) => {
                 let Some((active_cell, _)) = &self.active_cell else {
                     unreachable!();
@@ -266,8 +277,9 @@ impl ActiveSheetUi {
             }
         }
         .height(20)
-        .spacing(SPACE_S)
-        .into()
+        .spacing(SPACE_S);
+
+        column![horizontal_rule(3), controls].into()
     }
 
     fn grid_view(&self) -> Element<'_, Message> {
@@ -348,7 +360,6 @@ impl ActiveSheetUi {
 
     pub fn update(&mut self, message: Message) -> Event {
         match message {
-            Message::NoOp => Event::None,
             Message::SheetShowDetails => {
                 debug!(target: "flexpad", %message);
                 dbg!("Show sheet details");
@@ -401,6 +412,10 @@ impl ActiveSheetUi {
             Message::SetActiveSheet(sheet_id) => Event::UpdateRequested(
                 self.active_sheet.workpad().master(),
                 WorkpadUpdate::SetActiveSheet { sheet_id },
+            ),
+            Message::GotoVersion(version) => Event::UpdateRequested(
+                self.active_sheet.workpad().master(),
+                WorkpadUpdate::SetVersion { version },
             ),
         }
     }
@@ -492,6 +507,8 @@ impl ActiveSheetUi {
     }
 
     pub fn menu_paths(&self) -> menu::PathVec<Message> {
+        let (undo_to, redo_to) = surrounding_versions(&self.active_sheet.workpad());
+
         let mut paths = menu::PathVec::new()
             .with(workpad_menu::new_blank_workpad(None))
             .with(workpad_menu::new_starter_workpad(None))
@@ -501,6 +518,8 @@ impl ActiveSheetUi {
             // TODO No actual delete (since no actual save) at present
             .with(workpad_menu::delete_pad(Some(Message::PadClose)))
             .with(workpad_menu::close_pad(Some(Message::PadClose)))
+            .with(edit_menu::undo(undo_to.map(Message::GotoVersion)))
+            .with(edit_menu::redo(redo_to.map(Message::GotoVersion)))
             .with(sheets_menu::show_properties(Some(
                 Message::SheetShowProperties,
             )))
@@ -521,6 +540,13 @@ impl ActiveSheetUi {
 
         paths
     }
+}
+
+fn surrounding_versions(pad: &Workpad) -> (Option<Version>, Option<Version>) {
+    (
+        pad.backward_versions().next().map(|version| version.0),
+        pad.forward_versions().next().map(|version| version.0),
+    )
 }
 
 pub fn ensure_cell_visible(cell: RowCol) -> Command<Message> {

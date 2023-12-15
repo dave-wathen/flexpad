@@ -57,7 +57,7 @@ use crate::display_iter;
 pub type UpdateResult = Result<Workpad, UpdateError>;
 
 /// The version of a workpad
-type Version = u32;
+pub type Version = u32;
 
 /// The type which underlies Id types
 type IdBase = u32;
@@ -123,10 +123,6 @@ impl WorkpadMaster {
         let master_data = WorkpadMasterData {
             id: Uuid::new_v4().simple().to_string(),
             transaction: RwLock::new(None),
-            // history: RwLock::new(vec![HistoryEntry {
-            //     prior_version: None,
-            //     update: WorkpadUpdate::NewWorkpad,
-            // }]),
             history: Default::default(),
             active_version: RwLock::new(0),
             next_part_id: Default::default(),
@@ -185,16 +181,31 @@ impl WorkpadMaster {
     /// [`WorkpadUpdate`] applied.  The generated version becomes the
     /// active version of the workpad.
     pub fn update(&mut self, update: WorkpadUpdate) -> UpdateResult {
-        let tx = self.data.tx_begin();
-
-        match self.apply_update(&update, &tx) {
-            Ok(_) => {
-                self.data.tx_commit(&tx, update);
+        if let WorkpadUpdate::SetVersion { version } = update {
+            let history = self.data.history.read().unwrap();
+            if (version as usize) < history.len() {
+                self.data.set_version(version);
                 Ok(self.active_version())
+            } else {
+                Err(UpdateError {
+                    kind: ErrorKind::MissingVersion(version),
+                    update: update.clone(),
+                    workpad_id: self.data.id.clone(),
+                    workpad_version: *self.data.active_version.read().unwrap(),
+                })
             }
-            Err(err) => {
-                self.data.tx_rollback(&tx);
-                Err(err)
+        } else {
+            let tx = self.data.tx_begin();
+
+            match self.apply_update(&update, &tx) {
+                Ok(_) => {
+                    self.data.tx_commit(&tx, update);
+                    Ok(self.active_version())
+                }
+                Err(err) => {
+                    self.data.tx_rollback(&tx);
+                    Err(err)
+                }
             }
         }
     }
@@ -226,6 +237,7 @@ impl WorkpadMaster {
                 }
             }
             WorkpadUpdate::NewWorkpad => panic!("NewWorkpad not allowed for existing Workpad"),
+            WorkpadUpdate::SetVersion { .. } => unreachable!(),
             WorkpadUpdate::WorkpadSetProperties {
                 ref new_name,
                 ref new_author,
@@ -438,6 +450,8 @@ pub enum WorkpadUpdate {
     Multi(Vec<WorkpadUpdate>),
     /// Used to represent the creation of a workpad.  See [`WorkpadMaster::new`].
     NewWorkpad,
+    /// Instruction to change the active version of the workpad
+    SetVersion { version: Version },
     /// Instruction to change the name of the workpad
     WorkpadSetProperties {
         new_name: String,
@@ -482,6 +496,7 @@ impl std::fmt::Display for WorkpadUpdate {
             let variant = match self {
                 WU::Multi(_) => unreachable!(),
                 WU::NewWorkpad => "NewWorkpad",
+                WU::SetVersion { .. } => "SetVersion",
                 WU::WorkpadSetProperties { .. } => "WorkpadSetProperties",
                 WU::SetActiveSheet { .. } => "SetActiveSheet",
                 WU::SheetAdd { .. } => "SheetAdd",
@@ -522,6 +537,7 @@ impl Error for UpdateError {}
 #[derive(Debug, Clone)]
 pub enum ErrorKind {
     InvalidName(String),
+    MissingVersion(Version),
     MissingSheet(SheetId),
     MissingRow(RowId),
     MissingColumn(ColumnId),
@@ -531,19 +547,22 @@ pub enum ErrorKind {
 impl std::fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ErrorKind::InvalidName(name) => {
+            Self::InvalidName(name) => {
                 f.write_str(&t!("UpdateError.InvalidName").replace("{name}", name))
             }
-            ErrorKind::MissingSheet(id) => {
+            Self::MissingVersion(version) => f.write_str(
+                &t!("UpdateError.MissingVersion").replace("{version}", &version.to_string()),
+            ),
+            Self::MissingSheet(id) => {
                 f.write_str(&t!("UpdateError.MissingId").replace("{id}", &id.to_string()))
             }
-            ErrorKind::MissingRow(id) => {
+            Self::MissingRow(id) => {
                 f.write_str(&t!("UpdateError.MissingId").replace("{id}", &id.to_string()))
             }
-            ErrorKind::MissingColumn(id) => {
+            Self::MissingColumn(id) => {
                 f.write_str(&t!("UpdateError.MissingId").replace("{id}", &id.to_string()))
             }
-            ErrorKind::DuplicateName(name) => {
+            Self::DuplicateName(name) => {
                 f.write_str(&t!("UpdateError.DuplicateName").replace("{name}", name))
             }
         }
@@ -631,7 +650,7 @@ impl WorkpadMasterData {
             prior_version,
             update,
         });
-        *self.active_version.write().unwrap() = tx.new_version;
+        self.set_version(tx.new_version);
         self_tx.take();
     }
 
@@ -652,6 +671,10 @@ impl WorkpadMasterData {
         self.sheets_cells_idx.tx_rollback();
 
         self_tx.take();
+    }
+
+    fn set_version(&self, new_version: Version) {
+        *self.active_version.write().unwrap() = new_version;
     }
 
     /// Return the currently active version
@@ -1675,21 +1698,9 @@ mod tests {
 
         // Assert sheets is: ["Sheet 1", "Sheet 2", "Sheet 3"] and "Sheet 1" is the active sheet
         let mut sheets = pad.sheets();
-        match sheets.next() {
-            Some(s) => {
-                assert_eq!("Sheet 1", s.name());
-                assert_eq!(pad.active_sheet().unwrap(), s);
-            }
-            None => panic!(r#"Expected: "Sheet 1""#),
-        };
-        match sheets.next() {
-            Some(s) => assert_eq!("Sheet 2", s.name()),
-            None => panic!(r#"Expected: "Sheet 2""#),
-        };
-        match sheets.next() {
-            Some(s) => assert_eq!("Sheet 3", s.name()),
-            None => panic!(r#"Expected: "Sheet 3""#),
-        };
+        assert_next_sheet_is_active(&mut sheets, "Sheet 1", &pad);
+        assert_next_sheet(&mut sheets, "Sheet 2");
+        assert_next_sheet(&mut sheets, "Sheet 3");
         assert!(sheets.next().is_none());
 
         // Assert now at version 0 created by "New Workpad""
@@ -1720,10 +1731,7 @@ mod tests {
 
         // Assert backward_versions is [(0, "New Workpad"]
         let mut back_vers = pad.backward_versions();
-        match back_vers.next() {
-            Some(ver) => assert!(ver_is(ver, 0, "New Workpad")),
-            None => panic!(r#"Expected (0, "New Workpad")"#),
-        };
+        assert_next_ver(&mut back_vers, 0, "New Workpad");
         assert!(back_vers.next().is_none());
 
         // Assert no forward_versions
@@ -1763,23 +1771,9 @@ mod tests {
 
         // Assert sheets is: ["Sheet 1", "Sheet 2", "Sheet 3"] and "Sheet 2" is the active sheet
         let mut sheets = pad.sheets();
-        match sheets.next() {
-            Some(s) => {
-                assert_eq!("Sheet 1", s.name());
-            }
-            None => panic!(r#"Expected: "Sheet 1""#),
-        };
-        match sheets.next() {
-            Some(s) => {
-                assert_eq!("Sheet 2", s.name());
-                assert_eq!(pad.active_sheet().unwrap(), s);
-            }
-            None => panic!(r#"Expected: "Sheet 2""#),
-        };
-        match sheets.next() {
-            Some(s) => assert_eq!("Sheet 3", s.name()),
-            None => panic!(r#"Expected: "Sheet 3""#),
-        };
+        assert_next_sheet(&mut sheets, "Sheet 1");
+        assert_next_sheet_is_active(&mut sheets, "Sheet 2", &pad);
+        assert_next_sheet(&mut sheets, "Sheet 3");
         assert!(sheets.next().is_none());
 
         // Assert now at version 1 created by "Set Active Sheet""
@@ -1787,10 +1781,7 @@ mod tests {
 
         // Assert backward_versions is [(0, "New Workpad"]
         let mut back_vers = pad.backward_versions();
-        match back_vers.next() {
-            Some(ver) => assert!(ver_is(ver, 0, "New Workpad")),
-            None => panic!(r#"Expected (0, "New Workpad")"#),
-        };
+        assert_next_ver(&mut back_vers, 0, "New Workpad");
         assert!(back_vers.next().is_none());
 
         // Assert no forward_versions
@@ -1824,17 +1815,8 @@ mod tests {
 
         // Assert sheets is: ["Sheet 2", "Sheet 3"] and "Sheet 2" is now the active sheet
         let mut sheets = pad.sheets();
-        match sheets.next() {
-            Some(s) => {
-                assert_eq!("Sheet 2", s.name());
-                assert_eq!(pad.active_sheet().unwrap(), s);
-            }
-            None => panic!(r#"Expected: "Sheet 2""#),
-        };
-        match sheets.next() {
-            Some(s) => assert_eq!("Sheet 3", s.name()),
-            None => panic!(r#"Expected: "Sheet 3""#),
-        };
+        assert_next_sheet_is_active(&mut sheets, "Sheet 2", &pad);
+        assert_next_sheet(&mut sheets, "Sheet 3");
         assert!(sheets.next().is_none());
 
         // Assert now at version 1 created by "Delete Sheet""
@@ -1842,10 +1824,7 @@ mod tests {
 
         // Assert backward_versions is [(0, "New Workpad"]
         let mut back_vers = pad.backward_versions();
-        match back_vers.next() {
-            Some(ver) => assert!(ver_is(ver, 0, "New Workpad")),
-            None => panic!(r#"Expected (0, "New Workpad")"#),
-        };
+        assert_next_ver(&mut back_vers, 0, "New Workpad");
         assert!(back_vers.next().is_none());
 
         // Assert no forward_versions
@@ -1864,17 +1843,8 @@ mod tests {
 
         // Assert sheets is: ["Sheet 1", "Sheet 3"] and "Sheet 1" is still the active sheet
         let mut sheets = pad.sheets();
-        match sheets.next() {
-            Some(s) => {
-                assert_eq!("Sheet 1", s.name());
-                assert_eq!(pad.active_sheet().unwrap(), s);
-            }
-            None => panic!(r#"Expected: "Sheet 1""#),
-        };
-        match sheets.next() {
-            Some(s) => assert_eq!("Sheet 3", s.name()),
-            None => panic!(r#"Expected: "Sheet 3""#),
-        };
+        assert_next_sheet_is_active(&mut sheets, "Sheet 1", &pad);
+        assert_next_sheet(&mut sheets, "Sheet 3");
         assert!(sheets.next().is_none());
 
         // Assert now at version 1 created by "Delete Sheet""
@@ -1882,10 +1852,7 @@ mod tests {
 
         // Assert backward_versions is [(0, "New Workpad"]
         let mut back_vers = pad.backward_versions();
-        match back_vers.next() {
-            Some(ver) => assert!(ver_is(ver, 0, "New Workpad")),
-            None => panic!(r#"Expected (0, "New Workpad")"#),
-        };
+        assert_next_ver(&mut back_vers, 0, "New Workpad");
         assert!(back_vers.next().is_none());
 
         // Assert no forward_versions
@@ -1921,13 +1888,7 @@ mod tests {
 
         // Assert sheets is: ["New 1"] and "New 1" is the active sheet
         let mut sheets = pad.sheets();
-        match sheets.next() {
-            Some(s) => {
-                assert_eq!("New 1", s.name());
-                assert_eq!(pad.active_sheet().unwrap(), s);
-            }
-            None => panic!(r#"Expected: "New 1""#),
-        };
+        assert_next_sheet_is_active(&mut sheets, "New 1", &pad);
         assert!(sheets.next().is_none());
 
         // Add "New 2"
@@ -1940,17 +1901,8 @@ mod tests {
 
         // Assert sheets is: ["New 1", "New 2"] and "New 2" is now the active sheet
         let mut sheets = pad.sheets();
-        match sheets.next() {
-            Some(s) => assert_eq!("New 1", s.name()),
-            None => panic!(r#"Expected: "New 1""#),
-        };
-        match sheets.next() {
-            Some(s) => {
-                assert_eq!("New 2", s.name());
-                assert_eq!(pad.active_sheet().unwrap(), s);
-            }
-            None => panic!(r#"Expected: "New 2""#),
-        };
+        assert_next_sheet(&mut sheets, "New 1");
+        assert_next_sheet_is_active(&mut sheets, "New 2", &pad);
         assert!(sheets.next().is_none());
 
         // Assert now at version 2 created by "Add Sheet""
@@ -1958,14 +1910,8 @@ mod tests {
 
         // Assert backward_versions is [(1, "Add Sheet"), (0, "New Workpad"]
         let mut back_vers = pad.backward_versions();
-        match back_vers.next() {
-            Some(ver) => assert!(ver_is(ver, 1, "Add Sheet")),
-            None => panic!(r#"Expected (1, "Add Sheet")"#),
-        };
-        match back_vers.next() {
-            Some(ver) => assert!(ver_is(ver, 0, "New Workpad")),
-            None => panic!(r#"Expected (0, "New Workpad")"#),
-        };
+        assert_next_ver(&mut back_vers, 1, "Add Sheet");
+        assert_next_ver(&mut back_vers, 0, "New Workpad");
         assert!(back_vers.next().is_none());
 
         // Assert no forward_versions
@@ -2025,21 +1971,9 @@ mod tests {
 
         // Assert sheets is: ["Test Sheet", "Sheet 2", "Sheet 3"] and "Test Sheet" is still the (renamed) active sheet
         let mut sheets = pad.sheets();
-        match sheets.next() {
-            Some(s) => {
-                assert_eq!("Test Sheet", s.name());
-                assert_eq!(pad.active_sheet().unwrap(), s);
-            }
-            None => panic!(r#"Expected: "Test Sheet""#),
-        };
-        match sheets.next() {
-            Some(s) => assert_eq!("Sheet 2", s.name()),
-            None => panic!(r#"Expected: "Sheet 2""#),
-        };
-        match sheets.next() {
-            Some(s) => assert_eq!("Sheet 3", s.name()),
-            None => panic!(r#"Expected: "Sheet 3""#),
-        };
+        assert_next_sheet_is_active(&mut sheets, "Test Sheet", &pad);
+        assert_next_sheet(&mut sheets, "Sheet 2");
+        assert_next_sheet(&mut sheets, "Sheet 3");
         assert!(sheets.next().is_none());
 
         // Assert now at version 1 created by "Set Sheet Properties""
@@ -2047,10 +1981,7 @@ mod tests {
 
         // Assert backward_versions is [(0, "New Workpad"]
         let mut back_vers = pad.backward_versions();
-        match back_vers.next() {
-            Some(ver) => assert!(ver_is(ver, 0, "New Workpad")),
-            None => panic!(r#"Expected (0, "New Workpad")"#),
-        };
+        assert_next_ver(&mut back_vers, 0, "New Workpad");
         assert!(back_vers.next().is_none());
 
         // Assert no forward_versions
@@ -2110,21 +2041,9 @@ mod tests {
 
         // Assert sheets is: ["Sheet 1", "Sheet 2", "Sheet 3"] and "Sheet 1" is still the active sheet
         let mut sheets = pad.sheets();
-        match sheets.next() {
-            Some(s) => {
-                assert_eq!("Sheet 1", s.name());
-                assert_eq!(pad.active_sheet().unwrap(), s);
-            }
-            None => panic!(r#"Expected: "Sheet 1""#),
-        };
-        match sheets.next() {
-            Some(s) => assert_eq!("Sheet 2", s.name()),
-            None => panic!(r#"Expected: "Sheet 2""#),
-        };
-        match sheets.next() {
-            Some(s) => assert_eq!("Sheet 3", s.name()),
-            None => panic!(r#"Expected: "Sheet 3""#),
-        };
+        assert_next_sheet_is_active(&mut sheets, "Sheet 1", &pad);
+        assert_next_sheet(&mut sheets, "Sheet 2");
+        assert_next_sheet(&mut sheets, "Sheet 3");
         assert!(sheets.next().is_none());
     }
 
@@ -2198,22 +2117,13 @@ mod tests {
         }
 
         // Assert now at version 3 created by "Set Active Cell""
-        assert!(ver_is(pad.version(), 3, "Set Sheet Active Cell"),);
+        assert!(ver_is(pad.version(), 3, "Set Sheet Active Cell"));
 
         // Assert backward_versions is [(2, "Set Sheet Active Cell"), (1, "Set Sheet Active Cell"), (0, "New Workpad")]
         let mut back_vers = pad.backward_versions();
-        match back_vers.next() {
-            Some(ver) => assert!(ver_is(ver, 2, "Set Sheet Active Cell")),
-            None => panic!(r#"Expected (2, "Set Sheet Active Cell")"#),
-        };
-        match back_vers.next() {
-            Some(ver) => assert!(ver_is(ver, 1, "Set Sheet Active Cell")),
-            None => panic!(r#"Expected (1, "Set Sheet Active Cell")"#),
-        };
-        match back_vers.next() {
-            Some(ver) => assert!(ver_is(ver, 0, "New Workpad")),
-            None => panic!(r#"Expected (0, "New Workpad")"#),
-        };
+        assert_next_ver(&mut back_vers, 2, "Set Sheet Active Cell");
+        assert_next_ver(&mut back_vers, 1, "Set Sheet Active Cell");
+        assert_next_ver(&mut back_vers, 0, "New Workpad");
         assert!(back_vers.next().is_none());
 
         // Assert no forward_versions
@@ -2310,10 +2220,7 @@ mod tests {
 
         // Assert backward_versions is [(0, "New Workpad")]
         let mut back_vers = pad.backward_versions();
-        match back_vers.next() {
-            Some(ver) => assert!(ver_is(ver, 0, "New Workpad")),
-            None => panic!(r#"Expected (0, "New Workpad")"#),
-        };
+        assert_next_ver(&mut back_vers, 0, "New Workpad");
         assert!(back_vers.next().is_none());
 
         // Assert no forward_versions
@@ -2437,10 +2344,7 @@ mod tests {
 
         // Assert backward_versions is [(0, "New Workpad")]
         let mut back_vers = pad.backward_versions();
-        match back_vers.next() {
-            Some(ver) => assert!(ver_is(ver, 0, "New Workpad")),
-            None => panic!(r#"Expected (0, "New Workpad")"#),
-        };
+        assert_next_ver(&mut back_vers, 0, "New Workpad");
         assert!(back_vers.next().is_none());
 
         // Assert no forward_versions
@@ -2486,10 +2390,7 @@ mod tests {
 
         // Assert backward_versions is [(0, "New Workpad")]
         let mut back_vers = pad.backward_versions();
-        match back_vers.next() {
-            Some(ver) => assert!(ver_is(ver, 0, "New Workpad")),
-            None => panic!(r#"Expected (0, "New Workpad")"#),
-        };
+        assert_next_ver(&mut back_vers, 0, "New Workpad");
         assert!(back_vers.next().is_none());
 
         // Assert no forward_versions
@@ -2532,14 +2433,134 @@ mod tests {
         assert!(sheet.cell(0, 0).value().is_empty());
 
         // Assert still at version 0 created by "New Workpad""
-        assert!(ver_is(pad.version(), 0, "New Workpad"),);
+        assert!(ver_is(pad.version(), 0, "New Workpad"));
 
         // Assert no backward_versions and no forward_versions
         assert!(pad.backward_versions().next().is_none());
         assert!(pad.forward_versions().next().is_none());
     }
 
+    #[test]
+    fn switching_versions() {
+        let mut master = WorkpadMaster::new_starter();
+
+        let sheet = master
+            .active_version()
+            .active_sheet()
+            .expect("Starter should have an active sheet");
+        let cell = sheet.cell(0, 0);
+        let mut set_value = |value| {
+            master
+                .update(WorkpadUpdate::SheetSetCellValue {
+                    sheet_id: sheet.id(),
+                    row_id: cell.row().id(),
+                    column_id: cell.column().id(),
+                    value,
+                })
+                .expect("Update should succeed")
+        };
+
+        // ================================================================================
+        // Generate versions 1 & 2
+        // ================================================================================
+        let pad = set_value(String::from("A"));
+        assert!(ver_is(pad.version(), 1, "Set Sheet Cell Value"));
+        assert_eq!("A", pad.active_sheet().unwrap().cell(0, 0).value());
+
+        let pad = set_value(String::from("B"));
+        assert!(ver_is(pad.version(), 2, "Set Sheet Cell Value"));
+        assert_eq!("B", pad.active_sheet().unwrap().cell(0, 0).value());
+
+        // ================================================================================
+        // Switch to version 1
+        // ================================================================================
+        let pad = pad
+            .master()
+            .update(WorkpadUpdate::SetVersion { version: 1 })
+            .expect("Update should succeed");
+        assert!(ver_is(pad.version(), 1, "Set Sheet Cell Value"));
+        assert_eq!("A", pad.active_sheet().unwrap().cell(0, 0).value());
+
+        // Assert backward_versions is [(0, "New Workpad")]
+        let mut back_vers = pad.backward_versions();
+        assert_next_ver(&mut back_vers, 0, "New Workpad");
+        assert!(back_vers.next().is_none());
+
+        // Assert forward_versions is [(2, "Set Sheet Cell Value")]
+        let mut forth_vers = pad.forward_versions();
+        assert_next_ver(&mut forth_vers, 2, "Set Sheet Cell Value");
+        assert!(forth_vers.next().is_none());
+
+        // ================================================================================
+        // Generate version 3 (which should be based on version 1)
+        // ================================================================================
+        let pad = set_value(String::from("C"));
+        assert!(ver_is(pad.version(), 3, "Set Sheet Cell Value"));
+        assert_eq!("C", pad.active_sheet().unwrap().cell(0, 0).value());
+
+        // Assert backward_versions is [(1, "Set Sheet Cell Value"), (0, "New Workpad")]
+        let mut back_vers = pad.backward_versions();
+        assert_next_ver(&mut back_vers, 1, "Set Sheet Cell Value");
+        assert_next_ver(&mut back_vers, 0, "New Workpad");
+        assert!(back_vers.next().is_none());
+
+        // Assert no forward_versions
+        assert!(pad.forward_versions().next().is_none());
+
+        // ================================================================================
+        // Switch to version 1 again - now its forward version should be 3
+        // ================================================================================
+        let pad = pad
+            .master()
+            .update(WorkpadUpdate::SetVersion { version: 1 })
+            .expect("Update should succeed");
+        assert!(ver_is(pad.version(), 1, "Set Sheet Cell Value"));
+        assert_eq!("A", pad.active_sheet().unwrap().cell(0, 0).value());
+
+        // Assert backward_versions is [(0, "New Workpad")]
+        let mut back_vers = pad.backward_versions();
+        assert_next_ver(&mut back_vers, 0, "New Workpad");
+        assert!(back_vers.next().is_none());
+
+        // Assert forward_versions is [(2, "Set Sheet Cell Value")]
+        let mut forth_vers = pad.forward_versions();
+        assert_next_ver(&mut forth_vers, 3, "Set Sheet Cell Value");
+        assert!(forth_vers.next().is_none());
+    }
+
+    fn assert_next_ver(
+        iter: &mut impl Iterator<Item = (Version, String)>,
+        expected_version: Version,
+        expected_desc: &str,
+    ) {
+        match iter.next() {
+            Some(ver) => assert!(ver_is(ver, expected_version, expected_desc)),
+            None => panic!(r#"Expected ({}, "{}")"#, expected_version, expected_desc),
+        };
+    }
+
     fn ver_is(ver: (Version, String), expected_version: Version, expected_desc: &str) -> bool {
         ver.0 == expected_version && ver.1 == expected_desc
+    }
+
+    fn assert_next_sheet(iter: &mut impl Iterator<Item = Sheet>, expected_name: &str) {
+        match iter.next() {
+            Some(s) => assert_eq!(expected_name, s.name()),
+            None => panic!(r#"Expected: "{}""#, expected_name),
+        };
+    }
+
+    fn assert_next_sheet_is_active(
+        iter: &mut impl Iterator<Item = Sheet>,
+        expected_name: &str,
+        pad: &Workpad,
+    ) {
+        match iter.next() {
+            Some(s) => {
+                assert_eq!(expected_name, s.name());
+                assert_eq!(pad.active_sheet().unwrap(), s);
+            }
+            None => panic!(r#"Expected: "{}""#, expected_name),
+        };
     }
 }

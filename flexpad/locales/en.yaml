@@ -20,6 +20,10 @@ Menus:
     PadShowProperties: Properties ...
     PadDelete: Delete Workpad
     PadClose: Close Workpad
+  Edit:
+    Title: Edit
+    Undo: Undo
+    Redo: Redo
   Sheets:
     Title: Sheets
     SheetShowProperties: Properties ...
@@ -49,6 +53,7 @@ UpdateError:
   Display: "{kind} (during update: {update})"
   DuplicateName: The name "{name}" is already used
   InvalidName: The name "{name}" is not allowed
+  MissingVersion: "{version} not found"
   MissingId: "{id} not found"
 Workpads:
   Create: Create New ...

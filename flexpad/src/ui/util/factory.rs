@@ -3,7 +3,7 @@ use iced::{
     widget::{
         self, button, column, container, horizontal_space, row, text, vertical_space, Button, Row,
     },
-    Element, Event, Font, Length, Pixels,
+    Element, Event, Font, Length, Padding, Pixels,
 };
 
 use crate::ui::style;
@@ -19,6 +19,16 @@ pub const TEXT_SIZE_INPUT: Pixels = Pixels(16.0);
 pub const TEXT_SIZE_ERROR: Pixels = Pixels(14.0);
 
 pub const DIALOG_BUTTON_WIDTH: f32 = 100.0;
+
+pub const TOOLBAR_BUTTON_HEIGHT: f32 = 25.0;
+pub const TOOLBAR_END_SPACE: f32 = SPACE_M;
+pub const TOOLBAR_SEPARATOR_SIZE: f32 = 3.0;
+pub const TOOLBAR_PADDING: Padding = Padding {
+    top: SPACE_M,
+    right: SPACE_S,
+    bottom: SPACE_M,
+    left: SPACE_S,
+};
 
 pub fn dialog_title<'a, Message>(
     title: impl ToString,

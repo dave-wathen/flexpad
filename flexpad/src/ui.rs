@@ -24,7 +24,12 @@ pub mod widget {
     pub mod active_cell;
     pub mod inactive_cell;
 }
-pub mod workpad_menu;
+mod menus {
+    pub mod edit_menu;
+    pub mod workpad_menu;
+}
+pub use menus::edit_menu;
+pub use menus::workpad_menu;
 
 pub use util::style;
 
