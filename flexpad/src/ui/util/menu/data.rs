@@ -1,4 +1,4 @@
-use crate::ui::util::key::Key;
+use crate::ui::util::{action::Action, key::Key};
 
 use super::{path, PathVec};
 
@@ -8,7 +8,7 @@ where
 {
     SectionStart(String),
     SubMenu(Menu<Message>),
-    Item(String, Option<Key>, Option<Message>),
+    Action(Action, Option<Message>),
 }
 
 impl<Message> MenuEntry<Message>
@@ -18,7 +18,7 @@ where
     pub(super) fn is_active(&self) -> bool {
         match self {
             Self::SectionStart(_) => false,
-            Self::Item(_, _, on_select) => on_select.is_some(),
+            Self::Action(_, on_select) => on_select.is_some(),
             Self::SubMenu(_) => true,
         }
     }
@@ -164,9 +164,9 @@ where
                 menu.push_path_iter(path);
                 self.entries.insert(section_end, MenuEntry::SubMenu(menu));
             }
-        } else if let path::Element::Item(name, shortcut, on_select) = next {
+        } else if let path::Element::Action(action, on_select) = next {
             self.entries
-                .insert(section_end, MenuEntry::Item(name, shortcut, on_select));
+                .insert(section_end, MenuEntry::Action(action, on_select));
         }
     }
 
@@ -174,9 +174,13 @@ where
         self.entries
             .iter()
             .find_map(|e| match e {
-                MenuEntry::Item(_, Some(shortcut), Some(on_select)) if *shortcut == key => {
-                    Some(on_select.clone())
-                }
+                MenuEntry::Action(
+                    Action {
+                        shortcut: Some(shortcut),
+                        ..
+                    },
+                    Some(on_select),
+                ) if *shortcut == key => Some(on_select.clone()),
                 _ => None,
             })
             .or_else(|| {

@@ -1,7 +1,7 @@
 use super::key::Key;
 
 /// An action that can be performed in the application
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Action {
     /// The name of the action
     pub name: String,

@@ -566,19 +566,17 @@ fn cell_by_rc(sheet: &Sheet, rc: RowCol) -> Cell {
 }
 
 mod sheets_menu {
-    use iced::keyboard;
     use rust_i18n::t;
 
     use crate::ui::util::{
-        key::{alt, key},
-        menu,
+        action::Action, menu, ACTION_SHEETDELETE, ACTION_SHEETNEW, ACTION_SHEETPROPERTIES,
     };
 
     fn root<Message>() -> menu::PathToMenu<Message>
     where
         Message: Clone,
     {
-        menu::root(t!("Menus.Sheets.Title"))
+        menu::root(t!("Menu.Sheet"))
     }
 
     fn activate_sheets<Message>() -> menu::PathToMenuSection<Message>
@@ -592,42 +590,27 @@ mod sheets_menu {
     where
         Message: Clone,
     {
-        menu::Path::new(
-            root(),
-            t!("Menus.Sheets.SheetShowProperties"),
-            Some(alt(key(keyboard::KeyCode::Comma))),
-            on_select,
-        )
+        menu::Path::new(root(), &ACTION_SHEETPROPERTIES, on_select)
     }
 
     pub fn new_sheet<Message>(on_select: Option<Message>) -> menu::Path<Message>
     where
         Message: Clone,
     {
-        menu::Path::new(
-            root(),
-            t!("Menus.Sheets.SheetNew"),
-            Some(alt(key(keyboard::KeyCode::N))),
-            on_select,
-        )
+        menu::Path::new(root(), &ACTION_SHEETNEW, on_select)
     }
 
     pub fn delete_sheet<Message>(on_select: Option<Message>) -> menu::Path<Message>
     where
         Message: Clone,
     {
-        menu::Path::new(
-            root(),
-            t!("Menus.Sheets.SheetDelete"),
-            Some(alt(key(keyboard::KeyCode::Delete))),
-            on_select,
-        )
+        menu::Path::new(root(), &ACTION_SHEETDELETE, on_select)
     }
 
     pub fn activate_sheet<Message>(name: String, on_select: Option<Message>) -> menu::Path<Message>
     where
         Message: Clone,
     {
-        menu::Path::new(activate_sheets(), name, None, on_select)
+        menu::Path::new(activate_sheets(), &Action::new(name), on_select)
     }
 }

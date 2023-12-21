@@ -27,10 +27,12 @@ use data::{MenuEntry, Roots};
 
 mod menu_overlay;
 use menu_overlay::MenuOverlay;
-pub use menu_overlay::{MenuAppearance, MenuItemAppearance};
+pub use menu_overlay::{ActionAppearance, MenuAppearance};
 
 mod path;
-pub use path::{item, root, PartialPath, Path, PathItem, PathToMenu, PathToMenuSection, PathVec};
+pub use path::{
+    menu_action, root, PartialPath, Path, PathAction, PathToMenu, PathToMenuSection, PathVec,
+};
 
 mod state;
 use state::MenuStates;
@@ -374,14 +376,14 @@ pub trait StyleSheet {
     fn menu(&self, style: &Self::Style) -> MenuAppearance;
 
     /// The appearance of an item in a [`Menu`] when it is inactive (has no on_select)
-    fn inactive_menu_item(&self, style: &Self::Style) -> MenuItemAppearance;
+    fn inactive_action(&self, style: &Self::Style) -> ActionAppearance;
 
     /// The appearance of an item in a [`Menu`] when it is active (has an on_select)
-    fn active_menu_item(&self, style: &Self::Style) -> MenuItemAppearance;
+    fn active_action(&self, style: &Self::Style) -> ActionAppearance;
 
     /// The appearance of an item in a [`Menu`] when it is active and selected in a menu that has focus
-    fn focused_selected_menu_item(&self, style: &Self::Style) -> MenuItemAppearance;
+    fn focused_selected_action(&self, style: &Self::Style) -> ActionAppearance;
 
     /// The appearance of an item in a [`Menu`] when it is active and selected in a menu that does not have focus
-    fn unfocused_selected_menu_item(&self, style: &Self::Style) -> MenuItemAppearance;
+    fn unfocused_selected_action(&self, style: &Self::Style) -> ActionAppearance;
 }

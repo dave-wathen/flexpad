@@ -1,16 +1,15 @@
-use iced::keyboard;
 use rust_i18n::t;
 
 use crate::ui::util::{
-    key::{command, key, shift},
-    menu,
+    menu, ACTION_NEWBLANK, ACTION_NEWSTARTER, ACTION_PADCLOSE, ACTION_PADDELETE,
+    ACTION_PADPROPERTIES,
 };
 
 fn root<Message>() -> menu::PathToMenu<Message>
 where
     Message: Clone,
 {
-    menu::root(t!("Menus.Workpad.Title"))
+    menu::root(t!("Menu.Workpad"))
 }
 
 fn section_1<Message>() -> menu::PathToMenuSection<Message>
@@ -24,58 +23,33 @@ pub fn new_blank_workpad<Message>(on_select: Option<Message>) -> menu::Path<Mess
 where
     Message: Clone,
 {
-    menu::Path::new(
-        root(),
-        t!("Menus.Workpad.NewBlank"),
-        Some(command(key(keyboard::KeyCode::N))),
-        on_select,
-    )
+    menu::Path::new(root(), &ACTION_NEWBLANK, on_select)
 }
 
 pub fn new_starter_workpad<Message>(on_select: Option<Message>) -> menu::Path<Message>
 where
     Message: Clone,
 {
-    menu::Path::new(
-        root(),
-        t!("Menus.Workpad.NewStarter"),
-        Some(command(shift(key(keyboard::KeyCode::N)))),
-        on_select,
-    )
+    menu::Path::new(root(), &ACTION_NEWSTARTER, on_select)
 }
 
 pub fn show_properties<Message>(on_select: Option<Message>) -> menu::Path<Message>
 where
     Message: Clone,
 {
-    menu::Path::new(
-        section_1(),
-        t!("Menus.Workpad.PadShowProperties"),
-        Some(command(key(keyboard::KeyCode::Comma))),
-        on_select,
-    )
+    menu::Path::new(section_1(), &ACTION_PADPROPERTIES, on_select)
 }
 
 pub fn delete_pad<Message>(on_select: Option<Message>) -> menu::Path<Message>
 where
     Message: Clone,
 {
-    menu::Path::new(
-        section_1(),
-        t!("Menus.Workpad.PadDelete"),
-        Some(command(key(keyboard::KeyCode::Delete))),
-        on_select,
-    )
+    menu::Path::new(section_1(), &ACTION_PADDELETE, on_select)
 }
 
 pub fn close_pad<Message>(on_select: Option<Message>) -> menu::Path<Message>
 where
     Message: Clone,
 {
-    menu::Path::new(
-        section_1(),
-        t!("Menus.Workpad.PadClose"),
-        Some(command(key(keyboard::KeyCode::W))),
-        on_select,
-    )
+    menu::Path::new(section_1(), &ACTION_PADCLOSE, on_select)
 }

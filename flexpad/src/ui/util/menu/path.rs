@@ -1,4 +1,4 @@
-use crate::ui::util::key::Key;
+use crate::ui::util::action::Action;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -9,7 +9,7 @@ where
     Root(String),
     SubMenu(String),
     Section(String),
-    Item(String, Option<Key>, Option<Message>),
+    Action(Action, Option<Message>),
 }
 
 /// A collection of [`Path`]s
@@ -72,21 +72,16 @@ where
 {
     pub fn new(
         partial: impl PartialPath<Message>,
-        item_name: String,
-        shortcut: Option<Key>,
+        action: &Action,
         on_select: Option<Message>,
     ) -> Path<Message>
     where
         Message: Clone,
     {
-        let item = item(item_name);
-        let item = match shortcut {
-            Some(key) => item.shortcut(key),
-            None => item,
-        };
+        let action = menu_action(action);
         match on_select {
-            Some(msg) => partial.item(item.on_select(msg)),
-            None => partial.item(item),
+            Some(msg) => partial.action(action.on_select(msg)),
+            None => partial.action(action),
         }
     }
 
@@ -103,8 +98,8 @@ where
                     Element::Root(name) => Element::Root(name),
                     Element::SubMenu(menu) => Element::SubMenu(menu),
                     Element::Section(name) => Element::Section(name),
-                    Element::Item(name, shortcut, on_select) => {
-                        Element::Item(name, shortcut, on_select.map(&mut f))
+                    Element::Action(action, on_select) => {
+                        Element::Action(action, on_select.map(&mut f))
                     }
                 })
                 .collect(),
@@ -122,7 +117,7 @@ where
                 Element::Root(ref name) => write!(f, "{}", name)?,
                 Element::SubMenu(name) => write!(f, " ... {}", name)?,
                 Element::Section(name) => write!(f, "#{}", name)?,
-                Element::Item(name, _, _) => write!(f, " ... {}", name)?,
+                Element::Action(action, _) => write!(f, " ... {}", action.name)?,
             }
         }
         Ok(())
@@ -133,8 +128,8 @@ pub trait PartialPath<Message>
 where
     Message: Clone,
 {
-    /// Add a menu item to this partial path to give a full [`Path`].
-    fn item(&self, item: PathItem<Message>) -> Path<Message>;
+    /// Add an action to this partial path to give a full [`Path`].
+    fn action(&self, action: PathAction<Message>) -> Path<Message>;
 }
 
 /// A partial [`Path`] that terminates in a menu
@@ -161,8 +156,8 @@ where
     }
 
     /// Add a menu section to this partial path.  Menu sections are separated
-    /// visually within a menu.  A menu will consist of the items added without
-    /// a section, followed by a separator and the items for each section.
+    /// visually within a menu.  A menu will consist of the actions added without
+    /// a section, followed by a separator and the actions for each section.
     /// Sections are ordered by their names.
     pub fn section(&self, name: impl ToString) -> PathToMenuSection<Message> {
         let name = name.to_string();
@@ -178,10 +173,9 @@ impl<Message> PartialPath<Message> for PathToMenu<Message>
 where
     Message: Clone,
 {
-    /// Add a menu item to this partial path to give a full [`Path`].
-    fn item(&self, item: PathItem<Message>) -> Path<Message> {
+    fn action(&self, action: PathAction<Message>) -> Path<Message> {
         let mut elements = self.elements.clone();
-        elements.push(Element::Item(item.name, item.shortcut, item.on_select));
+        elements.push(Element::Action(action.action, action.on_select));
         Path { elements }
     }
 }
@@ -214,30 +208,21 @@ impl<Message> PartialPath<Message> for PathToMenuSection<Message>
 where
     Message: Clone,
 {
-    fn item(&self, item: PathItem<Message>) -> Path<Message> {
+    fn action(&self, action: PathAction<Message>) -> Path<Message> {
         let mut elements = self.elements.clone();
-        elements.push(Element::Item(item.name, item.shortcut, item.on_select));
+        elements.push(Element::Action(action.action, action.on_select));
         Path { elements }
     }
 }
 
-/// A menu item that will terminate a ['Path']
-pub struct PathItem<Message> {
-    name: String,
-    shortcut: Option<Key>,
+/// A menu action that will terminate a ['Path']
+pub struct PathAction<Message> {
+    action: Action,
     on_select: Option<Message>,
 }
 
-impl<Message> PathItem<Message> {
-    /// Add a shortcut key for this item
-    pub fn shortcut(self, key: Key) -> Self {
-        Self {
-            shortcut: Some(key),
-            ..self
-        }
-    }
-
-    /// Add a message to be emitted when this item is selected (via the menu or its shortcut)
+impl<Message> PathAction<Message> {
+    /// Add a message to be emitted when this action is selected (via the menu or its shortcut)
     pub fn on_select(self, message: Message) -> Self {
         Self {
             on_select: Some(message),
@@ -260,17 +245,13 @@ where
     }
 }
 
-/// Create a menu item that can be used to complete a partial path.
-pub fn item<Message>(name: impl ToString) -> PathItem<Message>
+/// Create a menu action that can be used to complete a partial path.
+pub fn menu_action<Message>(action: &Action) -> PathAction<Message>
 where
     Message: Clone,
 {
-    let name = name.to_string();
-    assert!(!name.is_empty(), "Empty names not permitted for menu items");
-
-    PathItem {
-        name,
-        shortcut: None,
+    PathAction {
+        action: action.clone(),
         on_select: None,
     }
 }

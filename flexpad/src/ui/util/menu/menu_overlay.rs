@@ -82,9 +82,9 @@ where
                     let text_size = paragraph.min_bounds();
                     (text_size, Size::ZERO)
                 }
-                MenuEntry::Item(name, shortcut, _) => {
+                MenuEntry::Action(action, _) => {
                     let paragraph = Renderer::Paragraph::with_text(Text {
-                        content: name,
+                        content: &action.name,
                         bounds: Size::INFINITY,
                         size: TEXT_SIZE_MENU,
                         line_height: LineHeight::Absolute(TEXT_SIZE_MENU),
@@ -95,7 +95,7 @@ where
                     });
                     let text_size = paragraph.min_bounds();
 
-                    let shorcut_size = if let Some(key) = shortcut {
+                    let shorcut_size = if let Some(key) = action.shortcut {
                         let paragraph = Renderer::Paragraph::with_text(Text {
                             content: &key.to_string(),
                             bounds: Size::INFINITY,
@@ -195,22 +195,22 @@ where
         {
             let bounds = child_layout.bounds();
             let selected = selected == Some(index);
-            let item_appearance = match (entry.is_active(), selected, focused) {
-                (true, true, true) => theme.focused_selected_menu_item(&style),
-                (true, true, false) => theme.unfocused_selected_menu_item(&style),
-                (true, false, _) => theme.active_menu_item(&style),
-                _ => theme.inactive_menu_item(&style),
+            let action_appearance = match (entry.is_active(), selected, focused) {
+                (true, true, true) => theme.focused_selected_action(&style),
+                (true, true, false) => theme.unfocused_selected_action(&style),
+                (true, false, _) => theme.active_action(&style),
+                _ => theme.inactive_action(&style),
             };
 
-            // Item background
+            // Action background
             renderer.fill_quad(
                 renderer::Quad {
                     bounds,
-                    border_radius: item_appearance.border_radius.into(),
-                    border_width: item_appearance.border_width,
-                    border_color: item_appearance.border_color,
+                    border_radius: action_appearance.border_radius.into(),
+                    border_width: action_appearance.border_width,
+                    border_color: action_appearance.border_color,
                 },
-                item_appearance.background,
+                action_appearance.background,
             );
 
             let inner_bounds = Rectangle::new(
@@ -257,7 +257,7 @@ where
                             shaping: text::Shaping::Advanced,
                         },
                         text_position_left,
-                        item_appearance.text_color,
+                        action_appearance.text_color,
                         text_bounds,
                     );
 
@@ -273,14 +273,14 @@ where
                             shaping: text::Shaping::Advanced,
                         },
                         text_position_right,
-                        item_appearance.text_color,
+                        action_appearance.text_color,
                         text_bounds,
                     );
                 }
-                MenuEntry::Item(name, shortcut, _) => {
+                MenuEntry::Action(action, _) => {
                     renderer.fill_text(
                         Text {
-                            content: name,
+                            content: &action.name,
                             font: self.font,
                             bounds: text_bounds.size(),
                             size: TEXT_SIZE_MENU,
@@ -290,11 +290,11 @@ where
                             shaping: text::Shaping::Advanced,
                         },
                         text_position_left,
-                        item_appearance.text_color,
+                        action_appearance.text_color,
                         text_bounds,
                     );
 
-                    if let Some(key) = shortcut {
+                    if let Some(key) = action.shortcut {
                         renderer.fill_text(
                             Text {
                                 content: &key.to_string(),
@@ -307,7 +307,7 @@ where
                                 shaping: text::Shaping::Advanced,
                             },
                             text_position_right,
-                            item_appearance.shortcut_color,
+                            action_appearance.shortcut_color,
                             text_bounds,
                         );
                     }
@@ -365,7 +365,7 @@ where
                     }
                     ENTER => {
                         if let Some(selected) = self.menu_states.selected(self.depth) {
-                            if let MenuEntry::Item(_, _, on_select) = self.entries[selected] {
+                            if let MenuEntry::Action(_, on_select) = self.entries[selected] {
                                 if let Some(msg) = on_select.clone() {
                                     shell.publish(msg);
                                     return event::Status::Captured;
@@ -422,7 +422,7 @@ where
 
                     let over = layout.children().position(|n| cursor.is_over(n.bounds()));
                     if let Some(over) = over {
-                        if let MenuEntry::Item(_, _, Some(on_select)) = self.entries[over] {
+                        if let MenuEntry::Action(_, Some(on_select)) = self.entries[over] {
                             shell.publish(on_select.clone());
                         }
                     }
@@ -455,24 +455,24 @@ pub struct MenuAppearance {
     pub border_color: Color,
 }
 
-/// The appearance of an item in a [`Menus`].
+/// The appearance of an action in a [`Menus`].
 #[derive(Clone, Copy, Debug)]
-pub struct MenuItemAppearance {
-    /// The background of an item in a [`Menu`]
+pub struct ActionAppearance {
+    /// The background of an action in a [`Menu`]
     pub background: Background,
 
-    /// The text color of an item in a [`Menu`]
+    /// The text color of an action in a [`Menu`]
     pub text_color: Color,
 
-    /// The text color of the keyboard shortcut for an item in a [`Menu`]
+    /// The text color of the keyboard shortcut for an action in a [`Menu`]
     pub shortcut_color: Color,
 
-    /// The border radius of an item on a [`Menu`]
+    /// The border radius of an action on a [`Menu`]
     pub border_radius: f32,
 
-    /// The border width of an item on a [`Menu`]
+    /// The border width of an action on a [`Menu`]
     pub border_width: f32,
 
-    /// The border color of an item on a [`Menu`]
+    /// The border color of an action on a [`Menu`]
     pub border_color: Color,
 }

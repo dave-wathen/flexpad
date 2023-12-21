@@ -26,9 +26,17 @@ pub const TEXT_SIZE_TOOLTIP: Pixels = Pixels(10.0);
 
 pub const DIALOG_BUTTON_WIDTH: f32 = 100.0;
 
+pub static ACTION_NEWBLANK: Lazy<Action> = Lazy::new(|| action("NewBlank"));
+pub static ACTION_NEWSTARTER: Lazy<Action> = Lazy::new(|| action("NewStarter"));
+pub static ACTION_PADCLOSE: Lazy<Action> = Lazy::new(|| action("PadClose"));
+pub static ACTION_PADDELETE: Lazy<Action> = Lazy::new(|| action("PadDelete"));
+pub static ACTION_PADPROPERTIES: Lazy<Action> = Lazy::new(|| action("PadProperties"));
 pub static ACTION_PRINT: Lazy<Action> = Lazy::new(|| action("Print"));
 pub static ACTION_PROPERTIES: Lazy<Action> = Lazy::new(|| action("Properties"));
 pub static ACTION_REDO: Lazy<Action> = Lazy::new(|| action("Redo"));
+pub static ACTION_SHEETDELETE: Lazy<Action> = Lazy::new(|| action("SheetDelete"));
+pub static ACTION_SHEETNEW: Lazy<Action> = Lazy::new(|| action("SheetNew"));
+pub static ACTION_SHEETPROPERTIES: Lazy<Action> = Lazy::new(|| action("SheetProperties"));
 pub static ACTION_UNDO: Lazy<Action> = Lazy::new(|| action("Undo"));
 
 fn action(id: &str) -> Action {

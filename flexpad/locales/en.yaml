@@ -1,4 +1,44 @@
 _version: 1
+Action:
+  NewBlank:
+    Name: New Blank Workpad
+    Shortcut: Command-N
+  NewStarter:
+    Name: New Starter Workpad
+    Shortcut: Shift-Command-N
+  PadDelete:
+    Name: Delete Workpad
+    Shortcut: Command-Delete
+  PadClose:
+    Name: Close Workpad
+    Shortcut: Command-W
+  PadProperties:
+    Name: Properties ...
+    Shortcut: Command-,
+  Print:
+    Name: "Print"
+    IconCodepoint: "\uE807"
+    Shortcut: Command-P
+  Properties:
+    Name: "Edit Properties"
+    IconCodepoint: "\uE808"
+  Redo:
+    Name: "Redo"
+    IconCodepoint: "\uE800"
+    Shortcut: Command-Shift-Z
+  SheetDelete:
+    Name: Delete Sheet
+    Shortcut: Alt-Delete
+  SheetNew:
+    Name: Add Sheet
+    Shortcut: Alt-N
+  SheetProperties:
+    Name: Properties ...
+    Shortcut: Alt-,
+  Undo:
+    Name: "Undo"
+    IconCodepoint: "\uE801"
+    Shortcut: Command-Z
 ActiveSheet:
   Corner: "#"
 AddSheet:
@@ -12,23 +52,10 @@ Common:
   Save: Save
 Error:
   Title: Unexpected Error
-Menus:
-  Workpad:
-    Title: Workpad
-    NewBlank: New Blank Workpad
-    NewStarter: New Starter Workpad
-    PadShowProperties: Properties ...
-    PadDelete: Delete Workpad
-    PadClose: Close Workpad
-  Edit:
-    Title: Edit
-    Undo: Undo
-    Redo: Redo
-  Sheets:
-    Title: Sheets
-    SheetShowProperties: Properties ...
-    SheetNew: New Sheet
-    SheetDelete: Delete Sheet
+Menu:
+  Workpad: Workpad
+  Edit: Edit
+  Sheet: Sheet
 PadAuthor:
   Label: Author
   Placeholder: Who is the author of the workpad
@@ -70,19 +97,3 @@ WorkpadUpdate:
   SheetSetCellValue: Set Sheet Cell Value
   SheetSetProperties: Set Sheet Properties
   WorkpadSetProperties: Set Workpad Properties
-Action:
-  Print:
-    Name: "Print"
-    IconCodepoint: "\uE807"
-    Shortcut: Command-P
-  Properties:
-    Name: "Edit Properties"
-    IconCodepoint: "\uE808"
-  Redo:
-    Name: "Redo"
-    IconCodepoint: "\uE800"
-    Shortcut: Command-Shift-Z
-  Undo:
-    Name: "Undo"
-    IconCodepoint: "\uE801"
-    Shortcut: Command-Z

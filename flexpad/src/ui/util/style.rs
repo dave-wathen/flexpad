@@ -267,22 +267,22 @@ impl crate::ui::menu::StyleSheet for iced::Theme {
         }
     }
 
-    fn inactive_menu_item(&self, style: &Self::Style) -> crate::ui::menu::MenuItemAppearance {
-        let active = self.active_menu_item(style);
+    fn inactive_action(&self, style: &Self::Style) -> crate::ui::menu::ActionAppearance {
+        let active = self.active_action(style);
         let color = active.text_color;
         let faded = Color::from_rgba(color.r, color.g, color.b, color.a / 2.0);
-        crate::ui::menu::MenuItemAppearance {
+        crate::ui::menu::ActionAppearance {
             text_color: faded,
             shortcut_color: faded,
             ..active
         }
     }
 
-    fn active_menu_item(&self, _style: &Self::Style) -> crate::ui::menu::MenuItemAppearance {
+    fn active_action(&self, _style: &Self::Style) -> crate::ui::menu::ActionAppearance {
         let palette = self.extended_palette();
         let color = palette.primary.base.text;
         let faded = Color::from_rgba(color.r, color.g, color.b, color.a / 2.0);
-        crate::ui::menu::MenuItemAppearance {
+        crate::ui::menu::ActionAppearance {
             background: Color::TRANSPARENT.into(),
             text_color: color,
             shortcut_color: faded,
@@ -292,16 +292,13 @@ impl crate::ui::menu::StyleSheet for iced::Theme {
         }
     }
 
-    fn focused_selected_menu_item(
-        &self,
-        style: &Self::Style,
-    ) -> crate::ui::menu::MenuItemAppearance {
+    fn focused_selected_action(&self, style: &Self::Style) -> crate::ui::menu::ActionAppearance {
         let palette = self.extended_palette();
         let color = palette.primary.strong.text;
         let faded = Color::from_rgba(color.r, color.g, color.b, color.a / 2.0);
 
-        let active = self.active_menu_item(style);
-        crate::ui::menu::MenuItemAppearance {
+        let active = self.active_action(style);
+        crate::ui::menu::ActionAppearance {
             background: palette.primary.strong.color.into(),
             text_color: color,
             shortcut_color: faded,
@@ -309,13 +306,10 @@ impl crate::ui::menu::StyleSheet for iced::Theme {
         }
     }
 
-    fn unfocused_selected_menu_item(
-        &self,
-        style: &Self::Style,
-    ) -> crate::ui::menu::MenuItemAppearance {
+    fn unfocused_selected_action(&self, style: &Self::Style) -> crate::ui::menu::ActionAppearance {
         let palette = self.extended_palette();
-        let active = self.active_menu_item(style);
-        crate::ui::menu::MenuItemAppearance {
+        let active = self.active_action(style);
+        crate::ui::menu::ActionAppearance {
             background: palette.background.strong.color.into(),
             ..active
         }
