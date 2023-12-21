@@ -240,7 +240,7 @@ where
             modifiers,
         }) = event
         {
-            let key = Key(modifiers, key_code);
+            let key = Key::new(modifiers, key_code);
             if let Some(message) = self.roots.for_shortcut(key) {
                 shell.publish(message);
                 return event::Status::Captured;

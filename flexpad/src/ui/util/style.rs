@@ -6,21 +6,21 @@ use iced::{
 
 use super::SPACE_M;
 
-pub struct TextBarStyle;
+pub struct ToolbarStyle;
 
-impl From<TextBarStyle> for theme::Container {
-    fn from(value: TextBarStyle) -> Self {
+impl From<ToolbarStyle> for theme::Container {
+    fn from(value: ToolbarStyle) -> Self {
         theme::Container::Custom(Box::new(value))
     }
 }
 
-impl From<TextBarStyle> for theme::Rule {
-    fn from(value: TextBarStyle) -> Self {
+impl From<ToolbarStyle> for theme::Rule {
+    fn from(value: ToolbarStyle) -> Self {
         theme::Rule::Custom(Box::new(value))
     }
 }
 
-impl widget::container::StyleSheet for TextBarStyle {
+impl widget::container::StyleSheet for ToolbarStyle {
     type Style = iced::Theme;
 
     fn appearance(&self, theme: &Self::Style) -> widget::container::Appearance {
@@ -36,7 +36,7 @@ impl widget::container::StyleSheet for TextBarStyle {
     }
 }
 
-impl widget::rule::StyleSheet for TextBarStyle {
+impl widget::rule::StyleSheet for ToolbarStyle {
     type Style = iced::Theme;
 
     fn appearance(&self, theme: &Self::Style) -> widget::rule::Appearance {

@@ -70,3 +70,19 @@ WorkpadUpdate:
   SheetSetCellValue: Set Sheet Cell Value
   SheetSetProperties: Set Sheet Properties
   WorkpadSetProperties: Set Workpad Properties
+Action:
+  Print:
+    Name: "Print"
+    IconCodepoint: "\uE807"
+    Shortcut: Command-P
+  Properties:
+    Name: "Edit Properties"
+    IconCodepoint: "\uE808"
+  Redo:
+    Name: "Redo"
+    IconCodepoint: "\uE800"
+    Shortcut: Command-Shift-Z
+  Undo:
+    Name: "Undo"
+    IconCodepoint: "\uE801"
+    Shortcut: Command-Z

@@ -7,10 +7,7 @@ use flexpad_grid::{
 use iced::{
     advanced::{mouse::click, widget},
     alignment, theme,
-    widget::{
-        button, column, container, horizontal_rule, horizontal_space, image, row, text,
-        vertical_rule,
-    },
+    widget::{button, column, horizontal_rule, horizontal_space, image, row, text, vertical_rule},
     Alignment, Color, Command, Element, Length, Subscription,
 };
 use once_cell::sync::Lazy;
@@ -20,11 +17,10 @@ use tracing::debug;
 use crate::{
     model::workpad::{Cell, Sheet, SheetId, Version, Workpad, WorkpadMaster, WorkpadUpdate},
     ui::{
-        menu,
-        style::TextBarStyle,
+        edit_menu, menu,
         util::{
-            images, SPACE_S, TOOLBAR_BUTTON_HEIGHT, TOOLBAR_END_SPACE, TOOLBAR_PADDING,
-            TOOLBAR_SEPARATOR_SIZE,
+            images, toolbar::Toolbar, ACTION_PRINT, ACTION_PROPERTIES, ACTION_REDO, ACTION_UNDO,
+            SPACE_S,
         },
         widget::{
             active_cell::{self, Editor},
@@ -33,8 +29,6 @@ use crate::{
         workpad_menu,
     },
 };
-
-use super::edit_menu;
 
 static FORMULA_BAR_ID: Lazy<active_cell::Id> = Lazy::new(active_cell::Id::unique);
 static ACTIVE_CELL_ID: Lazy<active_cell::Id> = Lazy::new(active_cell::Id::unique);
@@ -191,30 +185,14 @@ impl ActiveSheetUi {
     }
 
     fn toolbar_view(&self) -> iced::Element<'_, Message> {
-        let button = |img, msg| {
-            button(image(img))
-                .width(Length::Shrink)
-                .height(TOOLBAR_BUTTON_HEIGHT)
-                .style(theme::Button::Text)
-                .on_press_maybe(msg)
-        };
-
         let (undo_to, redo_to) = surrounding_versions(&self.active_sheet.workpad());
 
-        let buttons = row![
-            horizontal_space(TOOLBAR_END_SPACE),
-            button(images::undo(), undo_to.map(Message::GotoVersion)),
-            button(images::redo(), redo_to.map(Message::GotoVersion)),
-            button(images::print(), None),
-            vertical_rule(TOOLBAR_SEPARATOR_SIZE).style(TextBarStyle),
-            button(images::settings(), None),
-            horizontal_space(TOOLBAR_END_SPACE),
-        ]
-        .height(TOOLBAR_BUTTON_HEIGHT);
-
-        container(container(buttons).width(Length::Fill).style(TextBarStyle))
-            .width(Length::Fill)
-            .padding(TOOLBAR_PADDING)
+        Toolbar::new()
+            .action(&ACTION_UNDO, undo_to.map(Message::GotoVersion))
+            .action(&ACTION_REDO, redo_to.map(Message::GotoVersion))
+            .action(&ACTION_PRINT, None)
+            .separator()
+            .action(&ACTION_PROPERTIES, None)
             .into()
     }
 

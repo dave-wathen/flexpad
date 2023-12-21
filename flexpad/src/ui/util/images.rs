@@ -42,18 +42,6 @@ pub fn more_vert() -> Handle {
     Handle::from_memory(include_bytes!("./images/more_vert.png"))
 }
 
-pub fn print() -> Handle {
-    Handle::from_memory(include_bytes!("./images/print.png"))
-}
-
-pub fn redo() -> Handle {
-    Handle::from_memory(include_bytes!("./images/redo.png"))
-}
-
-pub fn settings() -> Handle {
-    Handle::from_memory(include_bytes!("./images/settings.png"))
-}
-
 pub fn workpad_no_sheets() -> Handle {
     Handle::from_memory(include_bytes!("./images/workpad_no_sheets.png"))
 }
@@ -68,8 +56,4 @@ pub fn worksheet() -> Handle {
 
 pub fn textsheet() -> Handle {
     Handle::from_memory(include_bytes!("./images/textsheet.png"))
-}
-
-pub fn undo() -> Handle {
-    Handle::from_memory(include_bytes!("./images/undo.png"))
 }

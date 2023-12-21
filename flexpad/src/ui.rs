@@ -34,7 +34,12 @@ pub use menus::workpad_menu;
 pub use util::style;
 
 pub(crate) fn run() -> iced::Result {
-    let settings = Settings::default();
+    let settings = Settings {
+        fonts: vec![include_bytes!("../fonts/flexpad-icons.ttf")
+            .as_slice()
+            .into()],
+        ..Settings::default()
+    };
     Flexpad::run(settings)
 }
 
