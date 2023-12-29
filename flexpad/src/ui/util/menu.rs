@@ -30,7 +30,7 @@ use menu_overlay::MenuOverlay;
 pub use menu_overlay::{ActionAppearance, MenuAppearance};
 
 mod path;
-pub use path::{root, Path, PathAction, PathToMenu, PathToMenuSection, PathVec};
+pub use path::{root, Path, PathToMenu, PathToMenuSection, PathVec};
 
 mod state;
 use state::MenuStates;
