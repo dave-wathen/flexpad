@@ -21,7 +21,7 @@ pub mod style;
 
 use head::{ColumnHeads, Head, RowHeads};
 use state::GridState;
-pub use style::{Appearance, StyleSheet};
+pub use style::StyleSheet;
 
 use cells::GridCells;
 
