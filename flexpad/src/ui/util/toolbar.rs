@@ -4,6 +4,8 @@ use iced::{
     Color, Element, Font, Length, Padding,
 };
 
+use crate::ui::util::action_tooltip;
+
 use super::{action::Action, style::ToolbarStyle, SPACE_M, SPACE_S, TEXT_SIZE_TOOLTIP};
 
 const TOOLBAR_HEIGHT: f32 = 25.0;
@@ -103,12 +105,7 @@ where
 
                     match msg {
                         Some(msg) => {
-                            let label = match action.shortcut {
-                                Some(key) => format!("{}  {}", action.name, key),
-                                None => action.name,
-                            };
-
-                            tooltip(button.on_press(msg), label, tooltip::Position::Bottom)
+                            action_tooltip(&action, button.on_press(msg), tooltip::Position::Bottom)
                                 .size(TEXT_SIZE_TOOLTIP)
                                 .style(theme::Container::Box)
                                 .into()

@@ -35,7 +35,7 @@ pub use util::style;
 
 pub(crate) fn run() -> iced::Result {
     let settings = Settings {
-        fonts: vec![include_bytes!("../fonts/flexpad-icons.ttf")
+        fonts: vec![include_bytes!("../resources/flexpad-icons.ttf")
             .as_slice()
             .into()],
         ..Settings::default()

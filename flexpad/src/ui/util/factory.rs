@@ -1,9 +1,10 @@
 use iced::{
     alignment, keyboard, theme,
     widget::{
-        self, button, column, container, horizontal_space, row, text, vertical_space, Button, Row,
+        self, button, column, container, horizontal_space, row, text, tooltip, vertical_space,
+        Button, Row, Text,
     },
-    Element, Event, Font, Length, Pixels,
+    Color, Element, Event, Font, Length, Pixels,
 };
 use once_cell::sync::Lazy;
 use rust_i18n::t;
@@ -13,21 +14,50 @@ use crate::ui::style;
 
 use super::action::Action;
 
+pub const FLEXPAD_GRID_COLOR: Color = Color {
+    r: 0.504,
+    g: 0.699,
+    b: 0.703,
+    a: 1.0,
+};
+
 pub const SPACE_S: f32 = 5.0;
 pub const SPACE_M: f32 = SPACE_S * 2.0;
 pub const SPACE_L: f32 = SPACE_S * 4.0;
 // const SPACE_XL: u16 = SPACE_S * 8;
 
+pub const TEXT_SIZE_APP_TITLE: Pixels = Pixels(20.0);
 pub const TEXT_SIZE_DIALOG_TITLE: Pixels = Pixels(16.0);
 pub const TEXT_SIZE_LABEL: Pixels = Pixels(12.0);
 pub const TEXT_SIZE_INPUT: Pixels = Pixels(16.0);
 pub const TEXT_SIZE_ERROR: Pixels = Pixels(14.0);
-pub const TEXT_SIZE_TOOLTIP: Pixels = Pixels(10.0);
+pub const TEXT_SIZE_TOOLTIP: Pixels = Pixels(12.0);
+
+pub const ICON_BUTTON_SIZE: Pixels = Pixels(48.0);
 
 pub const DIALOG_BUTTON_WIDTH: f32 = 100.0;
 
+pub const ICON_FX: char = '\u{E81A}';
+pub const ICON_OPEN_DOWN: char = '\u{E806}';
+
+pub fn icon<'a>(codepoint: char, size: impl Into<Pixels>) -> Text<'a, iced::Renderer> {
+    const ICON_FONT: Font = Font::with_name("flexpad-icons");
+
+    text(codepoint)
+        .font(ICON_FONT)
+        .size(size.into())
+        .line_height(1.0)
+        .shaping(text::Shaping::Advanced)
+        .width(Length::Fill)
+        .horizontal_alignment(alignment::Horizontal::Center)
+        .height(Length::Fill)
+        .vertical_alignment(alignment::Vertical::Center)
+}
+
 pub static ACTION_NEWBLANK: Lazy<Action> = Lazy::new(|| action("NewBlank"));
 pub static ACTION_NEWSTARTER: Lazy<Action> = Lazy::new(|| action("NewStarter"));
+pub static ACTION_NEWTEXTSHEET: Lazy<Action> = Lazy::new(|| action("NewTextsheet"));
+pub static ACTION_NEWWORKSHEET: Lazy<Action> = Lazy::new(|| action("NewWorksheet"));
 pub static ACTION_PADCLOSE: Lazy<Action> = Lazy::new(|| action("PadClose"));
 pub static ACTION_PADDELETE: Lazy<Action> = Lazy::new(|| action("PadDelete"));
 pub static ACTION_PADPROPERTIES: Lazy<Action> = Lazy::new(|| action("PadProperties"));
@@ -42,9 +72,17 @@ pub static ACTION_UNDO: Lazy<Action> = Lazy::new(|| action("Undo"));
 fn action(id: &str) -> Action {
     let mut result = Action::new(t!(&format!("Action.{id}.Name")));
 
+    let full_i18n_name = |i18n_name| format!("{}.{}", rust_i18n::locale(), i18n_name);
+
+    let i18n_name = format!("Action.{id}.ShortName");
+    let short_name = t!(&i18n_name);
+    if short_name != full_i18n_name(&i18n_name) {
+        result = result.short_name(short_name)
+    }
+
     let i18n_name = format!("Action.{id}.IconCodepoint");
     let codepoint = t!(&i18n_name);
-    if codepoint != format!("{}.{}", rust_i18n::locale(), i18n_name) {
+    if codepoint != full_i18n_name(&i18n_name) {
         if codepoint.chars().count() == 1 {
             result = result.icon_codepoint(codepoint.chars().next().unwrap())
         } else {
@@ -54,7 +92,7 @@ fn action(id: &str) -> Action {
 
     let i18n_name = format!("Action.{id}.Shortcut");
     let shortcut = t!(&i18n_name);
-    if shortcut != format!("{}.{}", rust_i18n::locale(), i18n_name) {
+    if shortcut != full_i18n_name(&i18n_name) {
         match shortcut.parse() {
             Ok(key) => result = result.shortcut(key),
             Err(_) => warn!("Invalid shortcut key {}", i18n_name),
@@ -62,6 +100,21 @@ fn action(id: &str) -> Action {
     }
 
     result
+}
+
+pub fn action_tooltip<'a, Message>(
+    action: &Action,
+    content: impl Into<Element<'a, Message, iced::Renderer>>,
+    position: tooltip::Position,
+) -> iced::widget::Tooltip<'a, Message, iced::Renderer> {
+    let label = match action.shortcut {
+        Some(key) => format!("{}  {}", action.name, key),
+        None => action.name.clone(),
+    };
+
+    tooltip(content, label, position)
+        .size(TEXT_SIZE_TOOLTIP)
+        .style(theme::Container::Box)
 }
 
 pub fn dialog_title<'a, Message>(

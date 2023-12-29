@@ -3,8 +3,8 @@ use crate::{
     ui::{
         menu, style,
         util::{
-            button_bar, dialog_button, handle_ok_and_cancel_keys, handle_ok_key, images,
-            text_input, SPACE_M, SPACE_S,
+            button_bar, dialog_button, handle_ok_and_cancel_keys, handle_ok_key, icon, text_input,
+            ACTION_NEWTEXTSHEET, ACTION_NEWWORKSHEET, ICON_BUTTON_SIZE, SPACE_M, SPACE_S,
         },
         workpad_menu,
     },
@@ -12,11 +12,13 @@ use crate::{
 use iced::{
     alignment, event,
     theme::{self},
-    widget::{button, column, container, horizontal_rule, image, row, text, vertical_space},
+    widget::{button, column, container, horizontal_rule, row, text, vertical_space},
     Alignment, Element, Length, Subscription,
 };
 use rust_i18n::t;
 use tracing::debug;
+
+use super::util::{FLEXPAD_GRID_COLOR, TEXT_SIZE_LABEL};
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -182,14 +184,9 @@ impl AddSheetUi {
 }
 
 fn kind_button<'a>(kind: SheetKind, selected: bool) -> Element<'a, Message> {
-    let txt = match kind {
-        SheetKind::Worksheet => t!("SheetKind.Worksheet"),
-        SheetKind::Textsheet => t!("SheetKind.Textsheet"),
-    };
-
-    let img = match kind {
-        SheetKind::Worksheet => images::worksheet(),
-        SheetKind::Textsheet => images::textsheet(),
+    let action = match kind {
+        SheetKind::Worksheet => &ACTION_NEWWORKSHEET,
+        SheetKind::Textsheet => &ACTION_NEWTEXTSHEET,
     };
 
     let style = match selected {
@@ -199,12 +196,20 @@ fn kind_button<'a>(kind: SheetKind, selected: bool) -> Element<'a, Message> {
 
     column![
         container(
-            button(image(img).width(48).height(48))
-                .on_press(Message::SelectKind(kind))
-                .style(theme::Button::Text)
+            button(
+                icon(
+                    action
+                        .icon_codepoint
+                        .expect("Add sheet actions must have image codepoints"),
+                    ICON_BUTTON_SIZE
+                )
+                .style(theme::Text::Color(FLEXPAD_GRID_COLOR))
+            )
+            .on_press(Message::SelectKind(kind))
+            .style(theme::Button::Text)
         )
         .style(style),
-        text(txt).size(12)
+        text(&action.short_name).size(TEXT_SIZE_LABEL)
     ]
     .align_items(Alignment::Center)
     .into()

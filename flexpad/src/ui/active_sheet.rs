@@ -7,8 +7,10 @@ use flexpad_grid::{
 use iced::{
     advanced::{mouse::click, widget},
     alignment, theme,
-    widget::{button, column, horizontal_rule, horizontal_space, image, row, text, vertical_rule},
-    Alignment, Color, Command, Element, Length, Subscription,
+    widget::{
+        button, column, container, horizontal_rule, horizontal_space, row, text, vertical_rule,
+    },
+    Alignment, Color, Command, Element, Length, Pixels, Subscription,
 };
 use once_cell::sync::Lazy;
 use rust_i18n::t;
@@ -19,8 +21,8 @@ use crate::{
     ui::{
         edit_menu, menu,
         util::{
-            images, toolbar::Toolbar, ACTION_PRINT, ACTION_PROPERTIES, ACTION_REDO, ACTION_UNDO,
-            SPACE_S,
+            toolbar::Toolbar, ACTION_PRINT, ACTION_PROPERTIES, ACTION_REDO, ACTION_UNDO, ICON_FX,
+            SPACE_S, TEXT_SIZE_LABEL,
         },
         widget::{
             active_cell::{self, Editor},
@@ -29,6 +31,8 @@ use crate::{
         workpad_menu,
     },
 };
+
+use super::util::{icon, ICON_OPEN_DOWN};
 
 static FORMULA_BAR_ID: Lazy<active_cell::Id> = Lazy::new(active_cell::Id::unique);
 static ACTIVE_CELL_ID: Lazy<active_cell::Id> = Lazy::new(active_cell::Id::unique);
@@ -197,19 +201,25 @@ impl ActiveSheetUi {
     }
 
     fn sheet_and_formula_row_view(&self) -> iced::Element<'_, Message> {
+        const TEXT_SIZE: Pixels = TEXT_SIZE_LABEL;
+
         let button = |img, msg| {
-            button(image(img))
+            button(img)
                 .on_press(msg)
+                .padding(SPACE_S)
                 .width(Length::Shrink)
-                .height(20)
-                .padding(2)
                 .style(theme::Button::Text)
         };
 
         let sheet: iced::Element<'_, Message> = row![
-            text(self.active_sheet.name()).size(14).width(200),
+            text(self.active_sheet.name())
+                .size(TEXT_SIZE)
+                .line_height(1.0)
+                .height(Length::Fill)
+                .vertical_alignment(alignment::Vertical::Center)
+                .width(200),
             // TODO
-            button(images::expand_more(), Message::SheetShowDetails),
+            button(icon(ICON_OPEN_DOWN, TEXT_SIZE), Message::SheetShowDetails),
         ]
         .spacing(SPACE_S)
         .into();
@@ -220,7 +230,10 @@ impl ActiveSheetUi {
                     unreachable!();
                 };
                 let cell_name: iced::Element<'_, Message> = text(active_cell.name())
-                    .size(14)
+                    .size(TEXT_SIZE)
+                    .line_height(1.0)
+                    .height(Length::Fill)
+                    .vertical_alignment(alignment::Vertical::Center)
                     .width(100)
                     .horizontal_alignment(alignment::Horizontal::Center)
                     .into();
@@ -231,18 +244,18 @@ impl ActiveSheetUi {
                         .focused(self.focus == FORMULA_BAR_ID.clone().into())
                         .horizontal_alignment(alignment::Horizontal::Left)
                         .vertical_alignment(alignment::Vertical::Center)
-                        .font_size(14)
+                        .font_size(TEXT_SIZE)
                         .into();
 
                 row![
-                    vertical_rule(3),
+                    vertical_rule(1),
                     sheet,
-                    vertical_rule(3),
+                    vertical_rule(1),
                     cell_name,
-                    vertical_rule(3),
-                    image(images::fx()).height(20).width(20),
+                    vertical_rule(1),
+                    container(icon(ICON_FX, TEXT_SIZE)).height(Length::Fill),
                     formula,
-                    vertical_rule(3),
+                    vertical_rule(1),
                 ]
             }
             None => {
@@ -254,10 +267,10 @@ impl ActiveSheetUi {
                 ]
             }
         }
-        .height(20)
+        .height(SPACE_S + TEXT_SIZE.0 + SPACE_S)
         .spacing(SPACE_S);
 
-        column![horizontal_rule(3), controls].into()
+        column![horizontal_rule(1), controls].into()
     }
 
     fn grid_view(&self) -> Element<'_, Message> {

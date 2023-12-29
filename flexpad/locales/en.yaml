@@ -2,10 +2,22 @@ _version: 1
 Action:
   NewBlank:
     Name: New Blank Workpad
+    ShortName: Blank
+    IconCodepoint: "\uE81B"
     Shortcut: Command-N
   NewStarter:
     Name: New Starter Workpad
+    ShortName: Starter
+    IconCodepoint: "\uE81C"
     Shortcut: Shift-Command-N
+  NewTextsheet:
+    Name: New Textsheet
+    ShortName: Textsheet
+    IconCodepoint: "\uE81E"
+  NewWorksheet:
+    Name: New Worksheet
+    ShortName: Worksheet
+    IconCodepoint: "\uE81D"
   PadDelete:
     Name: Delete Workpad
     Shortcut: Command-Delete
@@ -66,9 +78,6 @@ PadName:
 PadProperties:
   Title: Workpad Properties
 Product: Flexpad
-SheetKind:
-  Worksheet: Worksheet
-  Textsheet: Textsheet
 SheetName:
   Label: Sheet Name
   Placeholder: Enter a name for the sheet
@@ -85,8 +94,6 @@ UpdateError:
 Workpads:
   Create: Create New ...
   Reopen: Reopen ...
-  Blank: Blank
-  Starter: Starter
 WorkpadUpdate:
   Join: " & "
   NewWorkpad: New Workpad

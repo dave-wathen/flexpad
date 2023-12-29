@@ -1,17 +1,23 @@
 use crate::version::Version;
 
-use crate::ui::{
-    menu,
-    util::{images, SPACE_M, SPACE_S},
-    workpad_menu,
-};
-
+use iced::widget::image::Handle;
+use iced::widget::tooltip;
 use iced::{
     alignment, theme,
     widget::{button, column, horizontal_rule, image, row, text},
     Alignment, Length,
 };
 use rust_i18n::t;
+
+use super::{
+    menu,
+    util::{
+        action::Action, action_tooltip, icon, ACTION_NEWBLANK, ACTION_NEWSTARTER,
+        FLEXPAD_GRID_COLOR, ICON_BUTTON_SIZE, SPACE_M, SPACE_S, TEXT_SIZE_APP_TITLE,
+        TEXT_SIZE_LABEL,
+    },
+    workpad_menu,
+};
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -48,35 +54,39 @@ impl Lobby {
     }
 
     pub fn view<'a>(&self) -> iced::Element<'a, Message> {
-        let image_button = |img, title, msg| {
+        let app_image = Handle::from_memory(include_bytes!("../../resources/flexpad.png"));
+
+        let image_button = |action: &Action, msg| {
+            let codepoint = action
+                .icon_codepoint
+                .expect("Lobby actions must have a codepoint");
             column![
-                button(image(img).width(48).height(48))
+                action_tooltip(
+                    action,
+                    button(
+                        icon(codepoint, ICON_BUTTON_SIZE)
+                            .style(theme::Text::Color(FLEXPAD_GRID_COLOR))
+                    )
                     .on_press(msg)
                     .style(theme::Button::Text),
-                text(title).size(12)
+                    tooltip::Position::FollowCursor
+                ),
+                text(&action.short_name).size(TEXT_SIZE_LABEL)
             ]
             .align_items(Alignment::Center)
         };
 
         column![
-            image(images::app()).width(200).height(200),
-            text(self.version.description()).size(12),
+            image(app_image).width(200).height(200),
+            text(self.version.description()).size(TEXT_SIZE_LABEL),
             horizontal_rule(3),
             text(t!("Workpads.Create"))
-                .size(20)
+                .size(TEXT_SIZE_APP_TITLE)
                 .width(Length::Fill)
                 .horizontal_alignment(alignment::Horizontal::Left),
             row![
-                image_button(
-                    images::workpad_no_sheets(),
-                    t!("Workpads.Blank"),
-                    Message::NewBlankWorkpad
-                ),
-                image_button(
-                    images::workpad_and_sheets(),
-                    t!("Workpads.Starter"),
-                    Message::NewStarterWorkpad
-                )
+                image_button(&ACTION_NEWBLANK, Message::NewBlankWorkpad),
+                image_button(&ACTION_NEWSTARTER, Message::NewStarterWorkpad)
             ]
             .spacing(SPACE_M)
             .width(Length::Fill),
