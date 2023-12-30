@@ -1,9 +1,21 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
-
+use super::util::{icon, ICON_OPEN_DOWN};
+use crate::ui::{
+    edit_menu, menu,
+    util::{
+        toolbar::Toolbar, ACTION_PRINT, ACTION_PROPERTIES, ACTION_REDO, ACTION_UNDO, ICON_FX,
+        SPACE_S, TEXT_SIZE_LABEL,
+    },
+    widget::{
+        active_cell::{self, Editor},
+        inactive_cell,
+    },
+    workpad_menu,
+};
 use flexpad_grid::{
     style, Border, Borders, CellRange, ColumnHead, Grid, GridCell, GridCorner, GridScrollable,
     RowCol, RowHead, SumSeq, Viewport,
 };
+use flexpad_model::{Cell, Sheet, SheetId, Version, Workpad, WorkpadMaster, WorkpadUpdate};
 use iced::{
     advanced::{mouse::click, widget},
     alignment, theme,
@@ -14,25 +26,8 @@ use iced::{
 };
 use once_cell::sync::Lazy;
 use rust_i18n::t;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use tracing::debug;
-
-use crate::{
-    model::workpad::{Cell, Sheet, SheetId, Version, Workpad, WorkpadMaster, WorkpadUpdate},
-    ui::{
-        edit_menu, menu,
-        util::{
-            toolbar::Toolbar, ACTION_PRINT, ACTION_PROPERTIES, ACTION_REDO, ACTION_UNDO, ICON_FX,
-            SPACE_S, TEXT_SIZE_LABEL,
-        },
-        widget::{
-            active_cell::{self, Editor},
-            inactive_cell,
-        },
-        workpad_menu,
-    },
-};
-
-use super::util::{icon, ICON_OPEN_DOWN};
 
 static FORMULA_BAR_ID: Lazy<active_cell::Id> = Lazy::new(active_cell::Id::unique);
 static ACTIVE_CELL_ID: Lazy<active_cell::Id> = Lazy::new(active_cell::Id::unique);

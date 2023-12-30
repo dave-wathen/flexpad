@@ -1,13 +1,11 @@
-use crate::{
-    model::workpad::{Workpad, WorkpadMaster, WorkpadUpdate},
-    ui::{
-        style,
-        util::{
-            button_bar, dialog::Dialog, dialog_button, dialog_title, handle_cancel_key,
-            handle_ok_and_cancel_keys, text_input, SPACE_S,
-        },
+use crate::ui::{
+    style,
+    util::{
+        button_bar, dialog::Dialog, dialog_button, dialog_title, handle_cancel_key,
+        handle_ok_and_cancel_keys, text_input, SPACE_S,
     },
 };
+use flexpad_model::{Workpad, WorkpadMaster, WorkpadUpdate};
 use iced::{event, widget::column, Subscription};
 use rust_i18n::t;
 

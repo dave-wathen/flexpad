@@ -11,11 +11,14 @@ use std::{
 };
 
 use internment::Intern;
+use itertools::Itertools;
 use once_cell::sync::Lazy;
-use rust_i18n::t;
+use rust_i18n::{i18n, t};
 use uuid::Uuid;
 
-use crate::display_iter;
+//use crate::display_iter;
+
+i18n!("locales", fallback = "en");
 
 // Overview of the Workpad Model
 // =============================
@@ -932,16 +935,15 @@ workpad_id_type!(
 
 impl std::fmt::Display for Workpad {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        //        write!(f, "Workpad{{id: {}, version: {}}}", self.id(), self.version)
         f.write_str("Workpad{")?;
         {
             f.write_str("id:")?;
             self.id().fmt(f)?;
             f.write_str(", version:")?;
             self.version.fmt(f)?;
-            f.write_str(", sheets:")?;
-            display_iter(self.data.sheets.iter(), f)?;
-            f.write_str(", active_sheet:")?;
+            f.write_str(", sheets:[")?;
+            f.write_fmt(format_args!("{}", self.data.sheets.iter().format(", ")))?;
+            f.write_str("], active_sheet:")?;
             match &self.data.active_sheet {
                 Some(id) => id.fmt(f)?,
                 None => f.write_str("None")?,
@@ -1152,11 +1154,11 @@ impl std::fmt::Display for Sheet {
         self.workpad.id().fmt(f)?;
         f.write_str(", version:")?;
         self.workpad.version.fmt(f)?;
-        f.write_str(", rows:")?;
-        display_iter(self.data.rows.iter(), f)?;
-        f.write_str(", columns:")?;
-        display_iter(self.data.columns.iter(), f)?;
-        write!(f, "}}",)
+        f.write_str(", rows:[")?;
+        f.write_fmt(format_args!("{}", self.data.rows.iter().format(", ")))?;
+        f.write_str("], columns:[")?;
+        f.write_fmt(format_args!("{}", self.data.columns.iter().format(", ")))?;
+        write!(f, "]}}",)
     }
 }
 

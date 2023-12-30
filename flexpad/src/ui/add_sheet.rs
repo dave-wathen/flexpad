@@ -1,14 +1,13 @@
-use crate::{
-    model::workpad::{SheetKind, Workpad, WorkpadMaster, WorkpadUpdate},
-    ui::{
-        menu, style,
-        util::{
-            button_bar, dialog_button, handle_ok_and_cancel_keys, handle_ok_key, icon, text_input,
-            ACTION_NEWTEXTSHEET, ACTION_NEWWORKSHEET, ICON_BUTTON_SIZE, SPACE_M, SPACE_S,
-        },
-        workpad_menu,
+use super::util::{FLEXPAD_GRID_COLOR, TEXT_SIZE_LABEL};
+use crate::ui::{
+    menu, style,
+    util::{
+        button_bar, dialog_button, handle_ok_and_cancel_keys, handle_ok_key, icon, text_input,
+        ACTION_NEWTEXTSHEET, ACTION_NEWWORKSHEET, ICON_BUTTON_SIZE, SPACE_M, SPACE_S,
     },
+    workpad_menu,
 };
+use flexpad_model::{SheetKind, Workpad, WorkpadMaster, WorkpadUpdate};
 use iced::{
     alignment, event,
     theme::{self},
@@ -17,8 +16,6 @@ use iced::{
 };
 use rust_i18n::t;
 use tracing::debug;
-
-use super::util::{FLEXPAD_GRID_COLOR, TEXT_SIZE_LABEL};
 
 #[derive(Debug, Clone)]
 pub enum Message {

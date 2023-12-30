@@ -1,5 +1,4 @@
 use crate::{
-    model::workpad::{UpdateResult, WorkpadUpdate},
     ui::util::{
         error,
         menu::{self, PathVec},
@@ -7,11 +6,10 @@ use crate::{
     },
     version::Version,
 };
+use flexpad_model::{UpdateResult, WorkpadMaster, WorkpadUpdate};
 use iced::{window, Application, Command, Settings, Theme};
 use rust_i18n::t;
 use tracing::{debug, info};
-
-use crate::model::workpad::WorkpadMaster;
 
 mod active_sheet;
 mod add_sheet;
