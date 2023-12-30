@@ -3,8 +3,8 @@ use std::ops::Range;
 /// A [`RowCol`] represents the row and column address of a cell within a [`Grid`].
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct RowCol {
-    pub row: u32,
-    pub column: u32,
+    pub row: usize,
+    pub column: usize,
 }
 
 impl RowCol {
@@ -12,26 +12,26 @@ impl RowCol {
     pub const TOP_LEFT: RowCol = RowCol::new(0, 0);
 
     /// Create a new [`RowCol`].
-    pub const fn new(row: u32, column: u32) -> Self {
+    pub const fn new(row: usize, column: usize) -> Self {
         Self { row, column }
     }
 
     /// Returns the row range for this [`RowCol`]
-    pub fn rows(&self) -> Range<u32> {
+    pub fn rows(&self) -> Range<usize> {
         (self.row)..(self.row + 1)
     }
 
     /// Returns the column range for this [`RowCol`]
-    pub fn columns(&self) -> Range<u32> {
+    pub fn columns(&self) -> Range<usize> {
         (self.column)..(self.column + 1)
     }
 }
 
-impl std::ops::Add<(u32, u32)> for RowCol {
+impl std::ops::Add<(usize, usize)> for RowCol {
     type Output = Self;
 
     /// Adds a row and column offset to a [`RowCol`] producing a new [`RowCol`].
-    fn add(self, addend: (u32, u32)) -> Self {
+    fn add(self, addend: (usize, usize)) -> Self {
         Self {
             row: self.row + addend.0,
             column: self.column + addend.1,
@@ -51,8 +51,8 @@ impl std::fmt::Display for RowCol {
     }
 }
 
-impl From<(u32, u32)> for RowCol {
-    fn from(value: (u32, u32)) -> Self {
+impl From<(usize, usize)> for RowCol {
+    fn from(value: (usize, usize)) -> Self {
         Self {
             row: value.0,
             column: value.1,
@@ -128,7 +128,7 @@ impl CellRange {
     }
 
     /// Returns the row range for this [`CellRange`]
-    pub fn rows(&self) -> Range<u32> {
+    pub fn rows(&self) -> Range<usize> {
         match self.kind {
             RangeKind::Empty => 0..0,
             RangeKind::Single(one) => (one.row)..(one.row + 1),
@@ -137,7 +137,7 @@ impl CellRange {
     }
 
     /// Returns the column range for this [`CellRange`]
-    pub fn columns(&self) -> Range<u32> {
+    pub fn columns(&self) -> Range<usize> {
         match self.kind {
             RangeKind::Empty => 0..0,
             RangeKind::Single(one) => (one.column)..(one.column + 1),

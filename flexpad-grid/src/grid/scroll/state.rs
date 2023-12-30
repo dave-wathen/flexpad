@@ -292,16 +292,16 @@ impl GridScrollableState {
         let start_column = self
             .column_widths
             .index_of_sum(x, Rounding::Up)
-            .unwrap_or(0) as u32;
-        let start_row = self.row_heights.index_of_sum(y, Rounding::Up).unwrap_or(0) as u32;
+            .unwrap_or(0);
+        let start_row = self.row_heights.index_of_sum(y, Rounding::Up).unwrap_or(0);
         let end_column = self
             .column_widths
             .index_of_sum(x + width, Rounding::Down)
-            .unwrap_or(self.column_widths.len() - 1) as u32;
+            .unwrap_or(self.column_widths.len() - 1);
         let end_row = self
             .row_heights
             .index_of_sum(y + height, Rounding::Down)
-            .unwrap_or(self.row_heights.len() - 1) as u32;
+            .unwrap_or(self.row_heights.len() - 1);
 
         CellRange::new((start_row, start_column), (end_row, end_column))
     }
@@ -391,46 +391,44 @@ impl GridScrollableState {
         self.set_x_offset(offset, viewport_width);
     }
 
-    pub fn scroll_to_column(&mut self, column: u32) {
-        let new_x = self.column_widths.sum_to(column as usize);
+    pub fn scroll_to_column(&mut self, column: usize) {
+        let new_x = self.column_widths.sum_to(column);
         self.set_x_offset(new_x, self.cells_bounds.width);
     }
 
-    pub fn scroll_to_row(&mut self, row: u32) {
-        let new_y = self.row_heights.sum_to(row as usize);
+    pub fn scroll_to_row(&mut self, row: usize) {
+        let new_y = self.row_heights.sum_to(row);
         self.set_y_offset(new_y, self.cells_bounds.height);
     }
-    pub fn ensure_column_visible(&mut self, column: u32) {
-        let required = self.column_widths.sum_to(column as usize)
-            ..=self.column_widths.sum_to(column as usize + 1);
+    pub fn ensure_column_visible(&mut self, column: usize) {
+        let required = self.column_widths.sum_to(column)..=self.column_widths.sum_to(column + 1);
 
         if self.cells_bounds.x > *required.start() {
-            let new_x = self.column_widths.sum_to(column as usize);
+            let new_x = self.column_widths.sum_to(column);
             self.set_x_offset(new_x, self.cells_bounds.width);
         } else if self.cells_bounds.x + self.cells_bounds.width < *required.end() {
             let first_column = self
                 .column_widths
                 .index_of_sum(required.end() - self.cells_bounds.width, Rounding::Up)
                 .map(|i| i + 1)
-                .unwrap_or(column as usize);
+                .unwrap_or(column);
             let new_x = self.column_widths.sum_to(first_column);
             self.set_x_offset(new_x, self.cells_bounds.width);
         }
     }
 
-    pub fn ensure_row_visible(&mut self, row: u32) {
-        let required =
-            self.row_heights.sum_to(row as usize)..=self.row_heights.sum_to(row as usize + 1);
+    pub fn ensure_row_visible(&mut self, row: usize) {
+        let required = self.row_heights.sum_to(row)..=self.row_heights.sum_to(row + 1);
 
         if self.cells_bounds.y > *required.start() {
-            let new_y = self.row_heights.sum_to(row as usize);
+            let new_y = self.row_heights.sum_to(row);
             self.set_y_offset(new_y, self.cells_bounds.height);
         } else if self.cells_bounds.y + self.cells_bounds.height < *required.end() {
             let first_row = self
                 .row_heights
                 .index_of_sum(required.end() - self.cells_bounds.height, Rounding::Up)
                 .map(|i| i + 1)
-                .unwrap_or(row as usize);
+                .unwrap_or(row);
             let new_y = self.row_heights.sum_to(first_row);
             self.set_y_offset(new_y, self.cells_bounds.height);
         }

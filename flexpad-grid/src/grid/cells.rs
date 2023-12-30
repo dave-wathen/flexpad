@@ -92,11 +92,11 @@ where
             .zip(tree.children.iter_mut())
             .map(|(cell, tree)| {
                 let rows = cell.range.rows();
-                let y1 = info.row_heights.sum_to(rows.start as usize);
-                let y2 = info.row_heights.sum_to(rows.end as usize);
+                let y1 = info.row_heights.sum_to(rows.start);
+                let y2 = info.row_heights.sum_to(rows.end);
                 let columns = cell.range.columns();
-                let x1 = info.column_widths.sum_to(columns.start as usize);
-                let x2 = info.column_widths.sum_to(columns.end as usize);
+                let x1 = info.column_widths.sum_to(columns.start);
+                let x2 = info.column_widths.sum_to(columns.end);
                 let cell_size = Size::new(x2 - x1, y2 - y1);
                 let cell_limits = Limits::new(cell_size, cell_size);
                 let mut cell_layout = cell.layout(tree, renderer, &cell_limits);

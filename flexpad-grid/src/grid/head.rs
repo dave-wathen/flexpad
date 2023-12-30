@@ -22,7 +22,7 @@ where
     Renderer: iced::advanced::Renderer,
     Renderer::Theme: StyleSheet,
 {
-    row: u32,
+    row: usize,
     content: Element<'a, Message, Renderer>,
     padding: Padding,
     horizontal_alignment: alignment::Horizontal,
@@ -36,7 +36,7 @@ where
     Renderer::Theme: StyleSheet,
 {
     /// Creates a  [`RowHead`].
-    pub fn new<T>(row: u32, content: T) -> Self
+    pub fn new<T>(row: usize, content: T) -> Self
     where
         T: Into<Element<'a, Message, Renderer>>,
     {
@@ -89,7 +89,7 @@ where
     Renderer: iced::advanced::Renderer,
     Renderer::Theme: StyleSheet,
 {
-    column: u32,
+    column: usize,
     content: Element<'a, Message, Renderer>,
     padding: Padding,
     horizontal_alignment: alignment::Horizontal,
@@ -103,7 +103,7 @@ where
     Renderer::Theme: StyleSheet,
 {
     /// Creates a  [`ColumnHead`].
-    pub fn new<T>(column: u32, content: T) -> Self
+    pub fn new<T>(column: usize, content: T) -> Self
     where
         T: Into<Element<'a, Message, Renderer>>,
     {
@@ -221,7 +221,7 @@ where
     Renderer: iced::advanced::Renderer,
     Renderer::Theme: StyleSheet,
 {
-    pub index: u32,
+    pub index: usize,
     content: Element<'a, Message, Renderer>,
     padding: Padding,
     horizontal_alignment: alignment::Horizontal,
@@ -498,8 +498,8 @@ where
         let mut max_width: f32 = 0.0;
         for (r_head, tree) in self.row_heads.iter().zip(tree.children.iter_mut()) {
             let rw = r_head.index;
-            let y1 = info.row_heights.sum_to(rw as usize);
-            let y2 = info.row_heights.sum_to((rw + 1) as usize);
+            let y1 = info.row_heights.sum_to(rw);
+            let y2 = info.row_heights.sum_to(rw + 1);
             let cell_limits = limits.loose().max_height(y2 - y1);
             let mut child_layout = r_head.layout(tree, renderer, &cell_limits);
             max_width = max_width.max(child_layout.size().width);
@@ -726,8 +726,8 @@ where
         let mut max_height: f32 = 0.0;
         for (c_head, tree) in self.column_heads.iter().zip(tree.children.iter_mut()) {
             let cl = c_head.index;
-            let x1 = info.column_widths.sum_to(cl as usize);
-            let x2 = info.column_widths.sum_to((cl + 1) as usize);
+            let x1 = info.column_widths.sum_to(cl);
+            let x2 = info.column_widths.sum_to(cl + 1);
             let cell_limits = limits.loose().max_width(x2 - x1);
             let mut child_layout = c_head.layout(tree, renderer, &cell_limits);
             max_height = max_height.max(child_layout.size().height);

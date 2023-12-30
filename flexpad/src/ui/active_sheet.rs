@@ -97,8 +97,8 @@ pub enum Move {
 impl Move {
     fn apply(&self, position: RowCol, rows_count: usize, columns_count: usize) -> RowCol {
         let RowCol { row, column } = position;
-        let max_column = columns_count.saturating_sub(1) as u32;
-        let max_row = rows_count.saturating_sub(1) as u32;
+        let max_column = columns_count.saturating_sub(1);
+        let max_row = rows_count.saturating_sub(1);
         match self {
             Move::Left => RowCol::new(row, column.saturating_sub(1)),
             Move::Right => RowCol::new(row, (column + 1).min(max_column)),
@@ -297,7 +297,7 @@ impl ActiveSheetUi {
             .column_head_height(active_sheet.column_header_height());
 
         for cl in self.visible_cells.columns() {
-            let column = active_sheet.column(cl as usize);
+            let column = active_sheet.column(cl);
             grid = grid.push_column_head(ColumnHead::new(
                 cl,
                 text(column.name()).size(12).line_height(1.0),
@@ -305,7 +305,7 @@ impl ActiveSheetUi {
         }
 
         for rw in self.visible_cells.rows() {
-            let row = active_sheet.row(rw as usize);
+            let row = active_sheet.row(rw);
             grid = grid.push_row_head(RowHead::new(rw, text(row.name()).size(12).line_height(1.0)))
         }
 
@@ -571,11 +571,11 @@ fn apply_move(active_cell: &Cell, mve: Move) -> Option<(RowCol, WorkpadUpdate)> 
 }
 
 fn rc_of_cell(cell: &Cell) -> RowCol {
-    RowCol::new(cell.row().index() as u32, cell.column().index() as u32)
+    RowCol::new(cell.row().index(), cell.column().index())
 }
 
 fn cell_by_rc(sheet: &Sheet, rc: RowCol) -> Cell {
-    sheet.cell(rc.row as usize, rc.column as usize)
+    sheet.cell(rc.row, rc.column)
 }
 
 mod sheets_menu {
