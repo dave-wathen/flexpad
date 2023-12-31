@@ -703,6 +703,7 @@ dependencies = [
  "backtrace",
  "flexpad-grid",
  "flexpad-model",
+ "flexpad-toolkit",
  "iced",
  "internment",
  "once_cell",
@@ -736,6 +737,15 @@ dependencies = [
  "tracing",
  "uuid",
  "whoami",
+]
+
+[[package]]
+name = "flexpad-toolkit"
+version = "0.0.2"
+dependencies = [
+ "iced",
+ "once_cell",
+ "tracing",
 ]
 
 [[package]]
@@ -1672,7 +1682,6 @@ dependencies = [
 [[package]]
 name = "iced"
 version = "0.12.0"
-source = "git+https://github.com/iced-rs/iced?branch=master#dd249a1d11c68b8fee1828d58bae158946ee2ebd"
 dependencies = [
  "iced_core",
  "iced_futures",
@@ -1686,7 +1695,6 @@ dependencies = [
 [[package]]
 name = "iced_core"
 version = "0.12.0"
-source = "git+https://github.com/iced-rs/iced?branch=master#dd249a1d11c68b8fee1828d58bae158946ee2ebd"
 dependencies = [
  "bitflags 1.3.2",
  "instant",
@@ -1701,7 +1709,6 @@ dependencies = [
 [[package]]
 name = "iced_futures"
 version = "0.12.0"
-source = "git+https://github.com/iced-rs/iced?branch=master#dd249a1d11c68b8fee1828d58bae158946ee2ebd"
 dependencies = [
  "futures",
  "iced_core",
@@ -1714,7 +1721,6 @@ dependencies = [
 [[package]]
 name = "iced_graphics"
 version = "0.12.0"
-source = "git+https://github.com/iced-rs/iced?branch=master#dd249a1d11c68b8fee1828d58bae158946ee2ebd"
 dependencies = [
  "bitflags 1.3.2",
  "bytemuck",
@@ -1736,7 +1742,6 @@ dependencies = [
 [[package]]
 name = "iced_renderer"
 version = "0.12.0"
-source = "git+https://github.com/iced-rs/iced?branch=master#dd249a1d11c68b8fee1828d58bae158946ee2ebd"
 dependencies = [
  "iced_graphics",
  "iced_tiny_skia",
@@ -1749,7 +1754,6 @@ dependencies = [
 [[package]]
 name = "iced_runtime"
 version = "0.12.0"
-source = "git+https://github.com/iced-rs/iced?branch=master#dd249a1d11c68b8fee1828d58bae158946ee2ebd"
 dependencies = [
  "iced_core",
  "iced_futures",
@@ -1759,7 +1763,6 @@ dependencies = [
 [[package]]
 name = "iced_style"
 version = "0.12.0"
-source = "git+https://github.com/iced-rs/iced?branch=master#dd249a1d11c68b8fee1828d58bae158946ee2ebd"
 dependencies = [
  "iced_core",
  "once_cell",
@@ -1769,7 +1772,6 @@ dependencies = [
 [[package]]
 name = "iced_tiny_skia"
 version = "0.12.0"
-source = "git+https://github.com/iced-rs/iced?branch=master#dd249a1d11c68b8fee1828d58bae158946ee2ebd"
 dependencies = [
  "bytemuck",
  "cosmic-text",
@@ -1786,7 +1788,6 @@ dependencies = [
 [[package]]
 name = "iced_wgpu"
 version = "0.12.0"
-source = "git+https://github.com/iced-rs/iced?branch=master#dd249a1d11c68b8fee1828d58bae158946ee2ebd"
 dependencies = [
  "bitflags 1.3.2",
  "bytemuck",
@@ -1804,7 +1805,6 @@ dependencies = [
 [[package]]
 name = "iced_widget"
 version = "0.12.0"
-source = "git+https://github.com/iced-rs/iced?branch=master#dd249a1d11c68b8fee1828d58bae158946ee2ebd"
 dependencies = [
  "iced_renderer",
  "iced_runtime",
@@ -1817,7 +1817,6 @@ dependencies = [
 [[package]]
 name = "iced_winit"
 version = "0.12.0"
-source = "git+https://github.com/iced-rs/iced?branch=master#dd249a1d11c68b8fee1828d58bae158946ee2ebd"
 dependencies = [
  "iced_graphics",
  "iced_runtime",

@@ -4,6 +4,7 @@ members = [
     "flexpad",
     "flexpad-grid",
     "flexpad-model",
+    "flexpad-toolkit",
 ]
 
 [workspace.package]
@@ -24,6 +25,3 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "registry"] }
 whoami = "1.4.1"
 unicode-segmentation = "1.10.1"
 uuid = { version = "1.4.1", features = ["v4", "fast-rng"] }
-
-# [patch."https://github.com/iced-rs/iced"]
-# iced = { path = "../iced" }

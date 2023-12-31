@@ -1,12 +1,11 @@
+use super::{style::ToolbarStyle, TEXT_SIZE_TOOLTIP};
+use crate::ui::util::action_tooltip;
+use flexpad_toolkit::prelude::*;
 use iced::{
     theme,
     widget::{button, container, horizontal_space, text, tooltip, vertical_rule, Row},
     Color, Element, Font, Length, Padding,
 };
-
-use crate::ui::util::action_tooltip;
-
-use super::{action::Action, style::ToolbarStyle, SPACE_M, SPACE_S, TEXT_SIZE_TOOLTIP};
 
 const TOOLBAR_HEIGHT: f32 = 25.0;
 const TOOLBAR_BUTTON_WIDTH: f32 = 15.0;

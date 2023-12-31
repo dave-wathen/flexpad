@@ -1,5 +1,7 @@
-use std::{rc::Rc, time::Instant};
-
+use super::{
+    MenuEntry, MenuOverlay, MenuStates, Roots, StyleSheet, CTRL_F2, DOWN, ENTER, ESCAPE, LEFT,
+    MENUBAR_ENTRY_PADDING, MENUBAR_PADDING, MENU_PADDING, RIGHT, TEXT_SIZE_MENU,
+};
 use iced::{
     advanced::{
         layout::Node,
@@ -12,11 +14,7 @@ use iced::{
     widget::text::LineHeight,
     Background, Color, Element, Event, Length, Point, Rectangle, Size, Vector,
 };
-
-use super::{
-    MenuEntry, MenuOverlay, MenuStates, Roots, StyleSheet, CTRL_F2, DOWN, ENTER, ESCAPE, LEFT,
-    MENUBAR_ENTRY_PADDING, MENUBAR_PADDING, MENU_PADDING, RIGHT, TEXT_SIZE_MENU,
-};
+use std::{rc::Rc, time::Instant};
 
 pub(super) struct MenuBar<Message, Renderer = iced::Renderer>
 where

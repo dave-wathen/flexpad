@@ -1,3 +1,4 @@
+use flexpad_toolkit::prelude::*;
 use iced::{
     advanced::{
         layout::{self, Node},
@@ -7,8 +8,6 @@ use iced::{
     },
     event, Background, Color, Element, Event, Length, Point, Rectangle, Size,
 };
-
-use crate::ui::util::SPACE_M;
 
 /// A Dialog (to be used with modal)
 pub struct Dialog<'a, Message, Renderer = iced::Renderer>

@@ -1,9 +1,9 @@
 use super::util::{icon, ICON_OPEN_DOWN};
 use crate::ui::{
-    edit_menu, menu,
+    edit_menu,
     util::{
         toolbar::Toolbar, ACTION_PRINT, ACTION_PROPERTIES, ACTION_REDO, ACTION_UNDO, ICON_FX,
-        SPACE_S, TEXT_SIZE_LABEL,
+        TEXT_SIZE_LABEL,
     },
     widget::{
         active_cell::{self, Editor},
@@ -16,6 +16,7 @@ use flexpad_grid::{
     RowCol, RowHead, SumSeq, Viewport,
 };
 use flexpad_model::{Cell, Sheet, SheetId, Version, Workpad, WorkpadMaster, WorkpadUpdate};
+use flexpad_toolkit::{menu, prelude::*};
 use iced::{
     advanced::{mouse::click, widget},
     alignment, theme,
@@ -574,11 +575,9 @@ fn cell_by_rc(sheet: &Sheet, rc: RowCol) -> Cell {
 }
 
 mod sheets_menu {
+    use crate::ui::util::{ACTION_SHEETDELETE, ACTION_SHEETNEW, ACTION_SHEETPROPERTIES};
+    use flexpad_toolkit::{menu, prelude::*};
     use rust_i18n::t;
-
-    use crate::ui::util::{
-        action::Action, menu, ACTION_SHEETDELETE, ACTION_SHEETNEW, ACTION_SHEETPROPERTIES,
-    };
 
     fn root<Message>() -> menu::PathToMenu<Message>
     where

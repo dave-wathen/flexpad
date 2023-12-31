@@ -1,9 +1,8 @@
 use crate::ui::{
     style::{self, DialogStyle},
-    util::{
-        button_bar, dialog::Dialog, dialog_button, dialog_title, handle_ok_and_cancel_keys, SPACE_S,
-    },
+    util::{button_bar, dialog::Dialog, dialog_button, dialog_title, handle_ok_and_cancel_keys},
 };
+use flexpad_toolkit::prelude::*;
 use iced::{
     event,
     widget::{column, text},

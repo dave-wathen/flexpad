@@ -1,0 +1,11 @@
+[package]
+name = "flexpad-toolkit"
+version.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+edition.workspace = true
+
+[dependencies]
+iced.workspace = true
+once_cell.workspace = true
+tracing.workspace = true

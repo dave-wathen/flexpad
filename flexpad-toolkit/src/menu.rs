@@ -1,5 +1,4 @@
-use std::rc::Rc;
-
+use crate::prelude::*;
 use iced::{
     advanced::{
         self,
@@ -12,28 +11,23 @@ use iced::{
     widget::vertical_space,
     Element, Event, Length, Padding, Pixels, Point, Rectangle, Size,
 };
-
-use crate::ui::util::{
-    key::{ctrl, key, pressed, released, Key},
-    SPACE_M, SPACE_S,
-};
+use std::rc::Rc;
 
 mod bar;
-use bar::MenuBar;
-pub use bar::{MenuBarAppearance, MenuBarItemAppearance};
-
 mod data;
-use data::{MenuEntry, Roots};
-
 mod menu_overlay;
-use menu_overlay::MenuOverlay;
-pub use menu_overlay::{ActionAppearance, MenuAppearance};
-
 mod path;
-pub use path::{root, Path, PathToMenu, PathToMenuSection, PathVec};
-
 mod state;
+
+use bar::MenuBar;
+use data::{MenuEntry, Roots};
+use menu_overlay::MenuOverlay;
 use state::MenuStates;
+
+pub use bar::{MenuBarAppearance, MenuBarItemAppearance};
+pub use menu_overlay::{ActionAppearance, MenuAppearance};
+#[allow(unused_imports)]
+pub use path::{root, Path, PathToMenu, PathToMenuSection, PathVec};
 
 const SEPARATOR_HEIGHT: f32 = 1.0;
 

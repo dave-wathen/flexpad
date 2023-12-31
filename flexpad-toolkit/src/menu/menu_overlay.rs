@@ -1,5 +1,8 @@
-use std::rc::Rc;
-
+use super::{
+    MenuEntry, MenuStates, StyleSheet, DOWN, ENTER, LEFT, MENU_ENTRY_PADDING, MENU_PADDING, RIGHT,
+    SEPARATOR_HEIGHT, TEXT_SIZE_MENU, UP,
+};
+use crate::prelude::*;
 use iced::{
     advanced::{
         self,
@@ -12,13 +15,7 @@ use iced::{
     widget::text::LineHeight,
     Background, Color, Event, Length, Point, Rectangle, Size, Vector,
 };
-
-use crate::ui::util::SPACE_L;
-
-use super::{
-    MenuEntry, MenuStates, StyleSheet, DOWN, ENTER, LEFT, MENU_ENTRY_PADDING, MENU_PADDING, RIGHT,
-    SEPARATOR_HEIGHT, TEXT_SIZE_MENU, UP,
-};
+use std::rc::Rc;
 
 pub(super) struct MenuOverlay<'a, Message, Renderer>
 where

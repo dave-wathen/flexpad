@@ -1,12 +1,9 @@
 use crate::{
-    ui::util::{
-        error,
-        menu::{self, PathVec},
-        modal::Modal,
-    },
+    ui::util::{error, modal::Modal},
     version::Version,
 };
 use flexpad_model::{UpdateResult, WorkpadMaster, WorkpadUpdate};
+use flexpad_toolkit::menu::*;
 use iced::{window, Application, Command, Settings, Theme};
 use rust_i18n::t;
 use tracing::{debug, info};
@@ -49,7 +46,7 @@ where
 
     fn view<'a>(&self) -> iced::Element<'a, Message>;
 
-    fn menu_paths(&self) -> Vec<menu::Path<Message>>;
+    fn menu_paths(&self) -> Vec<Path<Message>>;
 }
 
 enum Screen {
@@ -334,14 +331,14 @@ impl Application for Flexpad {
             Screen::AddSheet(ui) => ui.view().map(Message::AddSheet),
         };
 
-        let paths: menu::PathVec<Message> = match &self.screen {
+        let paths: PathVec<Message> = match &self.screen {
             Screen::Loading(_) => PathVec::new(),
             Screen::Lobby(ui) => ui.menu_paths().map(Message::Lobby),
             Screen::ActiveSheet(ui) => ui.menu_paths().map(Message::ActiveSheet),
             Screen::AddSheet(ui) => ui.menu_paths().map(Message::AddSheet),
         };
 
-        let screen = crate::ui::menu::MenuedContent::new(paths, body).into();
+        let screen = MenuedContent::new(paths, body).into();
 
         match &self.dialog {
             Dialog::None => screen,

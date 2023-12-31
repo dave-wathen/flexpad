@@ -1,13 +1,14 @@
 use super::util::{FLEXPAD_GRID_COLOR, TEXT_SIZE_LABEL};
 use crate::ui::{
-    menu, style,
+    style,
     util::{
         button_bar, dialog_button, handle_ok_and_cancel_keys, handle_ok_key, icon, text_input,
-        ACTION_NEWTEXTSHEET, ACTION_NEWWORKSHEET, ICON_BUTTON_SIZE, SPACE_M, SPACE_S,
+        ACTION_NEWTEXTSHEET, ACTION_NEWWORKSHEET, ICON_BUTTON_SIZE,
     },
     workpad_menu,
 };
 use flexpad_model::{SheetKind, Workpad, WorkpadMaster, WorkpadUpdate};
+use flexpad_toolkit::{menu, prelude::*};
 use iced::{
     alignment, event,
     theme::{self},

@@ -1,6 +1,5 @@
-use crate::ui::util::{action::Action, key::Key};
-
 use super::{path, PathVec};
+use crate::prelude::*;
 
 pub(super) enum MenuEntry<Message>
 where

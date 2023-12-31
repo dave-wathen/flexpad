@@ -1,9 +1,8 @@
-use rust_i18n::t;
-
 use crate::ui::util::{
-    menu, ACTION_NEWBLANK, ACTION_NEWSTARTER, ACTION_PADCLOSE, ACTION_PADDELETE,
-    ACTION_PADPROPERTIES,
+    ACTION_NEWBLANK, ACTION_NEWSTARTER, ACTION_PADCLOSE, ACTION_PADDELETE, ACTION_PADPROPERTIES,
 };
+use flexpad_toolkit::menu;
+use rust_i18n::t;
 
 fn root<Message>() -> menu::PathToMenu<Message>
 where

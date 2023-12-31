@@ -1,6 +1,7 @@
 use rust_i18n::t;
 
-use crate::ui::util::{menu, ACTION_REDO, ACTION_UNDO};
+use crate::ui::util::{ACTION_REDO, ACTION_UNDO};
+use flexpad_toolkit::menu;
 
 fn root<Message>() -> menu::PathToMenu<Message>
 where

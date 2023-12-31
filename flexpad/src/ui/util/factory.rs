@@ -1,3 +1,4 @@
+use flexpad_toolkit::prelude::*;
 use iced::{
     alignment, keyboard, theme,
     widget::{
@@ -12,19 +13,12 @@ use tracing::warn;
 
 use crate::ui::style;
 
-use super::action::Action;
-
 pub const FLEXPAD_GRID_COLOR: Color = Color {
     r: 0.504,
     g: 0.699,
     b: 0.703,
     a: 1.0,
 };
-
-pub const SPACE_S: f32 = 5.0;
-pub const SPACE_M: f32 = SPACE_S * 2.0;
-pub const SPACE_L: f32 = SPACE_S * 4.0;
-// const SPACE_XL: u16 = SPACE_S * 8;
 
 pub const TEXT_SIZE_APP_TITLE: Pixels = Pixels(20.0);
 pub const TEXT_SIZE_DIALOG_TITLE: Pixels = Pixels(16.0);

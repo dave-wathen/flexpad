@@ -1,5 +1,12 @@
+use super::{
+    util::{
+        action_tooltip, icon, ACTION_NEWBLANK, ACTION_NEWSTARTER, FLEXPAD_GRID_COLOR,
+        ICON_BUTTON_SIZE, TEXT_SIZE_APP_TITLE, TEXT_SIZE_LABEL,
+    },
+    workpad_menu,
+};
 use crate::version::Version;
-
+use flexpad_toolkit::{menu, prelude::*};
 use iced::widget::image::Handle;
 use iced::widget::tooltip;
 use iced::{
@@ -8,16 +15,6 @@ use iced::{
     Alignment, Length,
 };
 use rust_i18n::t;
-
-use super::{
-    menu,
-    util::{
-        action::Action, action_tooltip, icon, ACTION_NEWBLANK, ACTION_NEWSTARTER,
-        FLEXPAD_GRID_COLOR, ICON_BUTTON_SIZE, SPACE_M, SPACE_S, TEXT_SIZE_APP_TITLE,
-        TEXT_SIZE_LABEL,
-    },
-    workpad_menu,
-};
 
 #[derive(Debug, Clone)]
 pub enum Message {

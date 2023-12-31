@@ -23,3 +23,4 @@ uuid.workspace = true
 
 flexpad-grid = { path = "../flexpad-grid" }
 flexpad-model = { path = "../flexpad-model" }
+flexpad-toolkit = { path = "../flexpad-toolkit" }
