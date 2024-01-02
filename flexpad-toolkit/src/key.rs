@@ -6,7 +6,7 @@ static KEY_DB: Lazy<KeyDatabase> = Lazy::new(KeyDatabase::new);
 
 /// A Key, or key combination.  Keys are turned into their canonical representations.
 /// That is all number pad keys are translated to their main keyboard equivalents and
-/// duplicated modifier keys (Control, Alt, Shift, Command) are represented using their
+/// duplicated modifier keys (Control, Alt, Shift, Logo) are represented using their
 /// left-hand versions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Key(Modifiers, KeyCode);
@@ -24,8 +24,8 @@ impl Key {
         if modifiers.alt() {
             result = alt(result);
         }
-        if modifiers.command() {
-            result = command(result);
+        if modifiers.logo() {
+            result = logo(result);
         }
         result
     }
@@ -42,7 +42,7 @@ impl std::fmt::Display for Key {
         if self.0.shift() {
             f.write_str(KEY_DB.key_code_symbol(KeyCode::LShift))?;
         }
-        if self.0.command() {
+        if self.0.logo() {
             f.write_str(KEY_DB.key_code_symbol(KeyCode::LWin))?;
         }
         f.write_str(KEY_DB.key_code_symbol(self.1))
@@ -58,6 +58,7 @@ impl std::fmt::Display for Key {
 ///  * Ctrl-End
 ///  * Alt-Shift-A
 ///  * Command-Escape
+///  * Win-Shift-N
 impl FromStr for Key {
     type Err = KeyParseError;
 
@@ -82,7 +83,7 @@ impl FromStr for Key {
                         KeyCode::LControl => Ok(ctrl(remainder.parse()?)),
                         KeyCode::LAlt => Ok(alt(remainder.parse()?)),
                         KeyCode::LShift => Ok(shift(remainder.parse()?)),
-                        KeyCode::LWin => Ok(command(remainder.parse()?)),
+                        KeyCode::LWin => Ok(logo(remainder.parse()?)),
                         _ => unreachable!(),
                     }
                 } else {
@@ -117,9 +118,9 @@ pub const fn alt(key: Key) -> Key {
     Key(modifiers, key.1)
 }
 
-/// Create a [`Key`] as the command-modified versiopn of the given [`Key`].
-pub const fn command(key: Key) -> Key {
-    let modifiers = Modifiers::from_bits_truncate(key.0.bits() | Modifiers::COMMAND.bits());
+/// Create a [`Key`] as the logo-modified versiopn of the given [`Key`].
+pub const fn logo(key: Key) -> Key {
+    let modifiers = Modifiers::from_bits_truncate(key.0.bits() | Modifiers::LOGO.bits());
     Key(modifiers, key.1)
 }
 
@@ -156,6 +157,24 @@ impl Error for KeyParseError {
     }
 }
 
+#[cfg(target_os = "macos")]
+const LOGO_SYMBOL: &str = "⌘";
+#[cfg(target_os = "macos")]
+const ALT_SYMBOL: &str = "⌥";
+
+#[cfg(target_os = "windows")]
+const LOGO_SYMBOL: &str = "⊞";
+#[cfg(target_os = "windows")]
+const ALT_SYMBOL: &str = "⎇";
+
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
+const LOGO_SYMBOL: &str = "❖";
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
+const ALT_SYMBOL: &str = "⎇";
+
+const SHIFT_SYMBOL: &str = "⇧";
+const CONTROL_SYMBOL: &str = "⌃";
+
 struct KeyDatabase {
     key_code_to_symbol: HashMap<KeyCode, &'static str>,
     text_to_key_code: Vec<(&'static str, KeyCode, MatchKind)>,
@@ -185,16 +204,18 @@ impl KeyDatabase {
         };
 
         add_key(
-            KeyData::new(KeyCode::LControl, "⌃")
+            KeyData::new(KeyCode::LControl, CONTROL_SYMBOL)
                 .synonym("Control")
                 .synonym("Ctrl"),
         );
-        add_key(KeyData::new(KeyCode::LAlt, "⌥").synonym("Alt"));
-        add_key(KeyData::new(KeyCode::LShift, "⇧").synonym("Shift"));
+        add_key(KeyData::new(KeyCode::LAlt, ALT_SYMBOL).synonym("Alt"));
+        add_key(KeyData::new(KeyCode::LShift, SHIFT_SYMBOL).synonym("Shift"));
         add_key(
-            KeyData::new(KeyCode::LWin, "⌘")
+            KeyData::new(KeyCode::LWin, LOGO_SYMBOL)
                 .synonym("Command")
                 .synonym("Cmd")
+                .synonym("Logo")
+                .synonym("Super")
                 .synonym("Win"),
         );
 
@@ -607,6 +628,8 @@ mod test {
         assert_synonym!(KeyCode::LShift, "Shift");
         assert_synonym!(KeyCode::LWin, "Command");
         assert_synonym!(KeyCode::LWin, "Cmd");
+        assert_synonym!(KeyCode::LWin, "Logo");
+        assert_synonym!(KeyCode::LWin, "Super");
         assert_synonym!(KeyCode::LWin, "Win");
     }
 
@@ -621,14 +644,14 @@ mod test {
 
     #[test]
     fn roundtrip_combinatory() {
-        assert_roundtrip!(ctrl(key(KeyCode::A)), "\u{2303}A");
-        assert_roundtrip!(alt(key(KeyCode::A)), "\u{2325}A");
-        assert_roundtrip!(shift(key(KeyCode::A)), "\u{21E7}A");
-        assert_roundtrip!(command(key(KeyCode::A)), "\u{2318}A");
+        assert_roundtrip!(ctrl(key(KeyCode::A)), format!("{CONTROL_SYMBOL}A"));
+        assert_roundtrip!(alt(key(KeyCode::A)), format!("{ALT_SYMBOL}A"));
+        assert_roundtrip!(shift(key(KeyCode::A)), format!("{SHIFT_SYMBOL}A"));
+        assert_roundtrip!(logo(key(KeyCode::A)), format!("{LOGO_SYMBOL}A"));
 
         assert_roundtrip!(
-            ctrl(alt(shift(command(key(KeyCode::A))))),
-            "\u{2303}\u{2325}\u{21E7}\u{2318}A"
+            ctrl(alt(shift(logo(key(KeyCode::A))))),
+            format!("{CONTROL_SYMBOL}{ALT_SYMBOL}{SHIFT_SYMBOL}{LOGO_SYMBOL}A")
         );
     }
 
@@ -638,11 +661,11 @@ mod test {
         assert_eq!(ctrl(key(KeyCode::A)), "Ctrl-A".parse().unwrap());
         assert_eq!(ctrl(key(KeyCode::A)), "Control-A".parse().unwrap());
         assert_eq!(alt(key(KeyCode::A)), "Alt-A".parse().unwrap());
-        assert_eq!(command(key(KeyCode::A)), "Command-A".parse().unwrap());
-        assert_eq!(command(key(KeyCode::A)), "Cmd-A".parse().unwrap());
+        assert_eq!(logo(key(KeyCode::A)), "Command-A".parse().unwrap());
+        assert_eq!(logo(key(KeyCode::A)), "Cmd-A".parse().unwrap());
 
         assert_eq!(
-            ctrl(alt(shift(command(key(KeyCode::A))))),
+            ctrl(alt(shift(logo(key(KeyCode::A))))),
             "Ctrl-Alt-Shift-Command-A".parse().unwrap()
         );
     }
