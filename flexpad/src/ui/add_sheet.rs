@@ -1,9 +1,9 @@
-use super::util::{FLEXPAD_GRID_COLOR, TEXT_SIZE_LABEL};
+use super::util::{FlexpadAction, FLEXPAD_GRID_COLOR, TEXT_SIZE_LABEL};
 use crate::ui::{
     style,
     util::{
         button_bar, dialog_button, handle_ok_and_cancel_keys, handle_ok_key, icon, text_input,
-        ACTION_NEWTEXTSHEET, ACTION_NEWWORKSHEET, ICON_BUTTON_SIZE,
+        ICON_BUTTON_SIZE,
     },
     workpad_menu,
 };
@@ -182,10 +182,11 @@ impl AddSheetUi {
 }
 
 fn kind_button<'a>(kind: SheetKind, selected: bool) -> Element<'a, Message> {
-    let action = match kind {
-        SheetKind::Worksheet => &ACTION_NEWWORKSHEET,
-        SheetKind::Textsheet => &ACTION_NEWTEXTSHEET,
-    };
+    let action: Action = match kind {
+        SheetKind::Worksheet => FlexpadAction::NewWorksheet,
+        SheetKind::Textsheet => FlexpadAction::NewTextsheet,
+    }
+    .into();
 
     let style = match selected {
         true => KindButtonContainerStyle::Selected,

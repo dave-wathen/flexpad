@@ -1,10 +1,7 @@
-use super::util::{icon, ICON_OPEN_DOWN};
+use super::util::{icon, FlexpadAction, ICON_OPEN_DOWN};
 use crate::ui::{
     edit_menu,
-    util::{
-        toolbar::Toolbar, ACTION_PRINT, ACTION_PROPERTIES, ACTION_REDO, ACTION_UNDO, ICON_FX,
-        TEXT_SIZE_LABEL,
-    },
+    util::{toolbar::Toolbar, ICON_FX, TEXT_SIZE_LABEL},
     widget::{
         active_cell::{self, Editor},
         inactive_cell,
@@ -188,11 +185,11 @@ impl ActiveSheetUi {
         let (undo_to, redo_to) = surrounding_versions(&self.active_sheet.workpad());
 
         Toolbar::new()
-            .action(&ACTION_UNDO, undo_to.map(Message::GotoVersion))
-            .action(&ACTION_REDO, redo_to.map(Message::GotoVersion))
-            .action(&ACTION_PRINT, None)
+            .action(FlexpadAction::Undo, undo_to.map(Message::GotoVersion))
+            .action(FlexpadAction::Redo, redo_to.map(Message::GotoVersion))
+            .action(FlexpadAction::Print, None)
             .separator()
-            .action(&ACTION_PROPERTIES, None)
+            .action(FlexpadAction::Properties, None)
             .into()
     }
 
@@ -575,9 +572,10 @@ fn cell_by_rc(sheet: &Sheet, rc: RowCol) -> Cell {
 }
 
 mod sheets_menu {
-    use crate::ui::util::{ACTION_SHEETDELETE, ACTION_SHEETNEW, ACTION_SHEETPROPERTIES};
     use flexpad_toolkit::{menu, prelude::*};
     use rust_i18n::t;
+
+    use crate::ui::util::FlexpadAction;
 
     fn root<Message>() -> menu::PathToMenu<Message>
     where
@@ -597,27 +595,27 @@ mod sheets_menu {
     where
         Message: Clone,
     {
-        menu::Path::new(root(), &ACTION_SHEETPROPERTIES, on_select)
+        menu::Path::new(root(), FlexpadAction::SheetProperties, on_select)
     }
 
     pub fn new_sheet<Message>(on_select: Option<Message>) -> menu::Path<Message>
     where
         Message: Clone,
     {
-        menu::Path::new(root(), &ACTION_SHEETNEW, on_select)
+        menu::Path::new(root(), FlexpadAction::SheetNew, on_select)
     }
 
     pub fn delete_sheet<Message>(on_select: Option<Message>) -> menu::Path<Message>
     where
         Message: Clone,
     {
-        menu::Path::new(root(), &ACTION_SHEETDELETE, on_select)
+        menu::Path::new(root(), FlexpadAction::SheetDelete, on_select)
     }
 
     pub fn activate_sheet<Message>(name: String, on_select: Option<Message>) -> menu::Path<Message>
     where
         Message: Clone,
     {
-        menu::Path::new(activate_sheets(), &Action::new(name), on_select)
+        menu::Path::new(activate_sheets(), Action::new(name), on_select)
     }
 }

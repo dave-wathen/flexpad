@@ -7,9 +7,7 @@ use iced::{
     },
     Color, Element, Event, Font, Length, Pixels,
 };
-use once_cell::sync::Lazy;
 use rust_i18n::t;
-use tracing::warn;
 
 use crate::ui::style;
 
@@ -48,52 +46,115 @@ pub fn icon<'a>(codepoint: char, size: impl Into<Pixels>) -> Text<'a, iced::Rend
         .vertical_alignment(alignment::Vertical::Center)
 }
 
-pub static ACTION_NEWBLANK: Lazy<Action> = Lazy::new(|| action("NewBlank"));
-pub static ACTION_NEWSTARTER: Lazy<Action> = Lazy::new(|| action("NewStarter"));
-pub static ACTION_NEWTEXTSHEET: Lazy<Action> = Lazy::new(|| action("NewTextsheet"));
-pub static ACTION_NEWWORKSHEET: Lazy<Action> = Lazy::new(|| action("NewWorksheet"));
-pub static ACTION_PADCLOSE: Lazy<Action> = Lazy::new(|| action("PadClose"));
-pub static ACTION_PADDELETE: Lazy<Action> = Lazy::new(|| action("PadDelete"));
-pub static ACTION_PADPROPERTIES: Lazy<Action> = Lazy::new(|| action("PadProperties"));
-pub static ACTION_PRINT: Lazy<Action> = Lazy::new(|| action("Print"));
-pub static ACTION_PROPERTIES: Lazy<Action> = Lazy::new(|| action("Properties"));
-pub static ACTION_REDO: Lazy<Action> = Lazy::new(|| action("Redo"));
-pub static ACTION_SHEETDELETE: Lazy<Action> = Lazy::new(|| action("SheetDelete"));
-pub static ACTION_SHEETNEW: Lazy<Action> = Lazy::new(|| action("SheetNew"));
-pub static ACTION_SHEETPROPERTIES: Lazy<Action> = Lazy::new(|| action("SheetProperties"));
-pub static ACTION_UNDO: Lazy<Action> = Lazy::new(|| action("Undo"));
+#[derive(Debug)]
+pub enum FlexpadAction {
+    NewBlank,
+    NewStarter,
+    NewTextsheet,
+    NewWorksheet,
+    PadClose,
+    PadDelete,
+    PadProperties,
+    Print,
+    Properties,
+    Redo,
+    SheetDelete,
+    SheetNew,
+    SheetProperties,
+    Undo,
+}
 
-fn action(id: &str) -> Action {
-    let mut result = Action::new(t!(&format!("Action.{id}.Name")));
-
-    let full_i18n_name = |i18n_name| format!("{}.{}", rust_i18n::locale(), i18n_name);
-
-    let i18n_name = format!("Action.{id}.ShortName");
-    let short_name = t!(&i18n_name);
-    if short_name != full_i18n_name(&i18n_name) {
-        result = result.short_name(short_name)
+impl FlexpadAction {
+    fn icon_codepoint(&self) -> Option<char> {
+        match self {
+            Self::NewBlank => Some('\u{E81B}'),
+            Self::NewStarter => Some('\u{E81C}'),
+            Self::NewTextsheet => Some('\u{E81E}'),
+            Self::NewWorksheet => Some('\u{E81D}'),
+            Self::PadDelete => None,
+            Self::PadClose => None,
+            Self::PadProperties => None,
+            Self::Print => Some('\u{E807}'),
+            Self::Properties => Some('\u{E808}'),
+            Self::Redo => Some('\u{E800}'),
+            Self::SheetDelete => None,
+            Self::SheetNew => None,
+            Self::SheetProperties => None,
+            Self::Undo => Some('\u{E801}'),
+        }
     }
 
-    let i18n_name = format!("Action.{id}.IconCodepoint");
-    let codepoint = t!(&i18n_name);
-    if codepoint != full_i18n_name(&i18n_name) {
-        if codepoint.chars().count() == 1 {
-            result = result.icon_codepoint(codepoint.chars().next().unwrap())
-        } else {
-            warn!("Invalid icon codepoint {}", i18n_name)
-        };
+    #[cfg(target_os = "macos")]
+    fn shortcut(&self) -> Option<Key> {
+        match self {
+            Self::NewBlank => Some(logo(key(keyboard::KeyCode::N))),
+            Self::NewStarter => Some(shift(logo(key(keyboard::KeyCode::N)))),
+            Self::NewTextsheet => None,
+            Self::NewWorksheet => None,
+            Self::PadDelete => Some(logo(key(keyboard::KeyCode::Delete))),
+            Self::PadClose => Some(logo(key(keyboard::KeyCode::W))),
+            Self::PadProperties => Some(logo(key(keyboard::KeyCode::Comma))),
+            Self::Print => Some(logo(key(keyboard::KeyCode::P))),
+            Self::Properties => None,
+            Self::Redo => Some(shift(logo(key(keyboard::KeyCode::Z)))),
+            Self::SheetDelete => Some(alt(key(keyboard::KeyCode::Delete))),
+            Self::SheetNew => Some(alt(key(keyboard::KeyCode::N))),
+            Self::SheetProperties => Some(alt(key(keyboard::KeyCode::Comma))),
+            Self::Undo => Some(logo(key(keyboard::KeyCode::Z))),
+        }
     }
 
-    let i18n_name = format!("Action.{id}.Shortcut");
-    let shortcut = t!(&i18n_name);
-    if shortcut != full_i18n_name(&i18n_name) {
-        match shortcut.parse() {
-            Ok(key) => result = result.shortcut(key),
-            Err(_) => warn!("Invalid shortcut key {}", i18n_name),
-        };
+    #[cfg(not(target_os = "macos"))]
+    fn shortcut(&self) -> Option<Key> {
+        match self {
+            Self::NewBlank => Some(ctrl(key(keyboard::KeyCode::N))),
+            Self::NewStarter => Some(shift(ctrl(key(keyboard::KeyCode::N)))),
+            Self::NewTextsheet => None,
+            Self::NewWorksheet => None,
+            Self::PadDelete => Some(ctrl(key(keyboard::KeyCode::Delete))),
+            Self::PadClose => Some(ctrl(key(keyboard::KeyCode::W))),
+            Self::PadProperties => Some(ctrl(key(keyboard::KeyCode::Comma))),
+            Self::Print => Some(ctrl(key(keyboard::KeyCode::P))),
+            Self::Properties => None,
+            Self::Redo => Some(shift(ctrl(key(keyboard::KeyCode::Z)))),
+            Self::SheetDelete => Some(alt(key(keyboard::KeyCode::Delete))),
+            Self::SheetNew => Some(alt(key(keyboard::KeyCode::N))),
+            Self::SheetProperties => Some(alt(key(keyboard::KeyCode::Comma))),
+            Self::Undo => Some(ctrl(key(keyboard::KeyCode::Z))),
+        }
     }
+}
 
-    result
+impl std::fmt::Display for FlexpadAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        std::fmt::Debug::fmt(self, f)
+    }
+}
+
+impl From<FlexpadAction> for Action {
+    fn from(value: FlexpadAction) -> Self {
+        let full_i18n_name = |i18n_name| format!("{}.{}", rust_i18n::locale(), i18n_name);
+        let id = value.to_string();
+
+        let i18n_name = format!("Action.{id}.Name");
+        let mut result = Action::new(t!(&i18n_name));
+
+        let i18n_name = format!("Action.{id}.ShortName");
+        let short_name = t!(&i18n_name);
+        if short_name != full_i18n_name(&i18n_name) {
+            result = result.short_name(short_name)
+        }
+
+        if let Some(codepoint) = value.icon_codepoint() {
+            result = result.icon_codepoint(codepoint);
+        }
+
+        if let Some(shortcut) = value.shortcut() {
+            result = result.shortcut(shortcut);
+        }
+
+        result
+    }
 }
 
 pub fn action_tooltip<'a, Message>(

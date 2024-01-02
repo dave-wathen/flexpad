@@ -72,13 +72,13 @@ where
 {
     pub fn new(
         partial: impl PartialPath<Message>,
-        action: &Action,
+        action: impl Into<Action>,
         on_select: Option<Message>,
     ) -> Path<Message>
     where
         Message: Clone,
     {
-        let action = menu_action(action);
+        let action = menu_action(&action.into());
         match on_select {
             Some(msg) => partial.action(action.on_select(msg)),
             None => partial.action(action),

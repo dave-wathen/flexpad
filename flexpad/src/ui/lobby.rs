@@ -1,11 +1,11 @@
 use super::{
     util::{
-        action_tooltip, icon, ACTION_NEWBLANK, ACTION_NEWSTARTER, FLEXPAD_GRID_COLOR,
-        ICON_BUTTON_SIZE, TEXT_SIZE_APP_TITLE, TEXT_SIZE_LABEL,
+        action_tooltip, icon, FLEXPAD_GRID_COLOR, ICON_BUTTON_SIZE, TEXT_SIZE_APP_TITLE,
+        TEXT_SIZE_LABEL,
     },
     workpad_menu,
 };
-use crate::version::Version;
+use crate::{ui::util::FlexpadAction, version::Version};
 use flexpad_toolkit::{menu, prelude::*};
 use iced::widget::image::Handle;
 use iced::widget::tooltip;
@@ -53,13 +53,14 @@ impl Lobby {
     pub fn view<'a>(&self) -> iced::Element<'a, Message> {
         let app_image = Handle::from_memory(include_bytes!("../../resources/flexpad.png"));
 
-        let image_button = |action: &Action, msg| {
+        fn image_button<'a>(action: impl Into<Action>, msg: Message) -> iced::Element<'a, Message> {
+            let action = action.into();
             let codepoint = action
                 .icon_codepoint
                 .expect("Lobby actions must have a codepoint");
             column![
                 action_tooltip(
-                    action,
+                    &action,
                     button(
                         icon(codepoint, ICON_BUTTON_SIZE)
                             .style(theme::Text::Color(FLEXPAD_GRID_COLOR))
@@ -71,7 +72,8 @@ impl Lobby {
                 text(&action.short_name).size(TEXT_SIZE_LABEL)
             ]
             .align_items(Alignment::Center)
-        };
+            .into()
+        }
 
         column![
             image(app_image).width(200).height(200),
@@ -82,8 +84,8 @@ impl Lobby {
                 .width(Length::Fill)
                 .horizontal_alignment(alignment::Horizontal::Left),
             row![
-                image_button(&ACTION_NEWBLANK, Message::NewBlankWorkpad),
-                image_button(&ACTION_NEWSTARTER, Message::NewStarterWorkpad)
+                image_button(FlexpadAction::NewBlank, Message::NewBlankWorkpad),
+                image_button(FlexpadAction::NewStarter, Message::NewStarterWorkpad)
             ]
             .spacing(SPACE_M)
             .width(Length::Fill),

@@ -3,54 +3,36 @@ Action:
   NewBlank:
     Name: New Blank Workpad
     ShortName: Blank
-    IconCodepoint: "\uE81B"
-    Shortcut: Command-N
   NewStarter:
     Name: New Starter Workpad
     ShortName: Starter
-    IconCodepoint: "\uE81C"
-    Shortcut: Shift-Command-N
   NewTextsheet:
     Name: New Textsheet
     ShortName: Textsheet
-    IconCodepoint: "\uE81E"
   NewWorksheet:
     Name: New Worksheet
     ShortName: Worksheet
-    IconCodepoint: "\uE81D"
   PadDelete:
     Name: Delete Workpad
     Shortcut: Command-Delete
   PadClose:
     Name: Close Workpad
-    Shortcut: Command-W
   PadProperties:
     Name: Properties ...
-    Shortcut: Command-,
   Print:
     Name: "Print"
-    IconCodepoint: "\uE807"
-    Shortcut: Command-P
   Properties:
     Name: "Edit Properties"
-    IconCodepoint: "\uE808"
   Redo:
     Name: "Redo"
-    IconCodepoint: "\uE800"
-    Shortcut: Command-Shift-Z
   SheetDelete:
     Name: Delete Sheet
-    Shortcut: Alt-Delete
   SheetNew:
     Name: Add Sheet
-    Shortcut: Alt-N
   SheetProperties:
     Name: Properties ...
-    Shortcut: Alt-,
   Undo:
     Name: "Undo"
-    IconCodepoint: "\uE801"
-    Shortcut: Command-Z
 ActiveSheet:
   Corner: "#"
 AddSheet:

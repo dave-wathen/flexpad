@@ -52,8 +52,8 @@ where
     }
 
     /// Add an action to the [`Toolbar`]
-    pub fn action(mut self, action: &Action, msg: Option<Message>) -> Self {
-        self.entries.push(Entry::Action(action.clone(), msg));
+    pub fn action(mut self, action: impl Into<Action>, msg: Option<Message>) -> Self {
+        self.entries.push(Entry::Action(action.into(), msg));
         self
     }
 }
