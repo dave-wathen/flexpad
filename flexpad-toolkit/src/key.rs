@@ -610,10 +610,10 @@ mod test {
         assert_roundtrip!(key(KeyCode::Apostrophe), "'");
         assert_roundtrip!(key(KeyCode::Caret), "^");
 
-        assert_roundtrip!(key(KeyCode::LControl), "\u{2303}");
-        assert_roundtrip!(key(KeyCode::LAlt), "\u{2325}");
-        assert_roundtrip!(key(KeyCode::LShift), "\u{21E7}");
-        assert_roundtrip!(key(KeyCode::LWin), "\u{2318}");
+        assert_roundtrip!(key(KeyCode::LControl), CONTROL_SYMBOL);
+        assert_roundtrip!(key(KeyCode::LAlt), ALT_SYMBOL);
+        assert_roundtrip!(key(KeyCode::LShift), SHIFT_SYMBOL);
+        assert_roundtrip!(key(KeyCode::LWin), LOGO_SYMBOL);
     }
 
     #[test]
