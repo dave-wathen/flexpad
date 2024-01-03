@@ -1,9 +1,7 @@
-use crate::{
-    ui::util::{error, modal::Modal},
-    version::Version,
-};
+use crate::{ui::util::error, version::Version};
 use flexpad_model::{UpdateResult, WorkpadMaster, WorkpadUpdate};
 use flexpad_toolkit::menu::*;
+use flexpad_toolkit::modal::Modal;
 use iced::{window, Application, Command, Settings, Theme};
 use rust_i18n::t;
 use tracing::{debug, info};
