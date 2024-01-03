@@ -1,52 +1,9 @@
 use flexpad_toolkit::prelude::*;
 use iced::{
     theme,
-    widget::{self, button, rule::FillMode},
+    widget::{self, button},
     Color, Theme,
 };
-
-pub struct ToolbarStyle;
-
-impl From<ToolbarStyle> for theme::Container {
-    fn from(value: ToolbarStyle) -> Self {
-        theme::Container::Custom(Box::new(value))
-    }
-}
-
-impl From<ToolbarStyle> for theme::Rule {
-    fn from(value: ToolbarStyle) -> Self {
-        theme::Rule::Custom(Box::new(value))
-    }
-}
-
-impl widget::container::StyleSheet for ToolbarStyle {
-    type Style = iced::Theme;
-
-    fn appearance(&self, theme: &Self::Style) -> widget::container::Appearance {
-        let palette = theme.extended_palette();
-
-        widget::container::Appearance {
-            text_color: None,
-            background: Some(palette.secondary.base.color.into()),
-            border_radius: SPACE_M.into(),
-            border_width: 1.0,
-            border_color: Color::TRANSPARENT,
-        }
-    }
-}
-
-impl widget::rule::StyleSheet for ToolbarStyle {
-    type Style = iced::Theme;
-
-    fn appearance(&self, theme: &Self::Style) -> widget::rule::Appearance {
-        let dflt = theme.appearance(&iced::theme::Rule::Default);
-
-        widget::rule::Appearance {
-            fill_mode: FillMode::Padded(4),
-            ..dflt
-        }
-    }
-}
 
 pub enum TextStyle {
     Default,

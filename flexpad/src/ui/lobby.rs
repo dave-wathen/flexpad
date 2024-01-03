@@ -1,17 +1,12 @@
 use super::{
-    util::{
-        action_tooltip, icon, FLEXPAD_GRID_COLOR, ICON_BUTTON_SIZE, TEXT_SIZE_APP_TITLE,
-        TEXT_SIZE_LABEL,
-    },
+    util::{icon, FLEXPAD_GRID_COLOR, ICON_BUTTON_SIZE, TEXT_SIZE_APP_TITLE, TEXT_SIZE_LABEL},
     workpad_menu,
 };
 use crate::{ui::util::FlexpadAction, version::Version};
 use flexpad_toolkit::{menu, prelude::*};
-use iced::widget::image::Handle;
-use iced::widget::tooltip;
 use iced::{
     alignment, theme,
-    widget::{button, column, horizontal_rule, image, row, text},
+    widget::{self, button, column, horizontal_rule, image::Handle, row, text},
     Alignment, Length,
 };
 use rust_i18n::t;
@@ -59,7 +54,7 @@ impl Lobby {
                 .icon_codepoint
                 .expect("Lobby actions must have a codepoint");
             column![
-                action_tooltip(
+                tooltip(
                     &action,
                     button(
                         icon(codepoint, ICON_BUTTON_SIZE)
@@ -67,7 +62,7 @@ impl Lobby {
                     )
                     .on_press(msg)
                     .style(theme::Button::Text),
-                    tooltip::Position::FollowCursor
+                    TooltipPosition::FollowCursor
                 ),
                 text(&action.short_name).size(TEXT_SIZE_LABEL)
             ]
@@ -76,7 +71,7 @@ impl Lobby {
         }
 
         column![
-            image(app_image).width(200).height(200),
+            widget::image(app_image).width(200).height(200),
             text(self.version.description()).size(TEXT_SIZE_LABEL),
             horizontal_rule(3),
             text(t!("Workpads.Create"))

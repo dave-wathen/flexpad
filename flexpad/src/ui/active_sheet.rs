@@ -1,7 +1,7 @@
 use super::util::{icon, FlexpadAction, ICON_OPEN_DOWN};
 use crate::ui::{
     edit_menu,
-    util::{toolbar::Toolbar, ICON_FX, TEXT_SIZE_LABEL},
+    util::{ICON_FX, TEXT_SIZE_LABEL},
     widget::{
         active_cell::{self, Editor},
         inactive_cell,
@@ -13,7 +13,7 @@ use flexpad_grid::{
     RowCol, RowHead, SumSeq, Viewport,
 };
 use flexpad_model::{Cell, Sheet, SheetId, Version, Workpad, WorkpadMaster, WorkpadUpdate};
-use flexpad_toolkit::{menu, prelude::*};
+use flexpad_toolkit::{menu, prelude::*, toolbar::Toolbar};
 use iced::{
     advanced::{mouse::click, widget},
     alignment, theme,

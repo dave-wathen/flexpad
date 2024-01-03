@@ -2,8 +2,8 @@ use flexpad_toolkit::prelude::*;
 use iced::{
     alignment, keyboard, theme,
     widget::{
-        self, button, column, container, horizontal_space, row, text, tooltip, vertical_space,
-        Button, Row, Text,
+        self, button, column, container, horizontal_space, row, text, vertical_space, Button, Row,
+        Text,
     },
     Color, Element, Event, Font, Length, Pixels,
 };
@@ -23,7 +23,6 @@ pub const TEXT_SIZE_DIALOG_TITLE: Pixels = Pixels(16.0);
 pub const TEXT_SIZE_LABEL: Pixels = Pixels(12.0);
 pub const TEXT_SIZE_INPUT: Pixels = Pixels(16.0);
 pub const TEXT_SIZE_ERROR: Pixels = Pixels(14.0);
-pub const TEXT_SIZE_TOOLTIP: Pixels = Pixels(12.0);
 
 pub const ICON_BUTTON_SIZE: Pixels = Pixels(48.0);
 
@@ -155,21 +154,6 @@ impl From<FlexpadAction> for Action {
 
         result
     }
-}
-
-pub fn action_tooltip<'a, Message>(
-    action: &Action,
-    content: impl Into<Element<'a, Message, iced::Renderer>>,
-    position: tooltip::Position,
-) -> iced::widget::Tooltip<'a, Message, iced::Renderer> {
-    let label = match action.shortcut {
-        Some(key) => format!("{}  {}", action.name, key),
-        None => action.name.clone(),
-    };
-
-    tooltip(content, label, position)
-        .size(TEXT_SIZE_TOOLTIP)
-        .style(theme::Container::Box)
 }
 
 pub fn dialog_title<'a, Message>(
