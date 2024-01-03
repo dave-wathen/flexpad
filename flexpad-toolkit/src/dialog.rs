@@ -1,4 +1,4 @@
-use flexpad_toolkit::prelude::*;
+use super::prelude::*;
 use iced::{
     advanced::{
         layout::{self, Node},

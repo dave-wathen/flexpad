@@ -1,8 +1,5 @@
-use crate::ui::{
-    style::{self, DialogStyle},
-    util::{button_bar, dialog::Dialog, dialog_button, dialog_title, handle_ok_and_cancel_keys},
-};
-use flexpad_toolkit::prelude::*;
+use crate::ui::util::{button_bar, dialog_button, dialog_title, handle_ok_and_cancel_keys};
+use flexpad_toolkit::{dialog::Dialog, prelude::*};
 use iced::{
     event,
     widget::{column, text},
@@ -49,7 +46,7 @@ impl ErrorUi {
             dialog_title(t!("Error.Title"), style::DialogStyle::Error),
             body,
         )
-        .style(DialogStyle::Error)
+        .style(style::DialogStyle::Error)
         .max_width(400.0)
         .into()
     }

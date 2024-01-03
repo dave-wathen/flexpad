@@ -24,8 +24,6 @@ mod menus {
 pub use menus::edit_menu;
 pub use menus::workpad_menu;
 
-pub use util::style;
-
 pub(crate) fn run() -> iced::Result {
     let settings = Settings {
         fonts: vec![include_bytes!("../resources/flexpad-icons.ttf")

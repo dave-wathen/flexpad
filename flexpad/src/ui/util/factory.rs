@@ -9,8 +9,6 @@ use iced::{
 };
 use rust_i18n::t;
 
-use crate::ui::style;
-
 pub const FLEXPAD_GRID_COLOR: Color = Color {
     r: 0.504,
     g: 0.699,

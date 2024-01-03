@@ -1,12 +1,11 @@
+use crate::ui;
+use flexpad_toolkit::prelude::*;
 use iced::{
     alignment,
     widget::{container, text},
     Command, Length,
 };
 use rust_i18n::t;
-
-use super::style;
-use crate::ui;
 
 #[derive(Debug, Clone)]
 
