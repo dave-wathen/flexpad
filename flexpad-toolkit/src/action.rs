@@ -1,4 +1,4 @@
-use super::key::Key;
+use crate::key::Key;
 
 /// An action that can be performed in the application
 #[derive(Debug, Clone, PartialEq, Eq)]

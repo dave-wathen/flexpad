@@ -1,13 +1,12 @@
 use super::util::{FlexpadAction, FLEXPAD_GRID_COLOR, TEXT_SIZE_LABEL};
 use crate::ui::{
     util::{
-        button_bar, dialog_button, handle_ok_and_cancel_keys, handle_ok_key, icon, text_input,
-        ICON_BUTTON_SIZE,
+        dialog_button, handle_ok_and_cancel_keys, handle_ok_key, icon, text_input, ICON_BUTTON_SIZE,
     },
     workpad_menu,
 };
 use flexpad_model::{SheetKind, Workpad, WorkpadMaster, WorkpadUpdate};
-use flexpad_toolkit::{menu, prelude::*};
+use flexpad_toolkit::{button_bar::ButtonBar, menu, prelude::*};
 use iced::{
     alignment, event,
     theme::{self},
@@ -82,7 +81,7 @@ impl AddSheetUi {
     }
 
     pub fn view(&self) -> iced::Element<'_, Message> {
-        let mut buttons = button_bar();
+        let mut buttons = ButtonBar::new();
         if !self.existing_names.is_empty() {
             buttons = buttons.push(
                 dialog_button(t!("Common.Cancel"), style::DialogButtonStyle::Cancel)

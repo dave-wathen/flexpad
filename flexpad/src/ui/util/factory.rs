@@ -1,10 +1,7 @@
 use flexpad_toolkit::prelude::*;
 use iced::{
     alignment, keyboard, theme,
-    widget::{
-        self, button, column, container, horizontal_space, row, text, vertical_space, Button, Row,
-        Text,
-    },
+    widget::{self, button, column, container, text, vertical_space, Button, Text},
     Color, Element, Event, Font, Length, Pixels,
 };
 use rust_i18n::t;
@@ -174,45 +171,6 @@ where
     button(text(label).horizontal_alignment(alignment::Horizontal::Center))
         .width(DIALOG_BUTTON_WIDTH)
         .style(theme::Button::Custom(Box::new(style)))
-}
-
-pub fn button_bar<'a, Message, Renderer>() -> ButtonBar<'a, Message, Renderer>
-where
-    Message: 'a,
-    Renderer: 'a + iced::advanced::Renderer,
-{
-    ButtonBar {
-        row: row![horizontal_space(Length::Fill)].spacing(SPACE_M),
-    }
-}
-
-pub struct ButtonBar<'a, Message, Renderer> {
-    row: Row<'a, Message, Renderer>,
-}
-
-impl<'a, Message, Renderer> ButtonBar<'a, Message, Renderer>
-where
-    Message: 'a + Clone,
-    Renderer: 'a + iced::advanced::Renderer,
-    Renderer::Theme: iced::widget::button::StyleSheet,
-{
-    pub fn push(self, button: Button<'a, Message, Renderer>) -> Self {
-        let Self { row } = self;
-        Self {
-            row: row.push(button),
-        }
-    }
-}
-
-impl<'a, Message, Renderer> From<ButtonBar<'a, Message, Renderer>>
-    for Element<'a, Message, Renderer>
-where
-    Message: 'a,
-    Renderer: 'a + iced::advanced::Renderer,
-{
-    fn from(value: ButtonBar<'a, Message, Renderer>) -> Self {
-        value.row.into()
-    }
 }
 
 pub fn input_label<'a, Message>(label: impl ToString) -> Element<'a, Message> {

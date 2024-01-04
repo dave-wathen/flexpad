@@ -1,9 +1,8 @@
 use crate::ui::util::{
-    button_bar, dialog_button, dialog_title, handle_cancel_key, handle_ok_and_cancel_keys,
-    text_input,
+    dialog_button, dialog_title, handle_cancel_key, handle_ok_and_cancel_keys, text_input,
 };
 use flexpad_model::{Sheet, WorkpadMaster, WorkpadUpdate};
-use flexpad_toolkit::{dialog::Dialog, prelude::*};
+use flexpad_toolkit::{button_bar::ButtonBar, dialog::Dialog, prelude::*};
 use iced::{event, widget::column, Subscription};
 use rust_i18n::t;
 
@@ -75,7 +74,7 @@ impl SheetPropertiesUi {
                 Message::Name,
                 self.name_error.as_ref(),
             ),
-            button_bar().push(cancel).push(ok)
+            ButtonBar::new().push(cancel).push(ok)
         ]
         .spacing(SPACE_S);
 

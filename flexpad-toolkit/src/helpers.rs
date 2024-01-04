@@ -1,6 +1,5 @@
-use iced::{Element, Pixels};
-
 use crate::action::Action;
+use iced::{Element, Pixels};
 
 pub const SPACE_S: f32 = 5.0;
 pub const SPACE_M: f32 = SPACE_S * 2.0;
@@ -12,7 +11,7 @@ pub const TEXT_SIZE_TOOLTIP: Pixels = Pixels(12.0);
 pub type Tooltip<'a, Message> = iced::widget::Tooltip<'a, Message, iced::Renderer>;
 pub type TooltipPosition = iced::widget::tooltip::Position;
 
-// Create a tooltip using the content of the given [`Action`]
+/// Create a tooltip using the content of the given [`Action`]
 pub fn tooltip<'a, Message>(
     action: &Action,
     content: impl Into<Element<'a, Message, iced::Renderer>>,

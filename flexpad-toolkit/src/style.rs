@@ -1,4 +1,4 @@
-use super::{helpers::SPACE_M, menu};
+use crate::{helpers::SPACE_M, menu};
 use iced::{theme, widget, Color};
 
 /// The style for a [`MenuBar`] and [`Menu`]s

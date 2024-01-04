@@ -1,4 +1,5 @@
 mod action;
+pub mod button_bar;
 pub mod dialog;
 mod helpers;
 mod key;

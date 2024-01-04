@@ -1,14 +1,16 @@
 // Copied from iced examples
 
-use iced::advanced::layout::{self, Layout};
-use iced::advanced::overlay;
-use iced::advanced::renderer;
-use iced::advanced::widget::{self, Tree, Widget};
-use iced::advanced::{self, Clipboard, Shell};
-use iced::alignment::Alignment;
-use iced::mouse;
-use iced::{event, Vector};
-use iced::{Color, Element, Event, Length, Point, Rectangle, Size};
+use iced::{
+    advanced::{
+        self,
+        layout::{self, Layout},
+        overlay, renderer,
+        widget::{self, Tree, Widget},
+        Clipboard, Shell,
+    },
+    alignment::Alignment,
+    event, mouse, Color, Element, Event, Length, Point, Rectangle, Size, Vector,
+};
 
 /// A widget that centers a modal element over some base element
 pub struct Modal<'a, Message, Renderer> {

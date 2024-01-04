@@ -1,5 +1,5 @@
-use crate::ui::util::{button_bar, dialog_button, dialog_title, handle_ok_and_cancel_keys};
-use flexpad_toolkit::{dialog::Dialog, prelude::*};
+use crate::ui::util::{dialog_button, dialog_title, handle_ok_and_cancel_keys};
+use flexpad_toolkit::{button_bar::ButtonBar, dialog::Dialog, prelude::*};
 use iced::{
     event,
     widget::{column, text},
@@ -40,7 +40,7 @@ impl ErrorUi {
         let ok = dialog_button(t!("Common.Ok"), style::DialogButtonStyle::Error)
             .on_press(Message::Acknowledge);
 
-        let body = column![text(&self.message), button_bar().push(ok)].spacing(SPACE_S);
+        let body = column![text(&self.message), ButtonBar::new().push(ok)].spacing(SPACE_S);
 
         Dialog::new(
             dialog_title(t!("Error.Title"), style::DialogStyle::Error),
