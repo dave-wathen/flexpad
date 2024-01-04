@@ -5,7 +5,7 @@ use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 mod ui;
 mod version;
 
-i18n!("locales", fallback = "en");
+i18n!("resources", fallback = "en");
 
 fn main() -> Result<(), FlexpadError> {
     tracing_subscriber::registry()
