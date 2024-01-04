@@ -1,8 +1,6 @@
 use super::util::{FlexpadAction, FLEXPAD_GRID_COLOR, TEXT_SIZE_LABEL};
 use crate::ui::{
-    util::{
-        dialog_button, handle_ok_and_cancel_keys, handle_ok_key, icon, text_input, ICON_BUTTON_SIZE,
-    },
+    util::{dialog_button, handle_ok_and_cancel_keys, handle_ok_key, text_input, ICON_BUTTON_SIZE},
     workpad_menu,
 };
 use flexpad_model::{SheetKind, Workpad, WorkpadMaster, WorkpadUpdate};

@@ -1,5 +1,12 @@
 use crate::action::Action;
-use iced::{Element, Pixels};
+use iced::{
+    alignment,
+    widget::{text, Text},
+    Element, Font, Length, Pixels,
+};
+
+pub const ICON_FONT_BYTES: &[u8] = include_bytes!("../resources/flexpad-icons.ttf");
+pub const ICON_FONT: Font = Font::with_name("flexpad-icons");
 
 pub const SPACE_S: f32 = 5.0;
 pub const SPACE_M: f32 = SPACE_S * 2.0;
@@ -25,4 +32,17 @@ pub fn tooltip<'a, Message>(
     iced::widget::tooltip(content, label, position)
         .size(TEXT_SIZE_TOOLTIP)
         .style(iced::theme::Container::Box)
+}
+
+/// Create an icon for a given codepoint in the flexpad-icons fonts.
+pub fn icon<'a>(codepoint: char, size: impl Into<Pixels>) -> Text<'a, iced::Renderer> {
+    text(codepoint)
+        .font(ICON_FONT)
+        .size(size.into())
+        .line_height(1.0)
+        .shaping(text::Shaping::Advanced)
+        .width(Length::Fill)
+        .horizontal_alignment(alignment::Horizontal::Center)
+        .height(Length::Fill)
+        .vertical_alignment(alignment::Vertical::Center)
 }

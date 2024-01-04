@@ -1,8 +1,8 @@
 use flexpad_toolkit::prelude::*;
 use iced::{
     alignment, keyboard, theme,
-    widget::{self, button, column, container, text, vertical_space, Button, Text},
-    Color, Element, Event, Font, Length, Pixels,
+    widget::{self, button, column, container, text, vertical_space, Button},
+    Color, Element, Event, Font, Pixels,
 };
 use rust_i18n::t;
 
@@ -25,20 +25,6 @@ pub const DIALOG_BUTTON_WIDTH: f32 = 100.0;
 
 pub const ICON_FX: char = '\u{E81A}';
 pub const ICON_OPEN_DOWN: char = '\u{E806}';
-
-pub fn icon<'a>(codepoint: char, size: impl Into<Pixels>) -> Text<'a, iced::Renderer> {
-    const ICON_FONT: Font = Font::with_name("flexpad-icons");
-
-    text(codepoint)
-        .font(ICON_FONT)
-        .size(size.into())
-        .line_height(1.0)
-        .shaping(text::Shaping::Advanced)
-        .width(Length::Fill)
-        .horizontal_alignment(alignment::Horizontal::Center)
-        .height(Length::Fill)
-        .vertical_alignment(alignment::Vertical::Center)
-}
 
 #[derive(Debug)]
 pub enum FlexpadAction {

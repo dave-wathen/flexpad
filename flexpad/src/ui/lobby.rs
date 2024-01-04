@@ -1,5 +1,5 @@
 use super::{
-    util::{icon, FLEXPAD_GRID_COLOR, ICON_BUTTON_SIZE, TEXT_SIZE_APP_TITLE, TEXT_SIZE_LABEL},
+    util::{FLEXPAD_GRID_COLOR, ICON_BUTTON_SIZE, TEXT_SIZE_APP_TITLE, TEXT_SIZE_LABEL},
     workpad_menu,
 };
 use crate::{ui::util::FlexpadAction, version::Version};

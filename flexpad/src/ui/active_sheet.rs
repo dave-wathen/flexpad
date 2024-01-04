@@ -1,4 +1,4 @@
-use super::util::{icon, FlexpadAction, ICON_OPEN_DOWN};
+use super::util::{FlexpadAction, ICON_OPEN_DOWN};
 use crate::ui::{
     edit_menu,
     util::{ICON_FX, TEXT_SIZE_LABEL},

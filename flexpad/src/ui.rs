@@ -1,7 +1,6 @@
 use crate::{ui::util::error, version::Version};
 use flexpad_model::{UpdateResult, WorkpadMaster, WorkpadUpdate};
-use flexpad_toolkit::menu::*;
-use flexpad_toolkit::modal::Modal;
+use flexpad_toolkit::{menu::*, modal::Modal, prelude::*};
 use iced::{window, Application, Command, Settings, Theme};
 use rust_i18n::t;
 use tracing::{debug, info};
@@ -26,9 +25,7 @@ pub use menus::workpad_menu;
 
 pub(crate) fn run() -> iced::Result {
     let settings = Settings {
-        fonts: vec![include_bytes!("../resources/flexpad-icons.ttf")
-            .as_slice()
-            .into()],
+        fonts: vec![ICON_FONT_BYTES.into()],
         ..Settings::default()
     };
     Flexpad::run(settings)
