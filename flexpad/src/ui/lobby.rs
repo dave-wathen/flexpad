@@ -1,7 +1,4 @@
-use super::{
-    util::{FLEXPAD_GRID_COLOR, ICON_BUTTON_SIZE, TEXT_SIZE_APP_TITLE, TEXT_SIZE_LABEL},
-    workpad_menu,
-};
+use super::{util::FLEXPAD_GRID_COLOR, workpad_menu};
 use crate::{ui::util::FlexpadAction, version::Version};
 use flexpad_toolkit::{menu, prelude::*};
 use iced::{
@@ -64,7 +61,7 @@ impl Lobby {
                     .style(theme::Button::Text),
                     TooltipPosition::FollowCursor
                 ),
-                text(&action.short_name).size(TEXT_SIZE_LABEL)
+                label(&action.short_name)
             ]
             .align_items(Alignment::Center)
             .into()
@@ -72,7 +69,7 @@ impl Lobby {
 
         column![
             widget::image(app_image).width(200).height(200),
-            text(self.version.description()).size(TEXT_SIZE_LABEL),
+            label(self.version.description()),
             horizontal_rule(3),
             text(t!("Workpads.Create"))
                 .size(TEXT_SIZE_APP_TITLE)

@@ -1,7 +1,6 @@
-use super::util::{FlexpadAction, ICON_OPEN_DOWN};
+use super::util::FlexpadAction;
 use crate::ui::{
     edit_menu,
-    util::{ICON_FX, TEXT_SIZE_LABEL},
     widget::{
         active_cell::{self, Editor},
         inactive_cell,

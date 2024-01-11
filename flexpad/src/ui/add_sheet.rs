@@ -1,8 +1,5 @@
-use super::util::{FlexpadAction, FLEXPAD_GRID_COLOR, TEXT_SIZE_LABEL};
-use crate::ui::{
-    util::{text_input, ICON_BUTTON_SIZE},
-    workpad_menu,
-};
+use super::util::{FlexpadAction, FLEXPAD_GRID_COLOR};
+use crate::ui::workpad_menu;
 use flexpad_model::{SheetKind, Workpad, WorkpadMaster, WorkpadUpdate};
 use flexpad_toolkit::{button_bar::ButtonBar, menu, prelude::*};
 use iced::{

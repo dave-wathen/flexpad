@@ -1,4 +1,3 @@
-use crate::ui::util::dialog_title;
 use flexpad_toolkit::{button_bar::ButtonBar, dialog::Dialog, prelude::*};
 use iced::{
     widget::{column, text},

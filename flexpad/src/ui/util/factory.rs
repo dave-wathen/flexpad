@@ -1,9 +1,5 @@
 use flexpad_toolkit::prelude::*;
-use iced::{
-    keyboard,
-    widget::{self, column, container, text, vertical_space},
-    Color, Element, Font, Pixels,
-};
+use iced::{keyboard, Color};
 use rust_i18n::t;
 
 pub const FLEXPAD_GRID_COLOR: Color = Color {
@@ -12,17 +8,6 @@ pub const FLEXPAD_GRID_COLOR: Color = Color {
     b: 0.703,
     a: 1.0,
 };
-
-pub const TEXT_SIZE_APP_TITLE: Pixels = Pixels(20.0);
-pub const TEXT_SIZE_DIALOG_TITLE: Pixels = Pixels(16.0);
-pub const TEXT_SIZE_LABEL: Pixels = Pixels(12.0);
-pub const TEXT_SIZE_INPUT: Pixels = Pixels(16.0);
-pub const TEXT_SIZE_ERROR: Pixels = Pixels(14.0);
-
-pub const ICON_BUTTON_SIZE: Pixels = Pixels(48.0);
-
-pub const ICON_FX: char = '\u{E81A}';
-pub const ICON_OPEN_DOWN: char = '\u{E806}';
 
 #[derive(Debug)]
 pub enum FlexpadAction {
@@ -141,78 +126,4 @@ impl From<FlexpadAction> for Action {
 
         result
     }
-}
-
-pub fn dialog_title<'a, Message>(
-    title: impl ToString,
-    style: style::DialogStyle,
-) -> Element<'a, Message>
-where
-    Message: 'a,
-{
-    container(text(title).size(TEXT_SIZE_DIALOG_TITLE).style(style)).into()
-}
-
-pub fn input_label<'a, Message>(label: impl ToString) -> Element<'a, Message> {
-    iced::widget::text(label)
-        .size(TEXT_SIZE_LABEL)
-        .style(style::TextStyle::Label)
-        .into()
-}
-
-pub fn text_input<'a, Message, F>(
-    label: impl ToString,
-    placeholder: impl ToString,
-    value: &str,
-    on_input: F,
-    error: Option<&String>,
-) -> Element<'a, Message>
-where
-    Message: 'a + Clone,
-    F: 'a + Fn(String) -> Message,
-{
-    let below: Element<'a, Message> = match error {
-        Some(msg) => container(
-            text(msg)
-                .size(TEXT_SIZE_ERROR)
-                .style(style::TextStyle::Error),
-        )
-        .height(SPACE_L)
-        .into(),
-        None => vertical_space(SPACE_L).into(),
-    };
-
-    let input_style = match error {
-        Some(_) => style::TextInputStyle::Error,
-        None => style::TextInputStyle::Default,
-    };
-
-    let icon = match error {
-        Some(_) => widget::text_input::Icon {
-            font: Font::default(),
-            code_point: '\u{2757}',
-            size: Some(TEXT_SIZE_INPUT),
-            spacing: SPACE_M,
-            side: widget::text_input::Side::Right,
-        },
-        None => widget::text_input::Icon {
-            font: Font::default(),
-            code_point: '\u{2713}',
-            size: Some(TEXT_SIZE_INPUT),
-            spacing: SPACE_M,
-            side: widget::text_input::Side::Right,
-        },
-    };
-
-    column![
-        input_label(label),
-        widget::vertical_space(SPACE_S),
-        iced::widget::text_input(&placeholder.to_string(), value)
-            .size(TEXT_SIZE_INPUT)
-            .icon(icon)
-            .style(input_style)
-            .on_input(on_input),
-        below
-    ]
-    .into()
 }
