@@ -1,8 +1,8 @@
 use flexpad_toolkit::prelude::*;
 use iced::{
-    alignment, keyboard, theme,
-    widget::{self, button, column, container, text, vertical_space, Button},
-    Color, Element, Event, Font, Pixels,
+    keyboard,
+    widget::{self, column, container, text, vertical_space},
+    Color, Element, Font, Pixels,
 };
 use rust_i18n::t;
 
@@ -21,17 +21,17 @@ pub const TEXT_SIZE_ERROR: Pixels = Pixels(14.0);
 
 pub const ICON_BUTTON_SIZE: Pixels = Pixels(48.0);
 
-pub const DIALOG_BUTTON_WIDTH: f32 = 100.0;
-
 pub const ICON_FX: char = '\u{E81A}';
 pub const ICON_OPEN_DOWN: char = '\u{E806}';
 
 #[derive(Debug)]
 pub enum FlexpadAction {
+    Cancel,
     NewBlank,
     NewStarter,
     NewTextsheet,
     NewWorksheet,
+    Ok,
     PadClose,
     PadDelete,
     PadProperties,
@@ -47,10 +47,12 @@ pub enum FlexpadAction {
 impl FlexpadAction {
     fn icon_codepoint(&self) -> Option<char> {
         match self {
+            Self::Cancel => None,
             Self::NewBlank => Some('\u{E81B}'),
             Self::NewStarter => Some('\u{E81C}'),
             Self::NewTextsheet => Some('\u{E81E}'),
             Self::NewWorksheet => Some('\u{E81D}'),
+            Self::Ok => None,
             Self::PadDelete => None,
             Self::PadClose => None,
             Self::PadProperties => None,
@@ -67,10 +69,12 @@ impl FlexpadAction {
     #[cfg(target_os = "macos")]
     fn shortcut(&self) -> Option<Key> {
         match self {
+            Self::Cancel => Some(key(keyboard::KeyCode::Escape)),
             Self::NewBlank => Some(logo(key(keyboard::KeyCode::N))),
             Self::NewStarter => Some(shift(logo(key(keyboard::KeyCode::N)))),
             Self::NewTextsheet => None,
             Self::NewWorksheet => None,
+            Self::Ok => Some(key(keyboard::KeyCode::Enter)),
             Self::PadDelete => Some(logo(key(keyboard::KeyCode::Delete))),
             Self::PadClose => Some(logo(key(keyboard::KeyCode::W))),
             Self::PadProperties => Some(logo(key(keyboard::KeyCode::Comma))),
@@ -87,10 +91,12 @@ impl FlexpadAction {
     #[cfg(not(target_os = "macos"))]
     fn shortcut(&self) -> Option<Key> {
         match self {
+            Self::Cancel => Some(key(keyboard::KeyCode::Escape)),
             Self::NewBlank => Some(ctrl(key(keyboard::KeyCode::N))),
             Self::NewStarter => Some(shift(ctrl(key(keyboard::KeyCode::N)))),
             Self::NewTextsheet => None,
             Self::NewWorksheet => None,
+            Self::Ok => Some(key(keyboard::KeyCode::Enter)),
             Self::PadDelete => Some(ctrl(key(keyboard::KeyCode::Delete))),
             Self::PadClose => Some(ctrl(key(keyboard::KeyCode::W))),
             Self::PadProperties => Some(ctrl(key(keyboard::KeyCode::Comma))),
@@ -145,18 +151,6 @@ where
     Message: 'a,
 {
     container(text(title).size(TEXT_SIZE_DIALOG_TITLE).style(style)).into()
-}
-
-pub fn dialog_button<'a, Message>(
-    label: impl ToString,
-    style: style::DialogButtonStyle,
-) -> Button<'a, Message>
-where
-    Message: 'a,
-{
-    button(text(label).horizontal_alignment(alignment::Horizontal::Center))
-        .width(DIALOG_BUTTON_WIDTH)
-        .style(theme::Button::Custom(Box::new(style)))
 }
 
 pub fn input_label<'a, Message>(label: impl ToString) -> Element<'a, Message> {
@@ -221,37 +215,4 @@ where
         below
     ]
     .into()
-}
-
-const ESCAPE: Event = Event::Keyboard(keyboard::Event::KeyPressed {
-    key_code: keyboard::KeyCode::Escape,
-    modifiers: keyboard::Modifiers::empty(),
-});
-const ENTER: Event = Event::Keyboard(keyboard::Event::KeyPressed {
-    key_code: keyboard::KeyCode::Enter,
-    modifiers: keyboard::Modifiers::empty(),
-});
-
-pub fn handle_ok_key<Message>(event: &Event, on_ok: Message) -> Option<Message> {
-    if *event == ENTER {
-        Some(on_ok)
-    } else {
-        None
-    }
-}
-
-pub fn handle_cancel_key<Message>(event: &Event, on_cancel: Message) -> Option<Message> {
-    if *event == ESCAPE {
-        Some(on_cancel)
-    } else {
-        None
-    }
-}
-
-pub fn handle_ok_and_cancel_keys<Message>(
-    event: &Event,
-    on_ok: Message,
-    on_cancel: Message,
-) -> Option<Message> {
-    handle_ok_key(event, on_ok).or_else(|| handle_cancel_key(event, on_cancel))
 }

@@ -1,7 +1,7 @@
-use crate::action::Action;
+use crate::{action::Action, action_button::ActionButton, shortcut::Shortcut};
 use iced::{
     alignment,
-    widget::{text, Text},
+    widget::{button, text, Text},
     Element, Font, Length, Pixels,
 };
 
@@ -45,4 +45,29 @@ pub fn icon<'a>(codepoint: char, size: impl Into<Pixels>) -> Text<'a, iced::Rend
         .horizontal_alignment(alignment::Horizontal::Center)
         .height(Length::Fill)
         .vertical_alignment(alignment::Vertical::Center)
+}
+
+/// A button representing an [`Action`]
+pub fn action_button<Message, Renderer>(
+    action: impl Into<Action>,
+) -> ActionButton<Message, Renderer>
+where
+    Message: Clone,
+    Renderer: iced::advanced::Renderer,
+    Renderer::Theme: button::StyleSheet,
+{
+    ActionButton::new(action)
+}
+
+/// A container that implements an [`Action`] shortcut for some [`Element`]
+pub fn shortcut<'a, Message, Renderer>(
+    action: impl Into<Action>,
+    content: impl Into<Element<'a, Message, Renderer>>,
+) -> Shortcut<'a, Message, Renderer>
+where
+    Message: Clone,
+    Renderer: iced::advanced::Renderer,
+    Renderer::Theme: button::StyleSheet,
+{
+    Shortcut::new(action, content)
 }

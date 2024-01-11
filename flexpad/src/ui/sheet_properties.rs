@@ -1,10 +1,10 @@
-use crate::ui::util::{
-    dialog_button, dialog_title, handle_cancel_key, handle_ok_and_cancel_keys, text_input,
-};
+use crate::ui::util::{dialog_title, text_input};
 use flexpad_model::{Sheet, WorkpadMaster, WorkpadUpdate};
 use flexpad_toolkit::{button_bar::ButtonBar, dialog::Dialog, prelude::*};
-use iced::{event, widget::column, Subscription};
+use iced::{widget::column, Subscription};
 use rust_i18n::t;
+
+use super::util::FlexpadAction;
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -58,10 +58,11 @@ impl SheetPropertiesUi {
     }
 
     pub fn view(&self) -> iced::Element<'_, Message> {
-        let cancel = dialog_button(t!("Common.Cancel"), style::DialogButtonStyle::Cancel)
+        let cancel = action_button(FlexpadAction::Cancel)
+            .style(style::ButtonStyle::Cancel)
             .on_press(Message::Cancel);
 
-        let mut ok = dialog_button(t!("Common.Ok"), style::DialogButtonStyle::Ok);
+        let mut ok = action_button(FlexpadAction::Ok).style(style::ButtonStyle::Ok);
         if self.name_error.is_none() {
             ok = ok.on_press(Message::Submit)
         }
@@ -87,13 +88,7 @@ impl SheetPropertiesUi {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        if self.name_error.is_none() {
-            event::listen_with(|event, _status| {
-                handle_ok_and_cancel_keys(&event, Message::Submit, Message::Cancel)
-            })
-        } else {
-            event::listen_with(|event, _status| handle_cancel_key(&event, Message::Cancel))
-        }
+        Subscription::none()
     }
 
     pub fn update(&mut self, message: Message) -> Event {

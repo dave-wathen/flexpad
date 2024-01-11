@@ -1,5 +1,7 @@
 _version: 1
 Action:
+  Cancel:
+    Name: Cancel
   NewBlank:
     Name: New Blank Workpad
     ShortName: Blank
@@ -12,6 +14,8 @@ Action:
   NewWorksheet:
     Name: New Worksheet
     ShortName: Worksheet
+  Ok:
+    Name: OK
   PadDelete:
     Name: Delete Workpad
     Shortcut: Command-Delete

@@ -1,12 +1,12 @@
 use super::util::{FlexpadAction, FLEXPAD_GRID_COLOR, TEXT_SIZE_LABEL};
 use crate::ui::{
-    util::{dialog_button, handle_ok_and_cancel_keys, handle_ok_key, text_input, ICON_BUTTON_SIZE},
+    util::{text_input, ICON_BUTTON_SIZE},
     workpad_menu,
 };
 use flexpad_model::{SheetKind, Workpad, WorkpadMaster, WorkpadUpdate};
 use flexpad_toolkit::{button_bar::ButtonBar, menu, prelude::*};
 use iced::{
-    alignment, event,
+    alignment,
     theme::{self},
     widget::{button, column, container, horizontal_rule, row, text, vertical_space},
     Alignment, Element, Length, Subscription,
@@ -82,11 +82,12 @@ impl AddSheetUi {
         let mut buttons = ButtonBar::new();
         if !self.existing_names.is_empty() {
             buttons = buttons.push(
-                dialog_button(t!("Common.Cancel"), style::DialogButtonStyle::Cancel)
+                action_button(FlexpadAction::Cancel)
+                    .style(style::ButtonStyle::Cancel)
                     .on_press(Message::Cancel),
             );
         }
-        let mut ok = dialog_button(t!("Common.Ok"), style::DialogButtonStyle::Ok);
+        let mut ok = action_button(FlexpadAction::Ok).style(style::ButtonStyle::Ok);
         if self.name_error.is_none() {
             ok = ok.on_press(Message::Submit)
         }
@@ -124,13 +125,7 @@ impl AddSheetUi {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        if self.existing_names.is_empty() {
-            event::listen_with(|event, _status| handle_ok_key(&event, Message::Submit))
-        } else {
-            event::listen_with(|event, _status| {
-                handle_ok_and_cancel_keys(&event, Message::Submit, Message::Cancel)
-            })
-        }
+        Subscription::none()
     }
 
     pub fn update(&mut self, message: Message) -> Event {

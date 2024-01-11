@@ -141,7 +141,7 @@ impl From<DialogStyle> for theme::Text {
 
 /// A style that can be applied to an action
 #[derive(Debug, Clone, Copy)]
-pub enum DialogButtonStyle {
+pub enum ButtonStyle {
     /// Normal stylimng for an Ok action
     Ok,
     /// Normal stylimng for a Cancel action
@@ -150,7 +150,7 @@ pub enum DialogButtonStyle {
     Error,
 }
 
-impl widget::button::StyleSheet for DialogButtonStyle
+impl widget::button::StyleSheet for ButtonStyle
 where
     iced::Theme: widget::button::StyleSheet<Style = theme::Button>,
 {
@@ -162,6 +162,12 @@ where
             Self::Cancel => theme.active(&theme::Button::Secondary),
             Self::Error => theme.active(&theme::Button::Destructive),
         }
+    }
+}
+
+impl From<ButtonStyle> for theme::Button {
+    fn from(value: ButtonStyle) -> Self {
+        theme::Button::Custom(Box::new(value))
     }
 }
 

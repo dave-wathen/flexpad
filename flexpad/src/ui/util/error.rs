@@ -1,11 +1,12 @@
-use crate::ui::util::{dialog_button, dialog_title, handle_ok_and_cancel_keys};
+use crate::ui::util::dialog_title;
 use flexpad_toolkit::{button_bar::ButtonBar, dialog::Dialog, prelude::*};
 use iced::{
-    event,
     widget::{column, text},
     Subscription,
 };
 use rust_i18n::t;
+
+use super::FlexpadAction;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Message {
@@ -37,7 +38,8 @@ impl ErrorUi {
     }
 
     pub fn view(&self) -> iced::Element<'_, Message> {
-        let ok = dialog_button(t!("Common.Ok"), style::DialogButtonStyle::Error)
+        let ok = action_button(FlexpadAction::Ok)
+            .style(style::ButtonStyle::Error)
             .on_press(Message::Acknowledge);
 
         let body = column![text(&self.message), ButtonBar::new().push(ok)].spacing(SPACE_S);
@@ -58,8 +60,6 @@ impl ErrorUi {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        event::listen_with(|event, _status| {
-            handle_ok_and_cancel_keys(&event, Message::Acknowledge, Message::Acknowledge)
-        })
+        Subscription::none()
     }
 }
