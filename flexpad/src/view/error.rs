@@ -1,11 +1,10 @@
+use crate::FlexpadAction;
 use flexpad_toolkit::{button_bar::ButtonBar, dialog::Dialog, prelude::*};
 use iced::{
     widget::{column, text},
     Subscription,
 };
 use rust_i18n::t;
-
-use super::FlexpadAction;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Message {

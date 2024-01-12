@@ -1,4 +1,4 @@
-use crate::ui::util::FlexpadAction;
+use crate::FlexpadAction;
 use flexpad_toolkit::menu;
 use rust_i18n::t;
 

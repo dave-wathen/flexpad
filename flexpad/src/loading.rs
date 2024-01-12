@@ -1,4 +1,3 @@
-use crate::ui;
 use flexpad_toolkit::prelude::*;
 use iced::{
     alignment,
@@ -12,14 +11,14 @@ use rust_i18n::t;
 pub struct Loading;
 
 impl Loading {
-    pub fn new() -> (Self, Command<ui::Message>) {
+    pub fn new() -> (Self, Command<super::Message>) {
         (
             Self,
-            iced::Command::perform(load(), ui::Message::LoadingComplete),
+            iced::Command::perform(load(), super::Message::LoadingComplete),
         )
     }
 
-    pub fn view<'a>(&self) -> iced::Element<'a, ui::Message> {
+    pub fn view<'a>(&self) -> iced::Element<'a, super::Message> {
         container(
             text(t!("Common.Loading"))
                 .style(style::TextStyle::Loading)

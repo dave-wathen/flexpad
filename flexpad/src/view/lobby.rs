@@ -1,5 +1,4 @@
-use super::{util::FLEXPAD_GRID_COLOR, workpad_menu};
-use crate::{ui::util::FlexpadAction, version::Version};
+use crate::{menu::workpad_menu, version::Version, FlexpadAction, FLEXPAD_GRID_COLOR};
 use flexpad_toolkit::{menu, prelude::*};
 use iced::{
     alignment, theme,

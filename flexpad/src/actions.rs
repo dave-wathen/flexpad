@@ -1,13 +1,5 @@
 use flexpad_toolkit::prelude::*;
-use iced::{keyboard, Color};
 use rust_i18n::t;
-
-pub const FLEXPAD_GRID_COLOR: Color = Color {
-    r: 0.504,
-    g: 0.699,
-    b: 0.703,
-    a: 1.0,
-};
 
 #[derive(Debug)]
 pub enum FlexpadAction {
@@ -53,6 +45,8 @@ impl FlexpadAction {
 
     #[cfg(target_os = "macos")]
     fn shortcut(&self) -> Option<Key> {
+        use iced::keyboard;
+
         match self {
             Self::Cancel => Some(key(keyboard::KeyCode::Escape)),
             Self::NewBlank => Some(logo(key(keyboard::KeyCode::N))),

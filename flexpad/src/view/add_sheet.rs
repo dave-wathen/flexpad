@@ -1,5 +1,4 @@
-use super::util::{FlexpadAction, FLEXPAD_GRID_COLOR};
-use crate::ui::workpad_menu;
+use crate::{menu::workpad_menu, FlexpadAction, FLEXPAD_GRID_COLOR};
 use flexpad_model::{SheetKind, Workpad, WorkpadMaster, WorkpadUpdate};
 use flexpad_toolkit::{button_bar::ButtonBar, menu, prelude::*};
 use iced::{

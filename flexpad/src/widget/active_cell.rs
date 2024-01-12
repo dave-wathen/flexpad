@@ -25,7 +25,7 @@ mod editor;
 mod platform;
 pub use editor::Editor;
 
-use crate::ui::active_sheet::Message;
+use crate::view::active_sheet::Message;
 
 /// The identifier of a [`ActiveCell`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -692,7 +692,7 @@ struct Focus {
 
 impl State {
     /// Creates a new [`State`], representing an unfocused [`ActiveCell`].
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             is_focused: None,
             is_dragging: false,

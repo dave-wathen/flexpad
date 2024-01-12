@@ -1,11 +1,10 @@
-use super::util::FlexpadAction;
-use crate::ui::{
-    edit_menu,
+use crate::{
+    menu::*,
     widget::{
         active_cell::{self, Editor},
         inactive_cell,
     },
-    workpad_menu,
+    FlexpadAction,
 };
 use flexpad_grid::{
     style, Border, Borders, CellRange, ColumnHead, Grid, GridCell, GridCorner, GridScrollable,
@@ -571,10 +570,9 @@ fn cell_by_rc(sheet: &Sheet, rc: RowCol) -> Cell {
 }
 
 mod sheets_menu {
+    use crate::FlexpadAction;
     use flexpad_toolkit::{menu, prelude::*};
     use rust_i18n::t;
-
-    use crate::ui::util::FlexpadAction;
 
     fn root<Message>() -> menu::PathToMenu<Message>
     where

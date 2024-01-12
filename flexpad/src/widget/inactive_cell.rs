@@ -15,7 +15,7 @@ use iced::{
     Color, Element, Event, Length, Pixels, Point, Rectangle, Size,
 };
 
-use crate::ui::active_sheet::{Message, Move};
+use crate::view::active_sheet::{Message, Move};
 
 pub struct InactiveCell<Renderer>
 where
