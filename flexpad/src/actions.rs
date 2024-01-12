@@ -1,4 +1,5 @@
 use flexpad_toolkit::prelude::*;
+use iced::keyboard::KeyCode;
 use rust_i18n::t;
 
 #[derive(Debug)]
@@ -45,47 +46,45 @@ impl FlexpadAction {
 
     #[cfg(target_os = "macos")]
     fn shortcut(&self) -> Option<Key> {
-        use iced::keyboard;
-
         match self {
-            Self::Cancel => Some(key(keyboard::KeyCode::Escape)),
-            Self::NewBlank => Some(logo(key(keyboard::KeyCode::N))),
-            Self::NewStarter => Some(shift(logo(key(keyboard::KeyCode::N)))),
+            Self::Cancel => Some(key(KeyCode::Escape)),
+            Self::NewBlank => Some(logo(key(KeyCode::N))),
+            Self::NewStarter => Some(shift(logo(key(KeyCode::N)))),
             Self::NewTextsheet => None,
             Self::NewWorksheet => None,
-            Self::Ok => Some(key(keyboard::KeyCode::Enter)),
-            Self::PadDelete => Some(logo(key(keyboard::KeyCode::Delete))),
-            Self::PadClose => Some(logo(key(keyboard::KeyCode::W))),
-            Self::PadProperties => Some(logo(key(keyboard::KeyCode::Comma))),
-            Self::Print => Some(logo(key(keyboard::KeyCode::P))),
+            Self::Ok => Some(key(KeyCode::Enter)),
+            Self::PadDelete => Some(logo(key(KeyCode::Delete))),
+            Self::PadClose => Some(logo(key(KeyCode::W))),
+            Self::PadProperties => Some(logo(key(KeyCode::Comma))),
+            Self::Print => Some(logo(key(KeyCode::P))),
             Self::Properties => None,
-            Self::Redo => Some(shift(logo(key(keyboard::KeyCode::Z)))),
-            Self::SheetDelete => Some(alt(key(keyboard::KeyCode::Delete))),
-            Self::SheetNew => Some(alt(key(keyboard::KeyCode::N))),
-            Self::SheetProperties => Some(alt(key(keyboard::KeyCode::Comma))),
-            Self::Undo => Some(logo(key(keyboard::KeyCode::Z))),
+            Self::Redo => Some(shift(logo(key(KeyCode::Z)))),
+            Self::SheetDelete => Some(alt(key(KeyCode::Delete))),
+            Self::SheetNew => Some(alt(key(KeyCode::N))),
+            Self::SheetProperties => Some(alt(key(KeyCode::Comma))),
+            Self::Undo => Some(logo(key(KeyCode::Z))),
         }
     }
 
     #[cfg(not(target_os = "macos"))]
     fn shortcut(&self) -> Option<Key> {
         match self {
-            Self::Cancel => Some(key(keyboard::KeyCode::Escape)),
-            Self::NewBlank => Some(ctrl(key(keyboard::KeyCode::N))),
-            Self::NewStarter => Some(shift(ctrl(key(keyboard::KeyCode::N)))),
+            Self::Cancel => Some(key(KeyCode::Escape)),
+            Self::NewBlank => Some(ctrl(key(KeyCode::N))),
+            Self::NewStarter => Some(shift(ctrl(key(KeyCode::N)))),
             Self::NewTextsheet => None,
             Self::NewWorksheet => None,
-            Self::Ok => Some(key(keyboard::KeyCode::Enter)),
-            Self::PadDelete => Some(ctrl(key(keyboard::KeyCode::Delete))),
-            Self::PadClose => Some(ctrl(key(keyboard::KeyCode::W))),
-            Self::PadProperties => Some(ctrl(key(keyboard::KeyCode::Comma))),
-            Self::Print => Some(ctrl(key(keyboard::KeyCode::P))),
+            Self::Ok => Some(key(KeyCode::Enter)),
+            Self::PadDelete => Some(ctrl(key(KeyCode::Delete))),
+            Self::PadClose => Some(ctrl(key(KeyCode::W))),
+            Self::PadProperties => Some(ctrl(key(KeyCode::Comma))),
+            Self::Print => Some(ctrl(key(KeyCode::P))),
             Self::Properties => None,
-            Self::Redo => Some(shift(ctrl(key(keyboard::KeyCode::Z)))),
-            Self::SheetDelete => Some(alt(key(keyboard::KeyCode::Delete))),
-            Self::SheetNew => Some(alt(key(keyboard::KeyCode::N))),
-            Self::SheetProperties => Some(alt(key(keyboard::KeyCode::Comma))),
-            Self::Undo => Some(ctrl(key(keyboard::KeyCode::Z))),
+            Self::Redo => Some(shift(ctrl(key(KeyCode::Z)))),
+            Self::SheetDelete => Some(alt(key(KeyCode::Delete))),
+            Self::SheetNew => Some(alt(key(KeyCode::N))),
+            Self::SheetProperties => Some(alt(key(KeyCode::Comma))),
+            Self::Undo => Some(ctrl(key(KeyCode::Z))),
         }
     }
 }
